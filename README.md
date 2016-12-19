@@ -43,6 +43,7 @@ If you are using [Chao's QUI](https://github.com/chaorace/cqui), this mod is alr
 
 ## Troubleshooting
 If you encounter issues with getting the mod working try the following steps:
+
 1. Try installing the Mod into the DLC folder. This folder is the folder where you installed Civilization VI, example *C:\Program Files (x86)\Steam\steamapps\common\Sid Meier's Civilization VI\DLC*
 2. Delete the cache. This can be found here - *Documents\My Games\Sid Meier's Civilization VI\Cache*
 3. Check out this [thread](https://forums.civfanatics.com/threads/mods-not-working-at-all-help.606288/)
