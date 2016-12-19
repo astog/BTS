@@ -38,8 +38,9 @@ The goal of this mod is to improve the trade screens in Civilization VI and help
 ## Installation
 If you are using [Chao's QUI](https://github.com/chaorace/cqui), this mod is already included in it, and requires no extra steps to install. If you are **NOT** using CQUI, follow the steps below:
 
-1. Extract the file to your Mods folder. For me this is in *Documents\My Games\Sid Meier's Civilization VI\Mods*
-2. Activate the Mod in *Additional Content* inside Civilization VI.
+1. Download the latest release.
+2. Extract the downloaded archive to your Mods folder. For me this is in *Documents\My Games\Sid Meier's Civilization VI\Mods*
+3. Activate the Mod in *Additional Content* inside Civilization VI.
 
 ## Troubleshooting
 If you encounter issues with getting the mod working try the following steps:
