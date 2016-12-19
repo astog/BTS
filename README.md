@@ -49,11 +49,13 @@ If you encounter issues with getting the mod working try the following steps:
 4. If none of the above work, let me know in this repository or [here](https://forums.civfanatics.com/threads/more-lenses.606150/)
 
 ## FAQ
-#####I loaded a save game and the text is all broken?
+**I loaded a save game and the text is all broken?**
 > This is a bug from Firaxis. To fix this you have to exit to **destop** and start Civilization VI again.
-#####I can't see yields for the destination city, where are they?
+
+**I can't see yields for the destination city, where are they?**
 >In the previous version, I had a string show that the destination city gains no benefits, but it lead to a lot of cluttering in the screen. Currently, if the destination city has no yield, you won't see any.
-#####Trade Overview panel does not open in between turns?
+
+**Trade Overview panel does not open in between turns?**
 >With v3.0 I blocked the Trade Overview panel from opening since it causes CTD. If you want to unblock this, change the following line in TradeOverview.lua
 >
 >`local blockPanelInBetweenTurns = true`
