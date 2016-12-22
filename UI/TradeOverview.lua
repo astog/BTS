@@ -1,5 +1,3 @@
-print("Better Trade Screen loaded")
-
 -- ===========================================================================
 --	SETTINGS
 -- ===========================================================================
@@ -8,7 +6,6 @@ local alignTradeYields = true
 local showNoBenefitsString = false
 local showSortOrdersPermanently = false
 local hideTradingPostIcon = false
-local blockPanelInBetweenTurns = true
 
 -- Color Settings for Headers
 local colorCityPlayerHeader = true
@@ -32,6 +29,7 @@ local tintLabelColorOpacity = 210
 -- ===========================================================================
 
 include("AnimSidePanelSupport");
+include("PopupDialogSupport");
 include("InstanceManager");
 include("SupportFunctions");
 include("TradeSupport");
@@ -56,31 +54,18 @@ local GROUP_BY_SETTINGS:table = {
 	DESTINATION			= 3;
 };
 
+local SORT_BY_ID:table = GetSortByIdConstants();
+local SORT_ASCENDING = GetSortAscendingIdConstant();
+local SORT_DESCENDING = GetSortDescendingIdConstant();
 
-local SORT_BY_ID:table = {
-	FOOD = 1;
-	PRODUCTION = 2;
-	GOLD = 3;
-	SCIENCE = 4;
-	CULTURE = 5;
-	FAITH = 6;
-	TURNS_TO_COMPLETE = 7;
-}
-
-local SORT_ASCENDING = 1
-local SORT_DESCENDING = 2
-
-local GROUP_DESTINATION_ROUTE_SHOW_COUNT:number = 2;
-local GROUP_ORIGIN_ROUTE_SHOW_COUNT:number = 4;
-local GROUP_NONE_ROUTE_SHOW_COUNT:number = 100;
-
-local m_shiftDown:boolean = false;
-local m_ctrlDown:boolean = false;
+local SEMI_EXPAND_SETTINGS:table = {};
+SEMI_EXPAND_SETTINGS[GROUP_BY_SETTINGS.NONE] = 10;
+SEMI_EXPAND_SETTINGS[GROUP_BY_SETTINGS.ORIGIN] = 4;
+SEMI_EXPAND_SETTINGS[GROUP_BY_SETTINGS.DESTINATION] = 2;
 
 -- ===========================================================================
 --	VARIABLES
 -- ===========================================================================
-
 local m_RouteInstanceIM:table			= InstanceManager:new("RouteInstance", "Top", Controls.BodyStack);
 local m_HeaderInstanceIM:table			= InstanceManager:new("HeaderInstance", "Top", Controls.BodyStack);
 local m_SimpleButtonInstanceIM:table	= InstanceManager:new("SimpleButtonInstance", "Top", Controls.BodyStack);
@@ -88,11 +73,13 @@ local m_SimpleButtonInstanceIM:table	= InstanceManager:new("SimpleButtonInstance
 local m_AnimSupport:table; -- AnimSidePanelSupport
 
 local m_currentTab:number = TRADE_TABS.MY_ROUTES;
-local m_processingTurn:boolean = false;
+
+local m_shiftDown:boolean = false;
+local m_ctrlDown:boolean = false;
+local m_changedSortSettings:boolean = false;
 
 -- Trade Routes Tables
 local m_AvailableTradeRoutes:table = {};		-- Stores all available routes
-local m_LocalPlayerRunningRoutes:table = {};	-- Stores the current running routes
 local m_TraderAutomated:table = {};
 
 -- Stores filter list and tracks the currently selected list
@@ -100,10 +87,14 @@ local m_filterList:table = {};
 local m_filterCount:number = 0;
 local m_filterSelected:number = 1;
 
-local m_groupBySelected:number = 1;
+local m_groupBySelected:number = GROUP_BY_SETTINGS.DESTINATION;
 local m_groupByList:table = {};
 
-local m_cityRouteLimitExclusionList:table = {};
+local m_GroupExpandAll:boolean = false;
+local m_GroupCollapseAll:boolean = false;
+
+local m_GroupsFullyExpanded:table = {};
+local m_GroupsFullyCollapsed:table = {};
 
 -- Variables used for cycle trade units function
 local m_TradeUnitIndex:number = 0;
@@ -114,7 +105,6 @@ local m_HasBuiltTradeRouteTable:boolean	= false;
 local m_LastTurnBuiltTradeRouteTable:number = -1;
 local m_LastTurnUpdatedMyRoutes:number = -1;
 
-local m_GroupShowAll:boolean = false;
 
 -- Stores the sort settings.
 local m_SortBySettings = {};
@@ -132,22 +122,17 @@ m_GroupSortBySettings[1] = {
 	SortOrder = SORT_DESCENDING;
 };
 
-local m_CompareFunctionByID	= {};
-
-m_CompareFunctionByID[SORT_BY_ID.FOOD]				= function(a, b) return CompareByFood(a, b) end;
-m_CompareFunctionByID[SORT_BY_ID.PRODUCTION]		= function(a, b) return CompareByProduction(a, b) end;
-m_CompareFunctionByID[SORT_BY_ID.GOLD]				= function(a, b) return CompareByGold(a, b) end;
-m_CompareFunctionByID[SORT_BY_ID.SCIENCE]			= function(a, b) return CompareByScience(a, b) end;
-m_CompareFunctionByID[SORT_BY_ID.CULTURE]			= function(a, b) return CompareByCulture(a, b) end;
-m_CompareFunctionByID[SORT_BY_ID.FAITH]				= function(a, b) return CompareByFaith(a, b) end;
-m_CompareFunctionByID[SORT_BY_ID.TURNS_TO_COMPLETE]	= function(a, b) return CompareByTurnsToComplete(a, b) end;
+-- ===========================================================================
+--	Refresh functions
+-- ===========================================================================
 
 -- Finds and adds all possible trade routes
 function RebuildAvailableTradeRoutesTable()
 	print ("Rebuilding Trade Routes table");
 	m_AvailableTradeRoutes = {};
 
-	local sourceCities:table = Players[Game.GetLocalPlayer()]:GetCities();
+	local sourcePlayerID = Game.GetLocalPlayer();
+	local sourceCities:table = Players[sourcePlayerID]:GetCities();
 	local players:table = Game:GetPlayers();
 	local tradeManager:table = Game.GetTradeManager();
 
@@ -159,20 +144,22 @@ function RebuildAvailableTradeRoutesTable()
 			m_AvailableTradeRoutes[i] = {};
 			local hasTradeRoute = false
 			for j, destinationPlayer in ipairs(players) do
-				local destinationCities:table = destinationPlayer:GetCities();				
-				for k, destinationCity in destinationCities:Members() do
-					-- Can we trade with this city / civ
-					if tradeManager:CanStartRoute(sourceCity:GetOwner(), sourceCity:GetID(), destinationCity:GetOwner(), destinationCity:GetID()) then
-						hasTradeRoute = true
-						-- Create the trade route entry
-						local tradeRoute = { 
-							OriginCityPlayer 		= Game.GetLocalPlayer(), 
-							OriginCityID 			= sourceCity:GetID(), 
-							DestinationCityPlayer 	= destinationPlayer:GetID(), 
-							DestinationCityID 		= destinationCity:GetID()
-						};
+				if CanPossiblyTradeWithPlayer(sourcePlayerID, destinationPlayer:GetID()) then
+					local destinationCities:table = destinationPlayer:GetCities();				
+					for k, destinationCity in destinationCities:Members() do
+						-- Can we trade with this city / civ
+						if tradeManager:CanStartRoute(sourcePlayerID, sourceCity:GetID(), destinationCity:GetOwner(), destinationCity:GetID()) then
+							hasTradeRoute = true
+							-- Create the trade route entry
+							local tradeRoute = { 
+								OriginCityPlayer 		= sourcePlayerID, 
+								OriginCityID 			= sourceCity:GetID(), 
+								DestinationCityPlayer 	= destinationPlayer:GetID(), 
+								DestinationCityID 		= destinationCity:GetID()
+							};
 
-						table.insert(m_AvailableTradeRoutes[i], tradeRoute);
+							table.insert(m_AvailableTradeRoutes[i], tradeRoute);
+						end
 					end
 				end
 			end
@@ -185,49 +172,53 @@ function RebuildAvailableTradeRoutesTable()
 	elseif m_groupByList[m_groupBySelected].groupByID == GROUP_BY_SETTINGS.DESTINATION then
 		local destinationCityCounter:number = 0;
 		for i, destinationPlayer in ipairs(players) do
-			local destinationCities:table = destinationPlayer:GetCities();				
-			for j, destinationCity in destinationCities:Members() do
-				local hasTradeRoute = false
-				destinationCityCounter = destinationCityCounter + 1;
-				m_AvailableTradeRoutes[destinationCityCounter] = {};
-				for k, sourceCity in sourceCities:Members() do
-					-- Can we trade with this city / civ
-					if tradeManager:CanStartRoute(sourceCity:GetOwner(), sourceCity:GetID(), destinationCity:GetOwner(), destinationCity:GetID()) then
-						hasTradeRoute = true
-						-- Create the trade route entry
-						local tradeRoute = { 
-							OriginCityPlayer 		= Game.GetLocalPlayer(), 
-							OriginCityID 			= sourceCity:GetID(), 
-							DestinationCityPlayer 	= destinationPlayer:GetID(), 
-							DestinationCityID 		= destinationCity:GetID()
-						};
-						table.insert(m_AvailableTradeRoutes[destinationCityCounter], tradeRoute);
+			if CanPossiblyTradeWithPlayer(sourcePlayerID, destinationPlayer:GetID()) then
+				local destinationCities:table = destinationPlayer:GetCities();				
+				for j, destinationCity in destinationCities:Members() do
+					local hasTradeRoute = false
+					destinationCityCounter = destinationCityCounter + 1;
+					m_AvailableTradeRoutes[destinationCityCounter] = {};
+					for k, sourceCity in sourceCities:Members() do
+						-- Can we trade with this city / civ
+						if tradeManager:CanStartRoute(sourcePlayerID, sourceCity:GetID(), destinationCity:GetOwner(), destinationCity:GetID()) then
+							hasTradeRoute = true
+							-- Create the trade route entry
+							local tradeRoute = { 
+								OriginCityPlayer 		= sourcePlayerID, 
+								OriginCityID 			= sourceCity:GetID(), 
+								DestinationCityPlayer 	= destinationPlayer:GetID(), 
+								DestinationCityID 		= destinationCity:GetID()
+							};
+							table.insert(m_AvailableTradeRoutes[destinationCityCounter], tradeRoute);
+						end
 					end
-				end
 
-				-- Remove entry if no trade route existed
-				if not hasTradeRoute then
-					table.remove(m_AvailableTradeRoutes, destinationCityCounter);
-					destinationCityCounter = destinationCityCounter - 1;
+					-- Remove entry if no trade route existed
+					if not hasTradeRoute then
+						table.remove(m_AvailableTradeRoutes, destinationCityCounter);
+						destinationCityCounter = destinationCityCounter - 1;
+					end
 				end
 			end
 		end
 	else
 		for i, sourceCity in sourceCities:Members() do
 			for j, destinationPlayer in ipairs(players) do
-				local destinationCities:table = destinationPlayer:GetCities();				
-				for k, destinationCity in destinationCities:Members() do
-					-- Can we trade with this city / civ
-					if tradeManager:CanStartRoute(sourceCity:GetOwner(), sourceCity:GetID(), destinationCity:GetOwner(), destinationCity:GetID()) then
-						-- Create the trade route entry
-						local tradeRoute = { 
-							OriginCityPlayer 		= Game.GetLocalPlayer(), 
-							OriginCityID 			= sourceCity:GetID(), 
-							DestinationCityPlayer 	= destinationPlayer:GetID(), 
-							DestinationCityID 		= destinationCity:GetID()
-						};
+				if CanPossiblyTradeWithPlayer(sourcePlayerID, destinationPlayer:GetID()) then
+					local destinationCities:table = destinationPlayer:GetCities();				
+					for k, destinationCity in destinationCities:Members() do
+						-- Can we trade with this city / civ
+						if tradeManager:CanStartRoute(sourcePlayerID, sourceCity:GetID(), destinationCity:GetOwner(), destinationCity:GetID()) then
+							-- Create the trade route entry
+							local tradeRoute = { 
+								OriginCityPlayer 		= sourcePlayerID, 
+								OriginCityID 			= sourceCity:GetID(), 
+								DestinationCityPlayer 	= destinationPlayer:GetID(), 
+								DestinationCityID 		= destinationCity:GetID()
+							};
 
-						table.insert(m_AvailableTradeRoutes, tradeRoute);
+							table.insert(m_AvailableTradeRoutes, tradeRoute);
+						end
 					end
 				end
 			end
@@ -239,6 +230,9 @@ function RebuildAvailableTradeRoutesTable()
 end
 
 function Refresh()
+	local preRefreshClock = os.clock();
+
+	-- Build a custom dialog
 	PreRefresh();
 
 	RefreshGroupByPulldown();
@@ -256,6 +250,9 @@ function Refresh()
 	end
 
 	PostRefresh();
+	local postRefreshClock = os.clock();
+
+	print("Time taken to refresh: " .. (postRefreshClock- preRefreshClock) .. " secs");
 end
 
 function PreRefresh()
@@ -286,9 +283,14 @@ function ViewMyRoutes()
 	SetMyRoutesTabSelected(true);
 	SetRoutesToCitiesTabSelected(false);
 	SetAvailableRoutesTabSelected(false);
+
+	local localPlayerID = Game.GetLocalPlayer();
+	if (localPlayerID == -1) then
+		return;
+	end
 	
 	-- Update Header
-	local playerTrade	:table	= Players[Game.GetLocalPlayer()]:GetTrade();
+	local playerTrade	:table	= Players[localPlayerID]:GetTrade();
 	local routesActive	:number = playerTrade:GetNumOutgoingRoutes();
 	local routesCapacity:number = playerTrade:GetOutgoingRouteCapacity();
 	Controls.HeaderLabel:SetText(Locale.ToUpper("LOC_TRADE_OVERVIEW_MY_ROUTES"));
@@ -303,13 +305,11 @@ function ViewMyRoutes()
 	end
 	Controls.ActiveRoutesLabel:SetText(Locale.Lookup("LOC_TRADE_OVERVIEW_ACTIVE_ROUTES", routesActiveText, routesCapacity));
 
-	-- Run a safety check, to make all running routes are present in table,
-	-- and routes completed are removed.
-	CheckConsistencyWithMyRunningRoutes(m_LocalPlayerRunningRoutes);
+	local localPlayerRunningRoutes:table = GetLocalPlayerRunningRoutes();
 
 	-- Gather data and apply filter
 	local routesSortedByPlayer:table = {};
-	for i,route in ipairs(m_LocalPlayerRunningRoutes) do
+	for i,route in ipairs(localPlayerRunningRoutes) do
 		if m_filterList[m_filterSelected].FilterFunction and m_filterList[m_filterSelected].FilterFunction(Players[route.DestinationCityPlayer]) then
 			-- Make sure we have a table for each destination player
 			if routesSortedByPlayer[route.DestinationCityPlayer] == nil then
@@ -321,12 +321,12 @@ function ViewMyRoutes()
 	end
 
 	-- Add routes to local player cities
-	if routesSortedByPlayer[Game.GetLocalPlayer()] ~= nil then
-		CreatePlayerHeader(Players[Game.GetLocalPlayer()]);
+	if routesSortedByPlayer[localPlayerID] ~= nil then
+		CreatePlayerHeader(Players[localPlayerID]);
 
-		SortTradeRoutes(routesSortedByPlayer[Game.GetLocalPlayer()]);
+		SortTradeRoutes(routesSortedByPlayer[localPlayerID], m_GroupSortBySettings);
 
-		for i,route in ipairs(routesSortedByPlayer[Game.GetLocalPlayer()]) do
+		for i,route in ipairs(routesSortedByPlayer[localPlayerID]) do
 			AddRouteInstanceFromRouteInfo(route);
 		end
 	end
@@ -334,8 +334,8 @@ function ViewMyRoutes()
 	-- Add routes to other civs
 	local haveAddedCityStateHeader:boolean = false;
 	for playerID,routes in pairs(routesSortedByPlayer) do
-		if playerID ~= Game.GetLocalPlayer() then
-			SortTradeRoutes ( routes );
+		if playerID ~= localPlayerID then
+			SortTradeRoutes(routes, m_GroupSortBySettings);
 
 			-- Skip City States as these are added below
 			local playerInfluence:table = Players[playerID]:GetInfluence();
@@ -364,7 +364,7 @@ function ViewMyRoutes()
 	if unusedRoutes > 0 then
 		CreateUnusedRoutesHeader();
 
-		local idleTradeUnits:table = GetIdleTradeUnits(Game.GetLocalPlayer());
+		local idleTradeUnits:table = GetIdleTradeUnits(localPlayerID);
 
 		-- Assign idle trade units to unused routes
 		for i=1,unusedRoutes,1 do
@@ -427,7 +427,7 @@ function ViewRoutesToCities()
 		CreatePlayerHeader(Players[playerID]);
 
 		-- Sort the routes
-		SortTradeRoutes( routes )
+		SortTradeRoutes(routes, m_GroupSortBySettings);
 
 		for i,route in ipairs(routes) do
 			AddRouteInstanceFromRouteInfo(route);
@@ -443,6 +443,11 @@ function ViewAvailableRoutes()
 	SetMyRoutesTabSelected(false);
 	SetRoutesToCitiesTabSelected(false);
 	SetAvailableRoutesTabSelected(true);
+
+	local localPlayerID = Game.GetLocalPlayer();
+	if (localPlayerID == -1) then
+		return;
+	end
 
 	-- Update Header
 	Controls.HeaderLabel:SetText(Locale.ToUpper("LOC_TRADE_OVERVIEW_AVAILABLE_ROUTES"));
@@ -461,7 +466,7 @@ function ViewAvailableRoutes()
 			local filteredRoutes:table = FilterTradeRoutes(groupedRoutes);
 
 			if tableLength(filteredRoutes) > 0 then
-				SortTradeRoutes(filteredRoutes);
+				-- SortTradeRoutes(filteredRoutes, m_SortBySettings);
 				table.insert(filteredAndSortedRoutes, filteredRoutes);
 			end
 		end
@@ -469,75 +474,71 @@ function ViewAvailableRoutes()
 		-- Sort the order of groups
 		SortGroupedRoutes(filteredAndSortedRoutes);
 
+		local groupsDisplayed:number = 0;
+
 		for i, filteredSortedRoutes in ipairs(filteredAndSortedRoutes) do
 			if m_groupByList[m_groupBySelected].groupByID == GROUP_BY_SETTINGS.ORIGIN then
 				local originPlayer:table = Players[filteredSortedRoutes[1].OriginCityPlayer];
 				local originCity:table = originPlayer:GetCities():FindID(filteredSortedRoutes[1].OriginCityID);
 
-				local routeCount:number = tableLength(filteredSortedRoutes);
-
-				if routeCount > 0 then
-					-- Find if the city is in exclusion list
-					local originCityEntry:table = {
-						OwnerID = originPlayer:GetID(),
-						CityID = originCity:GetID()
-					};
-
-					local cityExclusionIndex = findIndex(m_cityRouteLimitExclusionList, originCityEntry, CompareCityEntries);
-
-					if (cityExclusionIndex > 0) then
-						CreateCityHeader(originCity, routeCount, routeCount);
-						AddRouteInstancesFromTable(filteredSortedRoutes);
-					else
-						if not m_GroupShowAll then
-							CreateCityHeader(originCity, math.min(GROUP_ORIGIN_ROUTE_SHOW_COUNT, routeCount), routeCount);
-							AddRouteInstancesFromTable(filteredSortedRoutes, GROUP_ORIGIN_ROUTE_SHOW_COUNT);
-						else
-							-- If showing all, add city to exclusion list, and display all
-							table.insert(m_cityRouteLimitExclusionList, originCityEntry);
-							CreateCityHeader(originCity, routeCount, routeCount);
-							AddRouteInstancesFromTable(filteredSortedRoutes);
-						end
-					end
-				end
+				DisplayGroup(filteredSortedRoutes, originCity);
 			elseif m_groupByList[m_groupBySelected].groupByID == GROUP_BY_SETTINGS.DESTINATION then
 				local destinationPlayer:table = Players[filteredSortedRoutes[1].DestinationCityPlayer];
 				local destinationCity:table = destinationPlayer:GetCities():FindID(filteredSortedRoutes[1].DestinationCityID);
 
-				local routeCount:number = tableLength(filteredSortedRoutes);
-
-				if routeCount > 0 then
-					-- Find if the city is in exclusion list
-					local destinationCityEntry:table = {
-						OwnerID = destinationPlayer:GetID(),
-						CityID = destinationCity:GetID()
-					};
-
-					local cityExclusionIndex = findIndex(m_cityRouteLimitExclusionList, destinationCityEntry, CompareCityEntries);
-
-					if (cityExclusionIndex > 0) then
-						CreateCityHeader(destinationCity, routeCount, routeCount);
-						AddRouteInstancesFromTable(filteredSortedRoutes);
-					else
-						if m_GroupShowAll then
-							-- If showing all, add city to exclusion list, and display all
-							table.insert(m_cityRouteLimitExclusionList, destinationCityEntry);
-							CreateCityHeader(destinationCity, routeCount, routeCount);
-							AddRouteInstancesFromTable(filteredSortedRoutes);
-						else
-							CreateCityHeader(destinationCity, math.min(GROUP_DESTINATION_ROUTE_SHOW_COUNT, routeCount), routeCount);
-							AddRouteInstancesFromTable(filteredSortedRoutes, GROUP_DESTINATION_ROUTE_SHOW_COUNT);
-						end
-					end
-				end
+				DisplayGroup(filteredSortedRoutes, destinationCity);
 			end
 		end
 	else
 		local filteredRoutes:table = FilterTradeRoutes(m_AvailableTradeRoutes);
 
 		if tableLength(filteredRoutes) > 0 then
-			SortTradeRoutes(filteredRoutes);
-			AddRouteInstancesFromTable(filteredRoutes, GROUP_NONE_ROUTE_SHOW_COUNT);
+			SortTradeRoutes(filteredRoutes, m_GroupSortBySettings);
+			AddRouteInstancesFromTable(filteredRoutes, SEMI_EXPAND_SETTINGS[GROUP_BY_SETTINGS.NONE]);
+		end
+	end
+end
+
+function DisplayGroup(routesTable:table, city:table)
+
+	local routeCount:number = tableLength(routesTable);
+	if routeCount > 0 then
+		-- Find if the city is in exclusion list
+		local cityEntry:table = {
+			OwnerID = city:GetOwner(),
+			CityID = city:GetID()
+		};
+
+		local groupExpandIndex = findIndex(m_GroupsFullyExpanded, cityEntry, CompareCityEntries);
+		local groupCollapseIndex = findIndex(m_GroupsFullyCollapsed, cityEntry, CompareCityEntries);
+
+		-- If not collapsed, sort the routes
+		if groupCollapseIndex == -1 then
+			SortTradeRoutes(routesTable, m_SortBySettings);
+		end
+
+		-- print(Locale.Lookup(city:GetName()) .. ": " .. groupExpandIndex .. " " .. groupCollapseIndex )
+		if (groupExpandIndex > 0) then
+			CreateCityHeader(city, routeCount, routeCount, "");
+			AddRouteInstancesFromTable(routesTable);
+		elseif (groupCollapseIndex > 0) then
+			CreateCityHeader(city, 0, routeCount, GetCityHeaderTooltipString(routesTable));
+			AddRouteInstancesFromTable(routesTable, 0);
+		else
+			if m_GroupExpandAll then
+				-- If showing all, add city to expand list, and display all
+				table.insert(m_GroupsFullyExpanded, cityEntry);
+				CreateCityHeader(city, routeCount, routeCount, "");
+				AddRouteInstancesFromTable(routesTable);
+			elseif m_GroupCollapseAll then
+				-- If hiding all, add city to collapse list, and hide it
+				table.insert(m_GroupsFullyCollapsed, cityEntry);
+				CreateCityHeader(city, 0, routeCount, GetCityHeaderTooltipString(routesTable));
+				AddRouteInstancesFromTable(routesTable, 0);
+			else
+				CreateCityHeader(city, math.min(SEMI_EXPAND_SETTINGS[m_groupBySelected], routeCount), routeCount, "");
+				AddRouteInstancesFromTable(routesTable, SEMI_EXPAND_SETTINGS[m_groupBySelected]);
+			end
 		end
 	end
 end
@@ -566,6 +567,11 @@ function SetAvailableRoutesTabSelected( isSelected:boolean )
 	Controls.AvailableRoutesTabSelectedLabel:SetHide(not isSelected);
 end
 
+function GetCityHeaderTooltipString( tradeRoutes:table )
+	local topRoute = GetTopRouteFromSortSettings(tradeRoutes, m_SortBySettings);
+	return "Top Route: " .. GetTradeRouteString(topRoute) .. "[NEWLINE]" .. Locale.Lookup("LOC_TRADE_TURNS_REMAINING_TOOLTIP_BREAKER") .. "[NEWLINE]" .. GetTradeRouteYieldString(topRoute);
+end
+
 -- ===========================================================================
 --	Route Instance Creators
 -- ===========================================================================
@@ -588,6 +594,7 @@ end
 
 function AddRouteInstancesFromTable ( tradeRoutes:table, showCount:number )
 	for index, tradeRoute in ipairs(tradeRoutes) do
+
 		if showCount then
 			if index <= showCount then
 				AddRouteInstanceFromRouteInfo(tradeRoute);
@@ -619,45 +626,25 @@ function AddRouteInstance( originPlayer:table, originCity:table, destinationPlay
 	local brighterBackColor:number = DarkenLightenColor(backColor,90,250);
 
 	-- Update colors
-	if tintTradeRouteEntry then
+	tintBackColor = DarkenLightenColor(backColor, tintColorOffset, tintColorOpacity);
+	tintFrontColor = DarkenLightenColor(frontColor, tintLabelColorOffset, tintLabelColorOpacity);
 
-		tintBackColor = DarkenLightenColor(backColor, tintColorOffset, tintColorOpacity);
-		tintFrontColor = DarkenLightenColor(frontColor, tintLabelColorOffset, tintLabelColorOpacity);
+	routeInstance.GridButton:SetColor(tintBackColor);
+	routeInstance.RouteLabel:SetColor(tintFrontColor);
+	routeInstance.TurnsToComplete:SetColor( frontColor );
 
-		routeInstance.GridButton:SetColor(tintBackColor);
-		routeInstance.RouteLabel:SetColor(tintFrontColor);
-		routeInstance.RouteLabel2:SetColor(tintFrontColor);
-		routeInstance.TurnsToComplete:SetColor( frontColor );
-	
-		routeInstance.BannerBase:SetColor(  DarkenLightenColor(backColor,-10, 200) );
-		routeInstance.BannerDarker:SetColor( darkerBackColor );
-		routeInstance.BannerLighter:SetColor( brighterBackColor );
+	routeInstance.BannerBase:SetColor(  DarkenLightenColor(backColor,-10, 200) );
+	routeInstance.BannerDarker:SetColor( darkerBackColor );
+	routeInstance.BannerLighter:SetColor( brighterBackColor );
 
-		if hideHeaderOpaqueBackdrop then
-			routeInstance.BannerBase:SetHide(true);
-			routeInstance.BannerDarker:SetHide(true);
-			routeInstance.BannerLighter:SetHide(true);
-			routeInstance.DividerLine:SetHide(false);
-		else
-			routeInstance.RouteLabel:SetColor(frontColor);
-			routeInstance.RouteLabel2:SetColor(frontColor);
+	routeInstance.RouteLabel:SetColor(frontColor);
 
-			routeInstance.BannerBase:SetHide(false);
-			routeInstance.BannerDarker:SetHide(false);
-			routeInstance.BannerLighter:SetHide(false);
-			routeInstance.RouteLabel2:SetHide(true);
-			routeInstance.DividerLine:SetHide(true);
-		end
-	else
-		routeInstance.BannerBase:SetHide(true);
-		routeInstance.BannerDarker:SetHide(true);
-		routeInstance.BannerLighter:SetHide(true);
-		routeInstance.RouteLabel2:SetHide(false);
-	end
+	routeInstance.BannerBase:SetHide(false);
+	routeInstance.BannerDarker:SetHide(false);
+	routeInstance.BannerLighter:SetHide(false);
 
 	-- Update Route Label
 	routeInstance.RouteLabel:SetText(Locale.ToUpper(originCity:GetName()) .. " " .. Locale.ToUpper("LOC_TRADE_OVERVIEW_TO") .. " " .. Locale.ToUpper(destinationCity:GetName()));
-	routeInstance.RouteLabel2:SetText(Locale.ToUpper(originCity:GetName()) .. " " .. Locale.ToUpper("LOC_TRADE_OVERVIEW_TO") .. " " .. Locale.ToUpper(destinationCity:GetName()));
 
 	-- Update yield directional arrows
 	local originBackColor, originFrontColor = UI.GetPlayerColors( originPlayer:GetID() );
@@ -665,106 +652,22 @@ function AddRouteInstance( originPlayer:table, originCity:table, destinationPlay
 	routeInstance.OriginCivArrow:SetColor(DarkenLightenColor(originFrontColor, 30, 255));
 	routeInstance.DestinationCivArrow:SetColor(DarkenLightenColor(destinationFrontColor, 30, 255));
 
-	-- Update Route Yields
-	routeInstance.OriginResourceStack:DestroyAllChildren();
-	routeInstance.DestinationResourceStack:DestroyAllChildren();
+	routeInstance.ResourceStack:DestroyAllChildren();
 
-	if showNoBenefitsString then
-		routeInstance.OriginResourceStack:SetHide(true);
-		routeInstance.DestinationResourceStack:SetHide(true);
-		routeInstance.OriginNoBenefitsLabel:SetHide(false);
-		routeInstance.OriginNoBenefitsLabel:SetString(Locale.Lookup(originCity:GetName()) .. " gains no benefits from this route.")
-		routeInstance.DestinationNoBenefitsLabel:SetHide(false);
-		routeInstance.DestinationNoBenefitsLabel:SetString(Locale.Lookup(destinationCity:GetName()) .. " gains no benefits from this route.")
-	else
-		routeInstance.OriginNoBenefitsLabel:SetHide(true);
-		routeInstance.DestinationNoBenefitsLabel:SetHide(true);
-	end
+	local originYieldInstance:table = {};
+	local destinationYieldInstance:table = {};
+	ContextPtr:BuildInstanceForControl( "RouteYieldInstance", originYieldInstance, routeInstance.ResourceStack );
+	ContextPtr:BuildInstanceForControl( "RouteYieldInstance", destinationYieldInstance, routeInstance.ResourceStack );
 
 	for yieldInfo in GameInfo.Yields() do
-		local originCityYieldValue = GetYieldFromCity(yieldInfo.Index, originCity, destinationCity);
+		local originCityYieldValue = GetYieldForOriginCity(yieldInfo.Index, originCity, destinationCity);
 		local destinationCityYieldValue = GetYieldForDestinationCity(yieldInfo.Index, originCity, destinationCity);
-
-		local originResourceInstance:table = {};
-		local destinationResourceInstance:table = {};
-
-		if alignTradeYields then
-			ContextPtr:BuildInstanceForControl( "ResourceInstance", originResourceInstance, routeInstance.OriginResourceStack );
-			ContextPtr:BuildInstanceForControl( "ResourceInstance", destinationResourceInstance, routeInstance.DestinationResourceStack );
-		end
-
-		if (originCityYieldValue ~= 0 ) then
-			routeInstance.OriginResourceStack:SetHide(false);
-
-			if not alignTradeYields then
-				ContextPtr:BuildInstanceForControl( "ResourceInstance", originResourceInstance, routeInstance.OriginResourceStack );
-			end
-
-			originResourceInstance.ResourceIconLabel:SetText(yieldInfo.IconString);
-			originResourceInstance.ResourceValueLabel:SetText("+" .. originCityYieldValue);
-
-			-- Set tooltip to resource name
-			originResourceInstance.Top:LocalizeAndSetToolTip(yieldInfo.Name);
-
-			-- Update Label Color
-			if (yieldInfo.YieldType == "YIELD_FOOD") then
-				originResourceInstance.ResourceValueLabel:SetColorByName("ResFoodLabelCS");
-			elseif (yieldInfo.YieldType == "YIELD_PRODUCTION") then
-				originResourceInstance.ResourceValueLabel:SetColorByName("ResProductionLabelCS");
-			elseif (yieldInfo.YieldType == "YIELD_GOLD") then
-				originResourceInstance.ResourceValueLabel:SetColorByName("ResGoldLabelCS");
-			elseif (yieldInfo.YieldType == "YIELD_SCIENCE") then
-				originResourceInstance.ResourceValueLabel:SetColorByName("ResScienceLabelCS");
-			elseif (yieldInfo.YieldType == "YIELD_CULTURE") then
-				originResourceInstance.ResourceValueLabel:SetColorByName("ResCultureLabelCS");
-			elseif (yieldInfo.YieldType == "YIELD_FAITH") then
-				originResourceInstance.ResourceValueLabel:SetColorByName("ResFaithLabelCS");
-			end
-
-			routeInstance.OriginNoBenefitsLabel:SetHide(true);
-
-		elseif alignTradeYields then
-			originResourceInstance.ResourceIconLabel:SetHide(true);
-			originResourceInstance.ResourceValueLabel:SetHide(true);
-		end
-
-		if (destinationCityYieldValue ~= 0 ) then
-			routeInstance.DestinationResourceStack:SetHide(false);
-
-			if not alignTradeYields then
-				ContextPtr:BuildInstanceForControl( "ResourceInstance", destinationResourceInstance, routeInstance.DestinationResourceStack );
-			end
-			destinationResourceInstance.ResourceIconLabel:SetText(yieldInfo.IconString);
-			destinationResourceInstance.ResourceValueLabel:SetText("+" .. destinationCityYieldValue);
-
-			-- Set tooltip to resouce name
-			destinationResourceInstance.Top:LocalizeAndSetToolTip(yieldInfo.Name);
-
-			-- Update Label Color
-			if (yieldInfo.YieldType == "YIELD_FOOD") then
-				destinationResourceInstance.ResourceValueLabel:SetColorByName("ResFoodLabelCS");
-			elseif (yieldInfo.YieldType == "YIELD_PRODUCTION") then
-				destinationResourceInstance.ResourceValueLabel:SetColorByName("ResProductionLabelCS");
-			elseif (yieldInfo.YieldType == "YIELD_GOLD") then
-				destinationResourceInstance.ResourceValueLabel:SetColorByName("ResGoldLabelCS");
-			elseif (yieldInfo.YieldType == "YIELD_SCIENCE") then
-				destinationResourceInstance.ResourceValueLabel:SetColorByName("ResScienceLabelCS");
-			elseif (yieldInfo.YieldType == "YIELD_CULTURE") then
-				destinationResourceInstance.ResourceValueLabel:SetColorByName("ResCultureLabelCS");
-			elseif (yieldInfo.YieldType == "YIELD_FAITH") then
-				destinationResourceInstance.ResourceValueLabel:SetColorByName("ResFaithLabelCS");
-			end
-
-			routeInstance.DestinationNoBenefitsLabel:SetHide(true);
-
-		elseif alignTradeYields then
-			destinationResourceInstance.ResourceIconLabel:SetHide(true);
-			destinationResourceInstance.ResourceValueLabel:SetHide(true);
-		end
+		
+		SetRouteInstanceYields(originYieldInstance, yieldInfo, originCityYieldValue);
+		SetRouteInstanceYields(destinationYieldInstance, yieldInfo, destinationCityYieldValue);
 	end
 
-	routeInstance.OriginResourceStack:CalculateSize();
-	routeInstance.DestinationResourceStack:CalculateSize();
+	routeInstance.ResourceStack:CalculateSize();
 	
 	-- Update City State Quest Icon
 	routeInstance.CityStateQuestIcon:SetHide(true);	
@@ -773,7 +676,7 @@ function AddRouteInstance( originPlayer:table, originCity:table, destinationPlay
 	local questsManager:table = Game.GetQuestsManager();
 	
 	if IsCityStateWithTradeQuest(destinationPlayer) then
-		questTooltip = questTooltip .. "[NEWLINE]" .. tradeRouteQuestInfo.IconString .. questsManager:GetActiveQuestName(Game.GetLocalPlayer(), destinationCity:GetOwner(), tradeRouteQuestInfo.Index);
+		questTooltip = questTooltip .. "[NEWLINE]" .. tradeRouteQuestInfo.IconString .. questsManager:GetActiveQuestName(localPlayerID, destinationCity:GetOwner(), tradeRouteQuestInfo.Index);
 		routeInstance.CityStateQuestIcon:SetHide(false);
 		routeInstance.CityStateQuestIcon:SetToolTipString(questTooltip);
 	end
@@ -795,20 +698,20 @@ function AddRouteInstance( originPlayer:table, originCity:table, destinationPlay
 		end
 	else
 		-- Determine are diplomatic visibility status
-		local visibilityIndex:number = Players[Game.GetLocalPlayer()]:GetDiplomacy():GetVisibilityOn(destinationPlayer);
+		local visibilityIndex:number = Players[localPlayerID]:GetDiplomacy():GetVisibilityOn(destinationPlayer);
 
 		-- Determine this player has a trade route with the local player
 		local hasTradeRoute:boolean = false;
 		local playerCities:table = destinationPlayer:GetCities();
 		for i,city in playerCities:Members() do
-			if city:GetTrade():HasActiveTradingPost(Game.GetLocalPlayer()) then
+			if city:GetTrade():HasActiveTradingPost(localPlayerID) then
 				hasTradeRoute = true;
 			end
 		end
 
 		-- Display trade route tourism modifier
 		local baseTourismModifier = GlobalParameters.TOURISM_TRADE_ROUTE_BONUS;
-		local extraTourismModifier = Players[Game.GetLocalPlayer()]:GetCulture():GetExtraTradeRouteTourismModifier();
+		local extraTourismModifier = Players[localPlayerID]:GetCulture():GetExtraTradeRouteTourismModifier();
 		
 		-- TODO: Use LOC_TRADE_OVERVIEW_TOURISM_BONUS when we can update the text
 		routeInstance.TourismBonusPercentage:SetText("+" .. Locale.ToPercent((baseTourismModifier + extraTourismModifier)/100));
@@ -938,28 +841,29 @@ function AddRouteInstance( originPlayer:table, originCity:table, destinationPlay
 		end
 	end
 
+	-- Hide the cancel automation button
+	routeInstance.CancelAutomation:SetHide(true);
+
 	-- Should we display the cancel automation?
-	if (m_currentTab == TRADE_TABS.MY_ROUTES) and (traderUnitID ~= nil and m_TraderAutomated[traderUnitID]) then
-		-- Unhide the cancel automation
-		routeInstance.CancelAutomation:SetHide(false);
-		-- Add button callback
-		routeInstance.CancelAutomation:RegisterCallback( Mouse.eLClick, 
-			function()
-				LuaEvents.TraderOverview_SetTraderAutomated( traderUnitID, false );
-				m_TraderAutomated[traderUnitID] = false;
-				Refresh();
-			end
-		);
-	else
-		-- Hide the cancel automation button
-		routeInstance.CancelAutomation:SetHide(true);
+	if m_currentTab == TRADE_TABS.MY_ROUTES and traderUnitID ~= nil then
+		if IsTraderAutomated(traderUnitID) then
+			-- Unhide the cancel automation
+			routeInstance.CancelAutomation:SetHide(false);
+			-- Add button callback
+			routeInstance.CancelAutomation:RegisterCallback( Mouse.eLClick, 
+				function()
+					CancelAutomatedTrader(traderUnitID);
+					Refresh();
+				end
+			);
+		end
 	end
 
 	-- Add buttton hookups
 	if m_currentTab == TRADE_TABS.AVAILABLE_ROUTES then
 		-- Find trader unit / units and set button callback to select that unit
 		local tradeUnits = {};
-		local pPlayerUnits:table = Players[Game.GetLocalPlayer()]:GetUnits();
+		local pPlayerUnits:table = Players[localPlayerID]:GetUnits();
 		for i, pUnit in pPlayerUnits:Members() do
 			-- Ignore trade units that have a pending operation
 			if not pUnit:HasPendingOperations() then
@@ -1009,7 +913,7 @@ function AddRouteInstance( originPlayer:table, originCity:table, destinationPlay
 end
 
 -- ---------------------------------------------------------------------------
--- Route button hookups
+-- Route button helpers
 -- ---------------------------------------------------------------------------
 function CycleTradeUnit( tradeUnits:table, tradeRouteID:number, newOriginCity:table )
 
@@ -1033,6 +937,28 @@ function CycleTradeUnit( tradeUnits:table, tradeRouteID:number, newOriginCity:ta
 	m_TradeUnitIndex = m_TradeUnitIndex + 1;
 	if m_TradeUnitIndex > tableLength(tradeUnits) then
 		m_TradeUnitIndex = 1;
+	end
+end
+
+function SetRouteInstanceYields(yieldsInstance, yieldInfo, yieldValue)
+	local iconString, text = FormatYieldText(yieldInfo, yieldValue);
+	if yieldValue == 0 then
+		iconString = "";
+		text = "";
+	end
+
+	if (yieldInfo.YieldType == "YIELD_FOOD") then
+		yieldsInstance.YieldFoodLabel:SetText(text .. iconString);
+	elseif (yieldInfo.YieldType == "YIELD_PRODUCTION") then
+		yieldsInstance.YieldProductionLabel:SetText(text .. iconString);
+	elseif (yieldInfo.YieldType == "YIELD_GOLD") then
+		yieldsInstance.YieldGoldLabel:SetText(text .. iconString);
+	elseif (yieldInfo.YieldType == "YIELD_SCIENCE") then
+		yieldsInstance.YieldScienceLabel:SetText(text .. iconString);
+	elseif (yieldInfo.YieldType == "YIELD_CULTURE") then
+		yieldsInstance.YieldCultureLabel:SetText(text .. iconString);
+	elseif (yieldInfo.YieldType == "YIELD_FAITH") then
+		yieldsInstance.YieldFaithLabel:SetText(text .. iconString);
 	end
 end
 
@@ -1155,12 +1081,16 @@ function CreateUnusedRoutesHeader()
 	headerInstance.TourismBonusGrid:SetHide(true);
 end
 
-function CreateCityHeader( city:table , currentRouteShowCount:number, totalRoutes:number )
+function CreateCityHeader( city:table , currentRouteShowCount:number, totalRoutes:number, tooltipString:string )
 	local headerInstance:table = m_HeaderInstanceIM:GetInstance();
 	
 	local playerID:number = city:GetOwner();
 	local pPlayer = Players[playerID];
 	headerInstance.HeaderLabel:SetText(Locale.ToUpper(city:GetName()));
+
+	if tooltipString ~= nil then
+		headerInstance.HeaderGrid:SetToolTipString(tooltipString);
+	end
 
 	if m_currentTab == TRADE_TABS.AVAILABLE_ROUTES then
 		headerInstance.RoutesExpand:SetHide(false);
@@ -1240,7 +1170,7 @@ function CreateCityHeader( city:table , currentRouteShowCount:number, totalRoute
 		CityID = city:GetID()
 	};
 
-	local cityExclusionIndex = findIndex(m_cityRouteLimitExclusionList, cityEntry, CompareCityEntries);
+	local cityExclusionIndex = findIndex(m_GroupsFullyExpanded, cityEntry, CompareCityEntries);
 	
 	if cityExclusionIndex == -1 then
 		headerInstance.RoutesExpand:SetCheck(false);
@@ -1252,6 +1182,8 @@ function CreateCityHeader( city:table , currentRouteShowCount:number, totalRoute
 
 
 	headerInstance.RoutesExpand:RegisterCallback( Mouse.eLClick, function() OnExpandRoutes(headerInstance.RoutesExpand, city:GetOwner(), city:GetID()); end );
+	headerInstance.RoutesExpand:RegisterCallback( Mouse.eMouseEnter, function() UI.PlaySound("Main_Menu_Mouse_Over"); end);
+	headerInstance.RoutesExpand:RegisterCallback( Mouse.eRClick, function() OnCollapseRoutes(headerInstance.RoutesExpand, city:GetOwner(), city:GetID()); end );
 	headerInstance.RoutesExpand:RegisterCallback( Mouse.eMouseEnter, function() UI.PlaySound("Main_Menu_Mouse_Over"); end);
 
 	if colorCityPlayerHeader then
@@ -1277,20 +1209,14 @@ function CreateCityHeader( city:table , currentRouteShowCount:number, totalRoute
 end
 
 function OnExpandRoutes( checkbox, cityOwnerID:number, cityID:number )
-
-	-- If expand button clicked with the expand all selected, unselect it
-	if m_GroupShowAll then
-		m_GroupShowAll = false;
-		Controls.GroupShowAllCheckBox:SetCheck(false);
-		Controls.GroupShowAllCheckBoxLabel:SetText("Expand All:");
+	if m_GroupCollapseAll then
+		m_GroupCollapseAll = false;
+		Controls.GroupCollapseAllCheckBox:SetCheck(false);
 	end
 
 	-- For some reason the Uncheck texture does not apply, so I had to hard code the offset in. 
 	-- TODO: Find a fix for this
 	if (checkbox:IsChecked()) then
-		Controls.GroupShowAllCheckBox:SetCheck(true);
-		Controls.GroupShowAllCheckBoxLabel:SetText("Collapse All:");
-
 		checkbox:SetCheckTextureOffsetVal(0,22);
 
 		local cityEntry = {
@@ -1299,13 +1225,18 @@ function OnExpandRoutes( checkbox, cityOwnerID:number, cityID:number )
 		};
 
 		-- Only add entry if it isn't already in the list
-		if findIndex(m_cityRouteLimitExclusionList, cityEntry, CompareCityEntries) == -1 then
+		if findIndex(m_GroupsFullyExpanded, cityEntry, CompareCityEntries) == -1 then
 			print("Adding " .. GetCityEntryString(cityEntry) .. " to the exclusion list");
-			table.insert(m_cityRouteLimitExclusionList, cityEntry);
+			table.insert(m_GroupsFullyExpanded, cityEntry);
 		else
 			print("City already exists in exclusion list");
 		end
 	else
+		if m_GroupExpandAll then
+			m_GroupExpandAll = false;
+			Controls.GroupExpandAllCheckBox:SetCheck(false);
+		end
+
 		checkbox:SetCheckTextureOffsetVal(0,0);
 
 		local cityEntry = {
@@ -1313,20 +1244,45 @@ function OnExpandRoutes( checkbox, cityOwnerID:number, cityID:number )
 			CityID = cityID
 		};
 
-		local cityIndex = findIndex(m_cityRouteLimitExclusionList, cityEntry, CompareCityEntries)
+		local cityIndex = findIndex(m_GroupsFullyExpanded, cityEntry, CompareCityEntries)
 
-		if findIndex(m_cityRouteLimitExclusionList, cityEntry, CompareCityEntries) > 0 then
+		if findIndex(m_GroupsFullyExpanded, cityEntry, CompareCityEntries) > 0 then
 			print("Removing " .. GetCityEntryString(cityEntry) .. " to the exclusion list");
-			table.remove(m_cityRouteLimitExclusionList, cityIndex);
-
-			-- If the exclusion list is empty, update the collapse all button
-			if tableLength(m_cityRouteLimitExclusionList)  <= 0 then
-				Controls.GroupShowAllCheckBox:SetCheck(false);
-				Controls.GroupShowAllCheckBoxLabel:SetText("Expand All:");
-			end
+			table.remove(m_GroupsFullyExpanded, cityIndex);
 		else
 			print("City does not exist in exclusion list");
 		end
+	end
+
+	Refresh();
+end
+
+function OnCollapseRoutes( checkbox, cityOwnerID:number, cityID:number )
+	if m_GroupExpandAll then
+		m_GroupExpandAll = false;
+		Controls.GroupExpandAllCheckBox:SetCheck(false);
+	end
+
+	checkbox:SetCheck(false);
+	checkbox:SetCheckTextureOffsetVal(0,0);
+
+	-- Check if city is in Groups expanded list
+	local cityEntry = {
+			OwnerID = cityOwnerID,
+			CityID = cityID
+		};
+
+	local cityIndex = findIndex(m_GroupsFullyExpanded, cityEntry, CompareCityEntries)
+
+	-- Remove from fully expanded
+	if cityIndex > 0 then
+		table.remove(m_GroupsFullyExpanded, cityIndex);
+	end
+
+	-- Add city to Groups collapsed list, if it does not exist
+	cityIndex = findIndex(m_GroupsFullyCollapsed, cityEntry, CompareCityEntries)
+	if cityIndex == -1 then
+		table.insert(m_GroupsFullyCollapsed, cityEntry);
 	end
 
 	Refresh();
@@ -1352,147 +1308,6 @@ end
 -- ===========================================================================
 --	Trade Route Tracker
 -- ===========================================================================
--- ---------------------------------------------------------------------------
--- Current running routes tracker
--- ---------------------------------------------------------------------------
-
--- Adds the route turns remaining to the table, if it does not exist already
-function AddRouteWithTurnsRemaining( routeInfo:table, routesTable:table, addedFromConsistencyCheck:boolean)
-	print("Adding route: " .. GetTradeRouteString(routeInfo));
-
-	local originPlayer:table = Players[routeInfo.OriginCityPlayer];
-	local originCity:table = originPlayer:GetCities():FindID(routeInfo.OriginCityID);
-
-	local destinationPlayer:table = Players[routeInfo.DestinationCityPlayer];
-	local destinationCity:table = destinationPlayer:GetCities():FindID(routeInfo.DestinationCityID);
-
-	local tradePathLength, tripsToDestination, turnsToCompleteRoute = GetRouteInfo( originCity, destinationCity );
-
-	local routeIndex = findIndex ( routesTable, routeInfo, CheckRouteEquality );
-
-	if routeIndex == -1 then
-		-- Build entry
-		local routeEntry:table = {
-			OriginCityPlayer 		= routeInfo.OriginCityPlayer;
-			OriginCityID 			= routeInfo.OriginCityID;
-			DestinationCityPlayer 	= routeInfo.DestinationCityPlayer;
-			DestinationCityID 		= routeInfo.DestinationCityID;
-			TraderUnitID 			= routeInfo.TraderUnitID;
-			TurnsRemaining 			= turnsToCompleteRoute;
-		};
-
-		-- Optional flag
-		if addedFromConsistencyCheck ~= nil then
-			routeEntry.AddedFromCheck = addedFromConsistencyCheck;
-		end
-
-		-- Append entry
-		table.insert(routesTable, routeEntry);
-		SaveRunningRoutesInfo();
-	else
-		print("Route already exists in table.");
-	end
-end
-
--- Returns the remaining turns, if it exists in the table. Else returns -1
-function GetRouteTurnsRemaining( routeInfo:table )
-	local routeIndex = findIndex( m_LocalPlayerRunningRoutes, routeInfo, CheckRouteEquality );
-
-	if routeIndex > 0 then
-		return m_LocalPlayerRunningRoutes[routeIndex].TurnsRemaining;
-	end
-
-	return -1;
-end
-
--- Decrements routes present. Removes those that completed
-function UpdateRoutesWithTurnsRemaining( routesTable:table )
-	-- Manually control the indices, so that you can iterate over the table while deleting items within it
-	local i = 1;
-	while i <= tableLength(routesTable) do
-		routesTable[i].TurnsRemaining = routesTable[i].TurnsRemaining - 1;
-		print("Updated route " .. GetTradeRouteString(routesTable[i]) .. " with turns remaining " .. routesTable[i].TurnsRemaining)
-		
-		if routesTable[i].TurnsRemaining <= 0 then
-			print("Removing route: " .. GetTradeRouteString(routesTable[i]));
-			LuaEvents.TradeOverview_SetLastRoute(routesTable[i]);
-			table.remove(routesTable, i);
-		else
-			i = i + 1;
-		end
-	end
-
-	m_LastTurnUpdatedMyRoutes = Game.GetCurrentGameTurn();
-end
-
--- Checks if routes running in game and the routesTable are consistent with each other
-function CheckConsistencyWithMyRunningRoutes( routesTable:table )
-	-- Build currently running routes
-	local routesCurrentlyRunning:table = {};
-	local localPlayerCities:table = Players[Game.GetLocalPlayer()]:GetCities();
-	for i,city in localPlayerCities:Members() do
-		local outgoingRoutes = city:GetTrade():GetOutgoingRoutes();
-		for j, routeInfo in ipairs(outgoingRoutes) do
-			table.insert(routesCurrentlyRunning, routeInfo);
-		end
-	end
-
-	-- Add all routes in routesCurrentlyRunning table that are not in routesTable
-	for i, route in ipairs(routesCurrentlyRunning) do
-		local routeIndex = findIndex( routesTable, route, CheckRouteEquality );
-
-		-- Is the route not present?
-		if routeIndex == -1 then
-			-- Add it to the list, and set the optional flag
-			print(GetTradeRouteString(route) .. " was not present. Adding it to the table.");
-			AddRouteWithTurnsRemaining( route, routesTable, true);
-		end
-	end
-
-	-- Remove all routes in routesTable, that are not in routesCurrentlyRunning.
-	-- Manually control the indices, so that you can iterate over the table while deleting items within it
-	local i = 1;
-	while i <= tableLength(routesTable) do
-		local routeIndex = findIndex( routesCurrentlyRunning, routesTable[i], CheckRouteEquality );
-
-		-- Is the route not present?
-		if routeIndex == -1 then
-			print("Route " .. GetTradeRouteString(routesTable[i]) .. " is no longer running. Removing it.");
-			-- Send info trade overview screen
-			LuaEvents.TradeOverview_SetLastRoute(routesTable[i]);
-			table.remove(routesTable, i)
-		else
-			i = i + 1
-		end
-	end
-
-	SaveRunningRoutesInfo();
-end
-
-function SaveRunningRoutesInfo()
-	-- Dump active routes info
-	print("Dumping routes in PlayerConfig database")
-	local dataDump = DataDumper(m_LocalPlayerRunningRoutes, "localPlayerRunningRoutes", true);
-	-- print(dataDump);
-	PlayerConfigurations[Game.GetLocalPlayer()]:SetValue("BTS_LocalPlayerRunningRotues", dataDump);
-end
-
-function LoadRunningRoutesInfo()
-	local localPlayerID = Game.GetLocalPlayer();
-	if(PlayerConfigurations[localPlayerID]:GetValue("BTS_LocalPlayerRunningRotues") ~= nil) then
-		print("Retrieving previous routes PlayerConfig database")
-		local dataDump = PlayerConfigurations[localPlayerID]:GetValue("BTS_LocalPlayerRunningRotues");
-		-- print(dataDump);
-		loadstring(dataDump)();
-		m_LocalPlayerRunningRoutes = localPlayerRunningRoutes;
-	else
-		print("No running route data was found, on load.")
-	end
-
-	-- Check for consistency
-	CheckConsistencyWithMyRunningRoutes(m_LocalPlayerRunningRoutes);
-end
-
 -- ---------------------------------------------------------------------------
 -- Trader Route history tracker
 -- ---------------------------------------------------------------------------
@@ -1563,7 +1378,10 @@ end
 
 function FilterTradeRoutes ( tradeRoutes:table )
 	-- print("Current filter: " .. m_filterList[m_filterSelected].FilterText);
-	
+	if m_filterSelected == 1 then
+		return tradeRoutes;
+	end
+
 	local filtertedRoutes:table = {};
 
 	for index, tradeRoute in ipairs(tradeRoutes) do
@@ -1662,210 +1480,26 @@ function UpdateFilterArrow()
 end
 
 -- ===========================================================================
---	Trade Routes Sorter
+--	Grouped Routes Sorter
 -- ===========================================================================
 
-function SortTradeRoutes( tradeRoutes:table )
-	if tableLength(m_SortBySettings) > 0 then
-		-- If we are grouping by none, apply sort for groups
-		if m_groupBySelected == GROUP_BY_SETTINGS.NONE then
-			table.sort(tradeRoutes, CompleteGroupCompareBy)
-		else
-			table.sort(tradeRoutes, CompleteCompareBy)
-		end
-	end
-end
-
+-- Gets top route from each group and sorts them based on that
 function SortGroupedRoutes( groupedRoutes:table )
 	if tableLength(m_GroupSortBySettings) > 0 then
 		table.sort(groupedRoutes, CompareGroupedRoutes)
 	end
 end
 
-function InsertSortEntry( sortByID:number, sortOrder:number, sortSettings:table )
-	local sortEntry = {
-		SortByID = sortByID,
-		SortOrder = sortOrder
-	};
-
-	-- Only insert if it does not exist
-	local sortEntryIndex = findIndex (sortSettings, sortEntry, CompareSortEntries);
-	if sortEntryIndex == -1 then
-		print("Inserting " .. sortEntry.SortByID);
-		table.insert(sortSettings, sortEntry);
-	else
-		-- If it exists, just update the sort oder
-		print("Index: " .. sortEntryIndex);
-		sortSettings[sortEntryIndex].SortOrder = sortOrder;
-	end
-end
-
-function RemoveSortEntry( sortByID:number, sortSettings:table  )
-	local sortEntry = {
-		SortByID = sortByID,
-		SortOrder = sortOrder
-	};
-
-	-- Only delete if it exists
-	local sortEntryIndex:number = findIndex(sortSettings, sortEntry, CompareSortEntries);
-
-	if (sortEntryIndex > 0) then
-		table.remove(sortSettings, sortEntryIndex);
-	end
-end
-
--- ---------------------------------------------------------------------------
--- Compare functions
--- ---------------------------------------------------------------------------
-
--- Checks for the same ID, not the same order
-function CompareSortEntries( sortEntry1:table, sortEntry2:table)
-	if sortEntry1.SortByID == sortEntry2.SortByID then
-		return true;
-	end
-
-	return false;
-end
-
 -- Compares the top route of passed groups
 function CompareGroupedRoutes( groupedRoutes1:table, groupedRoutes2:table )
-	return CompleteGroupCompareBy(groupedRoutes1[1], groupedRoutes2[1]);
-end
-
--- Identitical to CompleteCompareBy but uses the group sort settings
-function CompleteGroupCompareBy( tradeRoute1:table, tradeRoute2:table )
-	for index, sortEntry in ipairs(m_GroupSortBySettings) do
-		local compareFunction = m_CompareFunctionByID[sortEntry.SortByID];
-		local compareResult:boolean = compareFunction(tradeRoute1, tradeRoute2);
-
-		if compareResult then
-			if (sortEntry.SortOrder == SORT_DESCENDING) then
-				return false;
-			else
-				return true;
-			end
-		elseif not CheckEquality( tradeRoute1, tradeRoute2, compareFunction ) then
-			if (sortEntry.SortOrder == SORT_DESCENDING) then
-				return true;
-			else
-				return false;
-			end
-		end
+	if groupedRoutes1 == nil or groupedRoutes2 == nil then
+		-- print("Error: Passed group was nil");
+		return false;
 	end
 
-	-- If it reaches here, we used all the settings, and all of them were equal. 
-	-- Do net yield compare. 'not' because order should be in descending
-	return CompareByNetYield(tradeRoute1, tradeRoute2);
-end
-
--- Uses the list of compare functions, to make one global compare function
-function CompleteCompareBy( tradeRoute1:table, tradeRoute2:table )
-	for index, sortEntry in ipairs(m_SortBySettings) do
-		local compareFunction = m_CompareFunctionByID[sortEntry.SortByID];
-		local compareResult:boolean = compareFunction(tradeRoute1, tradeRoute2);
-
-		if compareResult then
-			if (sortEntry.SortOrder == SORT_DESCENDING) then
-				return false;
-			else
-				return true;
-			end
-		elseif not CheckEquality( tradeRoute1, tradeRoute2, compareFunction ) then
-			if (sortEntry.SortOrder == SORT_DESCENDING) then
-				return true;
-			else
-				return false;
-			end
-		end
-	end
-
-	-- If it reaches here, we used all the settings, and all of them were equal. 
-	-- Do net yield compare. 'not' because order should be in descending
-	return CompareByNetYield(tradeRoute1, tradeRoute2);
-end
-
-function CompareByFood( tradeRoute1:table, tradeRoute2:table )
-	return CompareByYield (GameInfo.Yields["YIELD_FOOD"].Index, tradeRoute1, tradeRoute2);
-end
-
-function CompareByProduction( tradeRoute1:table, tradeRoute2:table )
-	return CompareByYield (GameInfo.Yields["YIELD_PRODUCTION"].Index, tradeRoute1, tradeRoute2);
-end
-
-function CompareByGold( tradeRoute1:table, tradeRoute2:table )
-	return CompareByYield (GameInfo.Yields["YIELD_GOLD"].Index, tradeRoute1, tradeRoute2);
-end
-
-function CompareByScience( tradeRoute1:table, tradeRoute2:table )
-	return CompareByYield (GameInfo.Yields["YIELD_SCIENCE"].Index, tradeRoute1, tradeRoute2);
-end
-
-function CompareByCulture( tradeRoute1:table, tradeRoute2:table )
-	return CompareByYield (GameInfo.Yields["YIELD_CULTURE"].Index, tradeRoute1, tradeRoute2);
-end
-
-function CompareByFaith( tradeRoute1:table, tradeRoute2:table )
-	return CompareByYield (GameInfo.Yields["YIELD_FAITH"].Index, tradeRoute1, tradeRoute2);
-end
-
-function CompareByYield( yieldIndex:number, tradeRoute1:table, tradeRoute2:table )
-	local originPlayer1:table = Players[tradeRoute1.OriginCityPlayer];
-	local destinationPlayer1:table = Players[tradeRoute1.DestinationCityPlayer];
-	local originCity1:table = originPlayer1:GetCities():FindID(tradeRoute1.OriginCityID);
-	local destinationCity1:table = destinationPlayer1:GetCities():FindID(tradeRoute1.DestinationCityID);
-
-	local originPlayer2:table = Players[tradeRoute2.OriginCityPlayer];
-	local destinationPlayer2:table = Players[tradeRoute2.DestinationCityPlayer];
-	local originCity2:table = originPlayer2:GetCities():FindID(tradeRoute2.OriginCityID);
-	local destinationCity2:table = destinationPlayer2:GetCities():FindID(tradeRoute2.DestinationCityID);
-
-	local yieldForRoute1 = GetYieldFromCity(yieldIndex, originCity1, destinationCity1);
-	local yieldForRoute2 = GetYieldFromCity(yieldIndex, originCity2, destinationCity2);
-
-	return yieldForRoute1 < yieldForRoute2;
-end
-
-function CompareByTurnsToComplete( tradeRoute1:table, tradeRoute2:table )
-	if m_currentTab == TRADE_TABS.MY_ROUTES then
-		return GetRouteTurnsRemaining( tradeRoute1 ) < GetRouteTurnsRemaining( tradeRoute2 );
-	end
-
-	local originPlayer1:table = Players[tradeRoute1.OriginCityPlayer];
-	local destinationPlayer1:table = Players[tradeRoute1.DestinationCityPlayer];
-	local originCity1:table = originPlayer1:GetCities():FindID(tradeRoute1.OriginCityID);
-	local destinationCity1:table = destinationPlayer1:GetCities():FindID(tradeRoute1.DestinationCityID);
-
-	local originPlayer2:table = Players[tradeRoute2.OriginCityPlayer];
-	local destinationPlayer2:table = Players[tradeRoute2.DestinationCityPlayer];
-	local originCity2:table = originPlayer2:GetCities():FindID(tradeRoute2.OriginCityID);
-	local destinationCity2:table = destinationPlayer2:GetCities():FindID(tradeRoute2.DestinationCityID);
-
-	local tradePathLength1, tripsToDestination1, turnsToCompleteRoute1 = GetRouteInfo(originCity1, destinationCity1);
-	local tradePathLength2, tripsToDestination2, turnsToCompleteRoute2 = GetRouteInfo(originCity2, destinationCity2);
-
-	return turnsToCompleteRoute1 < turnsToCompleteRoute2;
-end
-
-function CompareByNetYield( tradeRoute1:table, tradeRoute2:table )
-	local originPlayer1:table = Players[tradeRoute1.OriginCityPlayer];
-	local destinationPlayer1:table = Players[tradeRoute1.DestinationCityPlayer];
-	local originCity1:table = originPlayer1:GetCities():FindID(tradeRoute1.OriginCityID);
-	local destinationCity1:table = destinationPlayer1:GetCities():FindID(tradeRoute1.DestinationCityID);
-
-	local originPlayer2:table = Players[tradeRoute2.OriginCityPlayer];
-	local destinationPlayer2:table = Players[tradeRoute2.DestinationCityPlayer];
-	local originCity2:table = originPlayer2:GetCities():FindID(tradeRoute2.OriginCityID);
-	local destinationCity2:table = destinationPlayer2:GetCities():FindID(tradeRoute2.DestinationCityID);
-
-	local yieldForRoute1:number = 0;
-	local yieldForRoute2:number = 0;
-
-	for yieldInfo in GameInfo.Yields() do
-		yieldForRoute1 = yieldForRoute1 + GetYieldFromCity(yieldInfo.Index, originCity1, destinationCity1);
-		yieldForRoute2 = yieldForRoute2 + GetYieldFromCity(yieldInfo.Index, originCity2, destinationCity2);
-	end
-
-	return yieldForRoute1 > yieldForRoute2;
+	local group1_topRoute = GetTopRouteFromSortSettings(groupedRoutes1, m_GroupSortBySettings)
+	local group2_topRoute = GetTopRouteFromSortSettings(groupedRoutes2, m_GroupSortBySettings)
+	return CompleteCompareBy(group1_topRoute, group2_topRoute, m_GroupSortBySettings);
 end
 
 -- ===========================================================================
@@ -2014,6 +1648,12 @@ end
 -- ===========================================================================
 
 function Open()
+	-- dont show panel if there is no local player
+	local localPlayerID = Game.GetLocalPlayer();
+	if (localPlayerID == -1) then
+		return
+	end
+	
 	m_AnimSupport.Show();
 	UI.PlaySound("CityStates_Panel_Open");
 	LuaEvents.TradeOverview_UpdateContextStatus(true);
@@ -2041,7 +1681,6 @@ function SelectUnit( unit:table )
 	end
 	UI.LookAtPlotScreenPosition( unit:GetX(), unit:GetY(), 0.42, 0.5 );
 end
-
 function IsCityState( player:table )
 	local playerInfluence:table = player:GetInfluence();
 	if  playerInfluence:CanReceiveInfluence() then
@@ -2076,163 +1715,12 @@ function IsOtherCiv( player:table )
 	return false
 end
 
--- ---------------------------------------------------------------------------
--- Trade route helper functions
--- ---------------------------------------------------------------------------
--- Returns yield for the origin city
-function GetYieldFromCity( yieldIndex:number, originCity:table, destinationCity:table )
-	local tradeManager = Game.GetTradeManager();
-
-	-- From route
-	local yieldValue = tradeManager:CalculateOriginYieldFromPotentialRoute(originCity:GetOwner(), originCity:GetID(), destinationCity:GetOwner(), destinationCity:GetID(), yieldIndex);
-	-- From path
-	yieldValue = yieldValue + tradeManager:CalculateOriginYieldFromPath(originCity:GetOwner(), originCity:GetID(), destinationCity:GetOwner(), destinationCity:GetID(), yieldIndex);
-	-- From modifiers
-	local resourceID = -1;
-	yieldValue = yieldValue + tradeManager:CalculateOriginYieldFromModifiers(originCity:GetOwner(), originCity:GetID(), destinationCity:GetOwner(), destinationCity:GetID(), yieldIndex, resourceID);
-
-	return yieldValue;
-end
-
--- Returns yield for the destination city
-function GetYieldForDestinationCity( yieldIndex:number, originCity:table, destinationCity:table )
-	local tradeManager = Game.GetTradeManager();
-
-	-- From route
-	local yieldValue = tradeManager:CalculateDestinationYieldFromPotentialRoute(originCity:GetOwner(), originCity:GetID(), destinationCity:GetOwner(), destinationCity:GetID(), yieldIndex);
-	-- From path
-	yieldValue = yieldValue + tradeManager:CalculateDestinationYieldFromPath(originCity:GetOwner(), originCity:GetID(), destinationCity:GetOwner(), destinationCity:GetID(), yieldIndex);
-	-- From modifiers
-	local resourceID = -1;
-	yieldValue = yieldValue + tradeManager:CalculateDestinationYieldFromModifiers(originCity:GetOwner(), originCity:GetID(), destinationCity:GetOwner(), destinationCity:GetID(), yieldIndex, resourceID);
-
-	return yieldValue;
-end
-
--- Returns length of trade path, number of trips to destination, turns to complete route
-function GetRouteInfo(originCity:table, destinationCity:table)
-	local eSpeed = GameConfiguration.GetGameSpeedType();
-	
-	if GameInfo.GameSpeeds[eSpeed] ~= nil then
-		local iSpeedCostMultiplier = GameInfo.GameSpeeds[eSpeed].CostMultiplier;
-		local tradeManager = Game.GetTradeManager();
-		local pathPlots = tradeManager:GetTradeRoutePath(originCity:GetOwner(), originCity:GetID(), destinationCity:GetOwner(), destinationCity:GetID() );
-		local tradePathLength:number = tableLength(pathPlots) - 1;
-		local multiplierConstant:number = 0.1;
-
-		local tripsToDestination = 1 + math.floor(iSpeedCostMultiplier/tradePathLength * multiplierConstant);
-		
-		--print("Error: Playing on an unrecognized speed. Defaulting to standard for route turns calculation");
-		local turnsToCompleteRoute = (tradePathLength * 2 * tripsToDestination);
-		return tradePathLength, tripsToDestination, turnsToCompleteRoute;
-	else
-		print("Speed type index " .. eSpeed);
-		print("Error: Could not find game speed type. Defaulting to first entry in table");
-		local iSpeedCostMultiplier =  GameInfo.GameSpeeds[1].CostMultiplier;
-		local tradeManager = Game.GetTradeManager();
-		local pathPlots = tradeManager:GetTradeRoutePath(originCity:GetOwner(), originCity:GetID(), destinationCity:GetOwner(), destinationCity:GetID() );
-		local tradePathLength:number = tableLength(pathPlots) - 1;
-		local multiplierConstant:number = 0.1;
-
-		local tripsToDestination = 1 + math.floor(iSpeedCostMultiplier/tradePathLength * multiplierConstant);
-		local turnsToCompleteRoute = (tradePathLength * 2 * tripsToDestination);
-		return tradePathLength, tripsToDestination, turnsToCompleteRoute;
-	end
-end
-
--- Finds and removes routeToDelete from routeTable
-function RemoveRouteFromTable( routeToDelete:table , routeTable:table )
-	if m_groupBySelected == GROUP_BY_SETTINGS.NONE then
-		local targetIndex:number;
-
-		for i, route in ipairs(routeTable) do
-			if CheckRouteEquality( route, routeToDelete ) then
-				targetIndex = i;
-			end		
-		end
-
-		-- Remove route
-		if targetIndex then
-			table.remove(routeTable, targetIndex);
-		end
-
-	-- If grouping by something, go one level deeper
-	else
-		local targetIndex:number;
-		local targetGroupIndex:number;
-
-		for i, groupedRoutes in ipairs(routeTable) do
-			for j, route in ipairs(groupedRoutes) do
-				if CheckRouteEquality( route, routeToDelete ) then
-					targetIndex = j;
-					targetGroupIndex = i;
-				end
-			end
-		end
-
-		-- Remove route
-		if targetIndex then
-			table.remove(routeTable[targetGroupIndex], targetIndex);
-		end
-		-- If that group is empty, remove that group
-		if tableLength(routeTable[targetGroupIndex]) <= 0 then
-			if targetGroupIndex then
-				table.remove(routeTable, targetGroupIndex);
-			end
-		end
-	end
-end
-
--- Returns a string of the route in format "[ORIGIN_CITY_NAME]-[DESTINATION_CITY_NAME]"
-function GetTradeRouteString( routeInfo:table )
-	local originPlayer:table = Players[routeInfo.OriginCityPlayer];
-	local originCity:table = originPlayer:GetCities():FindID(routeInfo.OriginCityID);
-
-	local destinationPlayer:table = Players[routeInfo.DestinationCityPlayer];
-	local destinationCity:table = destinationPlayer:GetCities():FindID(routeInfo.DestinationCityID);
-
-
-	local s:string = Locale.Lookup(originCity:GetName()) .. "-" .. Locale.Lookup(destinationCity:GetName())
-	return s;
-end
-
--- Checks if the two routes are the same (does not compare traderUnit)
-function CheckRouteEquality ( tradeRoute1:table, tradeRoute2:table )
-	if ( 	tradeRoute1.OriginCityPlayer == tradeRoute2.OriginCityPlayer and
-			tradeRoute1.OriginCityID == tradeRoute2.OriginCityID and
-			tradeRoute1.DestinationCityPlayer == tradeRoute2.DestinationCityPlayer and
-			tradeRoute1.DestinationCityID == tradeRoute2.DestinationCityID ) then
-		return true;
-	end
-
-	return false;
-end
-
--- Checks equality with the passed sorting compare function
-function CheckEquality( tradeRoute1:table, tradeRoute2:table, compareFunction )
-	if not compareFunction(tradeRoute1, tradeRoute2) then
-		if not compareFunction(tradeRoute2, tradeRoute1) then
-			return true;
-		end
-	end
-
-	return false;
-end
-
 -- ===========================================================================
 --	Button handler functions
 -- ===========================================================================
 
 function OnOpen()
-	if blockPanelInBetweenTurns then
-		if not m_processingTurn then
-			Open();
-		else
-			print("In between turns. Blocking Trade Panel from opening.")	
-		end
-	else
-		Open();
-	end
+	Open();
 end
 
 function OnClose()
@@ -2279,21 +1767,39 @@ end
 -- ---------------------------------------------------------------------------
 -- Checkbox
 -- ---------------------------------------------------------------------------
-function OnGroupShowAll()
+function OnGroupExpandAll()
+	m_GroupExpandAll = false;
+	m_GroupCollapseAll = false;
+
+	Controls.GroupCollapseAllCheckBox:SetCheck(false);
 
 	-- Dont do anything, if grouping is none
 	if m_groupBySelected == GROUP_BY_SETTINGS.NONE then
 		return;
 	end
 
-	m_GroupShowAll = Controls.GroupShowAllCheckBox:IsChecked();
+	if Controls.GroupExpandAllCheckBox:IsChecked() then
+		m_GroupsFullyCollapsed = {};
+		m_GroupExpandAll = true;
+	end
+	
+	Refresh();
+end
 
-	if not m_GroupShowAll then
-		Controls.GroupShowAllCheckBoxLabel:LocalizeAndSetText("LOC_TRADE_EXPAND_ALL_BUTTON_TEXT");
-		m_cityRouteLimitExclusionList = {};
-	else
-		Controls.GroupShowAllCheckBoxLabel:LocalizeAndSetText("LOC_TRADE_COLLAPSE_ALL_BUTTON_TEXT");
-		m_cityRouteLimitExclusionList = {};
+function OnGroupCollapseAll()
+	m_GroupExpandAll = false;
+	m_GroupCollapseAll = false;
+	
+	Controls.GroupExpandAllCheckBox:SetCheck(false);
+
+	-- Dont do anything, if grouping is none
+	if m_groupBySelected == GROUP_BY_SETTINGS.NONE then
+		return;
+	end
+
+	if Controls.GroupCollapseAllCheckBox:IsChecked() then
+		m_GroupsFullyExpanded = {};
+		m_GroupCollapseAll = true;
 	end
 	
 	Refresh();
@@ -2305,541 +1811,355 @@ end
 function OnSortByFood()
 	-- If shift is not being pressed, reset sort settings
 	if not m_shiftDown then
-		if m_ctrlDown then
-			m_SortBySettings = {};
-		else
+		if not m_ctrlDown then
 			m_GroupSortBySettings = {};
 		end
+		m_SortBySettings = {};
 	end
+
+	RemoveSortEntry(SORT_BY_ID.TURNS_TO_COMPLETE, m_SortBySettings);
 
 	-- Sort based on currently showing icon toggled
 	if Controls.FoodDescArrow:IsHidden() then
-		if m_ctrlDown then
-			InsertSortEntry(SORT_BY_ID.FOOD, SORT_DESCENDING, m_SortBySettings);
-		else
+		if not m_ctrlDown then
 			InsertSortEntry(SORT_BY_ID.FOOD, SORT_DESCENDING, m_GroupSortBySettings);
 		end
+		InsertSortEntry(SORT_BY_ID.FOOD, SORT_DESCENDING, m_SortBySettings);
 	else
-		if m_ctrlDown then
-			InsertSortEntry(SORT_BY_ID.FOOD, SORT_ASCENDING, m_SortBySettings);
-		else
+		if not m_ctrlDown then
 			InsertSortEntry(SORT_BY_ID.FOOD, SORT_ASCENDING, m_GroupSortBySettings);
 		end
+		InsertSortEntry(SORT_BY_ID.FOOD, SORT_ASCENDING, m_SortBySettings);
 	end
 
-	Refresh();
+	InsertSortEntry(SORT_BY_ID.TURNS_TO_COMPLETE, SORT_ASCENDING, m_SortBySettings);
+
+	RefreshSortBar();
+	-- Dont call refresh while shift is held
+	if not m_shiftDown then
+		Refresh();
+	else
+		m_changedSortSettings = true;
+	end
 end
 
 function OnSortByProduction()
 	-- If shift is not being pressed, reset sort settings
 	if not m_shiftDown then
-		if m_ctrlDown then
-			m_SortBySettings = {};
-		else
+		if not m_ctrlDown then
 			m_GroupSortBySettings = {};
 		end
+		m_SortBySettings = {};
 	end
+
+	RemoveSortEntry(SORT_BY_ID.TURNS_TO_COMPLETE, m_SortBySettings);
 
 	-- Sort based on currently showing icon toggled
 	if Controls.ProductionDescArrow:IsHidden() then
-		if m_ctrlDown then
-			InsertSortEntry(SORT_BY_ID.PRODUCTION, SORT_DESCENDING, m_SortBySettings);
-		else
+		if not m_ctrlDown then
 			InsertSortEntry(SORT_BY_ID.PRODUCTION, SORT_DESCENDING, m_GroupSortBySettings);
 		end
+		InsertSortEntry(SORT_BY_ID.PRODUCTION, SORT_DESCENDING, m_SortBySettings);
 	else
-		if m_ctrlDown then
-			InsertSortEntry(SORT_BY_ID.PRODUCTION, SORT_ASCENDING, m_SortBySettings);
-		else
+		if not m_ctrlDown then
 			InsertSortEntry(SORT_BY_ID.PRODUCTION, SORT_ASCENDING, m_GroupSortBySettings);
 		end
+		InsertSortEntry(SORT_BY_ID.PRODUCTION, SORT_ASCENDING, m_SortBySettings);
 	end
 
-	Refresh();
+	InsertSortEntry(SORT_BY_ID.TURNS_TO_COMPLETE, SORT_ASCENDING, m_SortBySettings);
+
+	RefreshSortBar();
+	-- Dont call refresh while shift is held
+	if not m_shiftDown then
+		Refresh();
+	else
+		m_changedSortSettings = true;
+	end
 end
 
 function OnSortByGold()
 	-- If shift is not being pressed, reset sort settings
 	if not m_shiftDown then
-		if m_ctrlDown then
-			m_SortBySettings = {};
-		else
+		if not m_ctrlDown then
 			m_GroupSortBySettings = {};
 		end
+		m_SortBySettings = {};
 	end
+
+	RemoveSortEntry(SORT_BY_ID.TURNS_TO_COMPLETE, m_SortBySettings);
 
 	-- Sort based on currently showing icon toggled
 	if Controls.GoldDescArrow:IsHidden() then
-		if m_ctrlDown then
-			InsertSortEntry(SORT_BY_ID.GOLD, SORT_DESCENDING, m_SortBySettings);
-		else
+		if not m_ctrlDown then
 			InsertSortEntry(SORT_BY_ID.GOLD, SORT_DESCENDING, m_GroupSortBySettings);
 		end
+		InsertSortEntry(SORT_BY_ID.GOLD, SORT_DESCENDING, m_SortBySettings);
 	else
-		if m_ctrlDown then
-			InsertSortEntry(SORT_BY_ID.GOLD, SORT_ASCENDING, m_SortBySettings);
-		else
+		if not m_ctrlDown then
 			InsertSortEntry(SORT_BY_ID.GOLD, SORT_ASCENDING, m_GroupSortBySettings);
 		end
+		InsertSortEntry(SORT_BY_ID.GOLD, SORT_ASCENDING, m_SortBySettings);
 	end
 
-	Refresh();
+	InsertSortEntry(SORT_BY_ID.TURNS_TO_COMPLETE, SORT_ASCENDING, m_SortBySettings);
+
+	RefreshSortBar();
+	-- Dont call refresh while shift is held
+	if not m_shiftDown then
+		Refresh();
+	else
+		m_changedSortSettings = true;
+	end
 end
 
 function OnSortByScience()
 	-- If shift is not being pressed, reset sort settings
 	if not m_shiftDown then
-		if m_ctrlDown then
-			m_SortBySettings = {};
-		else
+		if not m_ctrlDown then
 			m_GroupSortBySettings = {};
 		end
+		m_SortBySettings = {};
 	end
+
+	RemoveSortEntry(SORT_BY_ID.TURNS_TO_COMPLETE, m_SortBySettings);
 
 	-- Sort based on currently showing icon toggled
 	if Controls.ScienceDescArrow:IsHidden() then
-		if m_ctrlDown then
-			InsertSortEntry(SORT_BY_ID.SCIENCE, SORT_DESCENDING, m_SortBySettings);
-		else
+		if not m_ctrlDown then
 			InsertSortEntry(SORT_BY_ID.SCIENCE, SORT_DESCENDING, m_GroupSortBySettings);
 		end
+		InsertSortEntry(SORT_BY_ID.SCIENCE, SORT_DESCENDING, m_SortBySettings);
 	else
-		if m_ctrlDown then
-			InsertSortEntry(SORT_BY_ID.SCIENCE, SORT_ASCENDING, m_SortBySettings);
-		else
+		if not m_ctrlDown then
 			InsertSortEntry(SORT_BY_ID.SCIENCE, SORT_ASCENDING, m_GroupSortBySettings);
 		end
+		InsertSortEntry(SORT_BY_ID.SCIENCE, SORT_ASCENDING, m_SortBySettings);
 	end
 
-	Refresh();
+	InsertSortEntry(SORT_BY_ID.TURNS_TO_COMPLETE, SORT_ASCENDING, m_SortBySettings);
+
+	RefreshSortBar();
+	-- Dont call refresh while shift is held
+	if not m_shiftDown then
+		Refresh();
+	else
+		m_changedSortSettings = true;
+	end
 end
 
 function OnSortByCulture()
 	-- If shift is not being pressed, reset sort settings
 	if not m_shiftDown then
-		if m_ctrlDown then
-			m_SortBySettings = {};
-		else
+		if not m_ctrlDown then
 			m_GroupSortBySettings = {};
 		end
+		m_SortBySettings = {};
 	end
+
+	RemoveSortEntry(SORT_BY_ID.TURNS_TO_COMPLETE, m_SortBySettings);
 
 	-- Sort based on currently showing icon toggled
 	if Controls.CultureDescArrow:IsHidden() then
-		if m_ctrlDown then
-			InsertSortEntry(SORT_BY_ID.CULTURE, SORT_DESCENDING, m_SortBySettings);
-		else
+		if not m_ctrlDown then
 			InsertSortEntry(SORT_BY_ID.CULTURE, SORT_DESCENDING, m_GroupSortBySettings);
 		end
+		InsertSortEntry(SORT_BY_ID.CULTURE, SORT_DESCENDING, m_SortBySettings);
 	else
-		if m_ctrlDown then
-			InsertSortEntry(SORT_BY_ID.CULTURE, SORT_ASCENDING, m_SortBySettings);
-		else
+		if not m_ctrlDown then
 			InsertSortEntry(SORT_BY_ID.CULTURE, SORT_ASCENDING, m_GroupSortBySettings);
 		end
+		InsertSortEntry(SORT_BY_ID.CULTURE, SORT_ASCENDING, m_SortBySettings);
 	end
 
-	Refresh();
+	InsertSortEntry(SORT_BY_ID.TURNS_TO_COMPLETE, SORT_ASCENDING, m_SortBySettings);
+
+	RefreshSortBar();
+	-- Dont call refresh while shift is held
+	if not m_shiftDown then
+		Refresh();
+	else
+		m_changedSortSettings = true;
+	end
 end
 
 function OnSortByFaith()
 	-- If shift is not being pressed, reset sort settings
 	if not m_shiftDown then
-		if m_ctrlDown then
-			m_SortBySettings = {};
-		else
+		if not m_ctrlDown then
 			m_GroupSortBySettings = {};
 		end
+		m_SortBySettings = {};
 	end
+
+	RemoveSortEntry(SORT_BY_ID.TURNS_TO_COMPLETE, m_SortBySettings);
 
 	-- Sort based on currently showing icon toggled
 	if Controls.FaithDescArrow:IsHidden() then
-		if m_ctrlDown then
-			InsertSortEntry(SORT_BY_ID.FAITH, SORT_DESCENDING, m_SortBySettings);
-		else
+		if not m_ctrlDown then
 			InsertSortEntry(SORT_BY_ID.FAITH, SORT_DESCENDING, m_GroupSortBySettings);
 		end
+		InsertSortEntry(SORT_BY_ID.FAITH, SORT_DESCENDING, m_SortBySettings);
 	else
-		if m_ctrlDown then
-			InsertSortEntry(SORT_BY_ID.FAITH, SORT_ASCENDING, m_SortBySettings);
-		else
+		if not m_ctrlDown then
 			InsertSortEntry(SORT_BY_ID.FAITH, SORT_ASCENDING, m_GroupSortBySettings);
 		end
+		InsertSortEntry(SORT_BY_ID.FAITH, SORT_ASCENDING, m_SortBySettings);
 	end
 
-	Refresh();
+	InsertSortEntry(SORT_BY_ID.TURNS_TO_COMPLETE, SORT_ASCENDING, m_SortBySettings);
+
+	RefreshSortBar();
+	-- Dont call refresh while shift is held
+	if not m_shiftDown then
+		Refresh();
+	else
+		m_changedSortSettings = true;
+	end
 end
 
 function OnSortByTurnsToComplete()
 	-- If shift is not being pressed, reset sort settings
 	if not m_shiftDown then
-		if m_ctrlDown then
-			m_SortBySettings = {};
-		else
+		if not m_ctrlDown then
 			m_GroupSortBySettings = {};
 		end
+		m_SortBySettings = {};
 	end
+
+	RemoveSortEntry(SORT_BY_ID.TURNS_TO_COMPLETE, m_SortBySettings);
 
 	-- Sort based on currently showing icon toggled
 	if Controls.TurnsToCompleteDescArrow:IsHidden() then
-		if m_ctrlDown then
-			InsertSortEntry(SORT_BY_ID.TURNS_TO_COMPLETE, SORT_DESCENDING, m_SortBySettings);
-		else
+		if not m_ctrlDown then
 			InsertSortEntry(SORT_BY_ID.TURNS_TO_COMPLETE, SORT_DESCENDING, m_GroupSortBySettings);
 		end
+		InsertSortEntry(SORT_BY_ID.TURNS_TO_COMPLETE, SORT_DESCENDING, m_SortBySettings);
 	else
-		if m_ctrlDown then
-			InsertSortEntry(SORT_BY_ID.TURNS_TO_COMPLETE, SORT_ASCENDING, m_SortBySettings);
-		else
+		if not m_ctrlDown then
 			InsertSortEntry(SORT_BY_ID.TURNS_TO_COMPLETE, SORT_ASCENDING, m_GroupSortBySettings);
 		end
+		InsertSortEntry(SORT_BY_ID.TURNS_TO_COMPLETE, SORT_ASCENDING, m_SortBySettings);
 	end
 
-	Refresh();
+	InsertSortEntry(SORT_BY_ID.TURNS_TO_COMPLETE, SORT_ASCENDING, m_SortBySettings);
+
+	RefreshSortBar();
+	-- Dont call refresh while shift is held
+	if not m_shiftDown then
+		Refresh();
+	else
+		m_changedSortSettings = true;
+	end
 end
 
 -- ---------------------------------------------------------------------------
 -- Sort bar delete buttons
 -- ---------------------------------------------------------------------------
 function OnNotSortByFood()
-	if m_ctrlDown then
-		RemoveSortEntry( SORT_BY_ID.FOOD, m_SortBySettings);
-	else
+	if not m_ctrlDown then
 		RemoveSortEntry( SORT_BY_ID.FOOD, m_GroupSortBySettings);
 	end
+	RemoveSortEntry( SORT_BY_ID.FOOD, m_SortBySettings);
 
-	Refresh();
+	RefreshSortBar();
+	-- Dont call refresh while shift is held
+	if not m_shiftDown then
+		Refresh();
+	else
+		m_changedSortSettings = true;
+	end
 end
 
 function OnNotSortByProduction()
-	if m_ctrlDown then
-		RemoveSortEntry( SORT_BY_ID.PRODUCTION, m_SortBySettings);
-	else
+	if not m_ctrlDown then
 		RemoveSortEntry( SORT_BY_ID.PRODUCTION, m_GroupSortBySettings);
 	end
+	RemoveSortEntry( SORT_BY_ID.PRODUCTION, m_SortBySettings);
 
-	Refresh();
+	RefreshSortBar();
+	-- Dont call refresh while shift is held
+	if not m_shiftDown then
+		Refresh();
+	else
+		m_changedSortSettings = true;
+	end
 end
 
 function OnNotSortByGold()
-	if m_ctrlDown then
-		RemoveSortEntry( SORT_BY_ID.GOLD, m_SortBySettings);
-	else
+	if not m_ctrlDown then
 		RemoveSortEntry( SORT_BY_ID.GOLD, m_GroupSortBySettings);
 	end
+	RemoveSortEntry( SORT_BY_ID.GOLD, m_SortBySettings);
 
-	Refresh();
+	RefreshSortBar();
+	-- Dont call refresh while shift is held
+	if not m_shiftDown then
+		Refresh();
+	else
+		m_changedSortSettings = true;
+	end
 end
 
 function OnNotSortByScience()
-	if m_ctrlDown then
-		RemoveSortEntry( SORT_BY_ID.SCIENCE, m_SortBySettings);
-	else
+	if not m_ctrlDown then
 		RemoveSortEntry( SORT_BY_ID.SCIENCE, m_GroupSortBySettings);
 	end
+	RemoveSortEntry( SORT_BY_ID.SCIENCE, m_SortBySettings);
 
-	Refresh();
+	RefreshSortBar();
+	-- Dont call refresh while shift is held
+	if not m_shiftDown then
+		Refresh();
+	else
+		m_changedSortSettings = true;
+	end
 end
 
 function OnNotSortByCulture()
-	if m_ctrlDown then
-		RemoveSortEntry( SORT_BY_ID.CULTURE, m_SortBySettings);
-	else
+	if not m_ctrlDown then
 		RemoveSortEntry( SORT_BY_ID.CULTURE, m_GroupSortBySettings);
 	end
+	RemoveSortEntry( SORT_BY_ID.CULTURE, m_SortBySettings);
 
-	Refresh();
+	RefreshSortBar();
+	-- Dont call refresh while shift is held
+	if not m_shiftDown then
+		Refresh();
+	else
+		m_changedSortSettings = true;
+	end
 end
 
 function OnNotSortByFaith()
-	if m_ctrlDown then
-		RemoveSortEntry( SORT_BY_ID.FAITH, m_SortBySettings);
-	else
+	if not m_ctrlDown then
 		RemoveSortEntry( SORT_BY_ID.FAITH, m_GroupSortBySettings);
 	end
+	RemoveSortEntry( SORT_BY_ID.FAITH, m_SortBySettings);
 
-	Refresh();
+	RefreshSortBar();
+	-- Dont call refresh while shift is held
+	if not m_shiftDown then
+		Refresh();
+	else
+		m_changedSortSettings = true;
+	end
 end
 
 function OnNotSortByTurnsToComplete()
-	if m_ctrlDown then
-		RemoveSortEntry( SORT_BY_ID.TURNS_TO_COMPLETE, m_SortBySettings);
-	else
+	if not m_ctrlDown then
 		RemoveSortEntry( SORT_BY_ID.TURNS_TO_COMPLETE, m_GroupSortBySettings);
 	end
+	RemoveSortEntry( SORT_BY_ID.TURNS_TO_COMPLETE, m_SortBySettings);
 
-	Refresh();
-end
-
-
--- ===========================================================================
---	Helper Utility functions
--- ===========================================================================
-
-function tableLength(T)
-	local count = 0
-	for _ in pairs(T) do count = count + 1 end
-	return count
-end
-
-function reverseTable(T)
-	table_length = tableLength(T);
-
-	for i=1, math.floor(table_length / 2) do
-		local tmp = T[i]
-		T[i] = T[table_length - i + 1]
-		T[table_length - i + 1] = tmp
+	RefreshSortBar();
+	-- Dont call refresh while shift is held
+	if not m_shiftDown then
+		Refresh();
+	else
+		m_changedSortSettings = true;
 	end
 end
-
-function findIndex(T, searchItem, compareFunc)
-	for index, item in ipairs(T) do
-		if compareFunc(item, searchItem) then
-			return index;
-		end
-	end
-
-	return -1;
-end
-
--- TODO: Move these to external file, when Firaxis patches the gameplay scripts not loading bug
--- ========== START OF DataDumper.lua =================
---[[ License DataDumper.lua
-	Copyright (c) 2007 Olivetti-Engineering SA
-
-	Permission is hereby granted, free of charge, to any person
-	obtaining a copy of this software and associated documentation
-	files (the "Software"), to deal in the Software without
-	restriction, including without limitation the rights to use,
-	copy, modify, merge, publish, distribute, sublicense, and/or sell
-	copies of the Software, and to permit persons to whom the
-	Software is furnished to do so, subject to the following
-	conditions:
-
-	The above copyright notice and this permission notice shall be
-	included in all copies or substantial portions of the Software.
-
-	THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
-	EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
-	OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
-	NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
-	HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
-	WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
-	FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
-	OTHER DEALINGS IN THE SOFTWARE.
-]]
-
-function dump(...)
-  print(DataDumper(...), "\n---")
-end
-
-local dumplua_closure = [[
-	local closures = {}
-	local function closure(t)
-	  closures[#closures+1] = t
-	  t[1] = assert(loadstring(t[1]))
-	  return t[1]
-	end
-
-	for _,t in pairs(closures) do
-	  for i = 2,#t do
-	    debug.setupvalue(t[1], i-1, t[i])
-	  end
-	end
-]]
-
-local lua_reserved_keywords = {
-  'and', 'break', 'do', 'else', 'elseif', 'end', 'false', 'for',
-  'function', 'if', 'in', 'local', 'nil', 'not', 'or', 'repeat',
-  'return', 'then', 'true', 'until', 'while' 
-}
-
-local function keys(t)
-  local res = {}
-  local oktypes = { stringstring = true, numbernumber = true }
-  local function cmpfct(a,b)
-    if oktypes[type(a)..type(b)] then
-      return a < b
-    else
-      return type(a) < type(b)
-    end
-  end
-  for k in pairs(t) do
-    res[#res+1] = k
-  end
-  table.sort(res, cmpfct)
-  return res
-end
-
-local c_functions = {}
-for _,lib in pairs{'_G', 'string', 'table', 'math',
-    'io', 'os', 'coroutine', 'package', 'debug'} do
-  local t = {}
-  lib = lib .. "."
-  if lib == "_G." then lib = "" end
-  for k,v in pairs(t) do
-    if type(v) == 'function' and not pcall(string.dump, v) then
-      c_functions[v] = lib..k
-    end
-  end
-end
-
-function DataDumper(value, varname, fastmode, ident)
-  local defined, dumplua = {}
-  -- Local variables for speed optimization
-  local string_format, type, string_dump, string_rep =
-        string.format, type, string.dump, string.rep
-  local tostring, pairs, table_concat =
-        tostring, pairs, table.concat
-  local keycache, strvalcache, out, closure_cnt = {}, {}, {}, 0
-  setmetatable(strvalcache, {__index = function(t,value)
-    local res = string_format('%q', value)
-    t[value] = res
-    return res
-  end})
-  local fcts = {
-    string = function(value) return strvalcache[value] end,
-    number = function(value) return value end,
-    boolean = function(value) return tostring(value) end,
-    ['nil'] = function(value) return 'nil' end,
-    ['function'] = function(value)
-      return string_format("loadstring(%q)", string_dump(value))
-    end,
-    userdata = function() error("Cannot dump userdata") end,
-    thread = function() error("Cannot dump threads") end,
-  }
-  local function test_defined(value, path)
-    if defined[value] then
-      if path:match("^getmetatable.*%)$") then
-        out[#out+1] = string_format("s%s, %s)\n", path:sub(2,-2), defined[value])
-      else
-        out[#out+1] = path .. " = " .. defined[value] .. "\n"
-      end
-      return true
-    end
-    defined[value] = path
-  end
-  local function make_key(t, key)
-    local s
-    if type(key) == 'string' and key:match('^[_%a][_%w]*$') then
-      s = key .. "="
-    else
-      s = "[" .. dumplua(key, 0) .. "]="
-    end
-    t[key] = s
-    return s
-  end
-  for _,k in ipairs(lua_reserved_keywords) do
-    keycache[k] = '["'..k..'"] = '
-  end
-  if fastmode then
-    fcts.table = function (value)
-      -- Table value
-      local numidx = 1
-      out[#out+1] = "{"
-      for key,val in pairs(value) do
-        if key == numidx then
-          numidx = numidx + 1
-        else
-          out[#out+1] = keycache[key]
-        end
-        local str = dumplua(val)
-        out[#out+1] = str..","
-      end
-      if string.sub(out[#out], -1) == "," then
-        out[#out] = string.sub(out[#out], 1, -2);
-      end
-      out[#out+1] = "}"
-      return ""
-    end
-  else
-    fcts.table = function (value, ident, path)
-      if test_defined(value, path) then return "nil" end
-      -- Table value
-      local sep, str, numidx, totallen = " ", {}, 1, 0
-      local meta, metastr = getmetatable(value)
-      if meta then
-        ident = ident + 1
-        metastr = dumplua(meta, ident, "getmetatable("..path..")")
-        totallen = totallen + #metastr + 16
-      end
-      for _,key in pairs(keys(value)) do
-        local val = value[key]
-        local s = ""
-        local subpath = path or ""
-        if key == numidx then
-          subpath = subpath .. "[" .. numidx .. "]"
-          numidx = numidx + 1
-        else
-          s = keycache[key]
-          if not s:match "^%[" then subpath = subpath .. "." end
-          subpath = subpath .. s:gsub("%s*=%s*$","")
-        end
-        s = s .. dumplua(val, ident+1, subpath)
-        str[#str+1] = s
-        totallen = totallen + #s + 2
-      end
-      if totallen > 80 then
-        sep = "\n" .. string_rep("  ", ident+1)
-      end
-      str = "{"..sep..table_concat(str, ","..sep).." "..sep:sub(1,-3).."}"
-      if meta then
-        sep = sep:sub(1,-3)
-        return "setmetatable("..sep..str..","..sep..metastr..sep:sub(1,-3)..")"
-      end
-      return str
-    end
-    fcts['function'] = function (value, ident, path)
-      if test_defined(value, path) then return "nil" end
-      if c_functions[value] then
-        return c_functions[value]
-      elseif debug == nil or debug.getupvalue(value, 1) == nil then
-        return string_format("loadstring(%q)", string_dump(value))
-      end
-      closure_cnt = closure_cnt + 1
-      local res = {string.dump(value)}
-      for i = 1,math.huge do
-        local name, v = debug.getupvalue(value,i)
-        if name == nil then break end
-        res[i+1] = v
-      end
-      return "closure " .. dumplua(res, ident, "closures["..closure_cnt.."]")
-    end
-  end
-  function dumplua(value, ident, path)
-    return fcts[type(value)](value, ident, path)
-  end
-  if varname == nil then
-    varname = ""
-  elseif varname:match("^[%a_][%w_]*$") then
-    varname = varname .. " = "
-  end
-  if fastmode then
-    setmetatable(keycache, {__index = make_key })
-    out[1] = varname
-    table.insert(out,dumplua(value, 0))
-    return table.concat(out)
-  else
-    setmetatable(keycache, {__index = make_key })
-    local items = {}
-    for i=1,10 do items[i] = '' end
-    items[3] = dumplua(value, ident or 0, "t")
-    if closure_cnt > 0 then
-      items[1], items[6] = dumplua_closure:match("(.*\n)\n(.*)")
-      out[#out+1] = ""
-    end
-    if #out > 0 then
-      items[2], items[4] = "local t = ", "\n"
-      items[5] = table.concat(out)
-      items[7] = varname .. "t"
-    else
-      items[2] = varname
-    end
-    return table.concat(items)
-  end
-end
-
--- ========== END OF DataDumper.lua =================
 
 -- ===========================================================================
 --	LUA Event
@@ -2849,10 +2169,6 @@ end
 function OnCloseAllExcept( contextToStayOpen:string )
 	if contextToStayOpen == ContextPtr:GetID() then return; end
 	Close();
-end
-
-function OnTraderAutomated( traderID:number, isAutomated:boolean )
-	m_TraderAutomated[traderID] = isAutomated;
 end
 
 -- ===========================================================================
@@ -2871,40 +2187,30 @@ function OnLocalPlayerTurnEnd()
 	end
 
 	m_HasBuiltTradeRouteTable = false;
-	m_processingTurn = true;
 end
 
-function OnLocalPlayerTurnBegin()
-	-- Dont call update, if game turn has not changed. Needs this check, otherwise it calls this hook
-	-- even if the turn has not started.
-	if m_LastTurnUpdatedMyRoutes < Game.GetCurrentGameTurn() then
-		UpdateRoutesWithTurnsRemaining( m_LocalPlayerRunningRoutes );
-	end
+function OnUnitOperationStarted( ownerID:number, unitID:number, operationID:number )
+	if ownerID == Game.GetLocalPlayer() and operationID == UnitOperationTypes.MAKE_TRADE_ROUTE then
+		-- Unit was just started a trade route. Find the route, and update the tables
+		local localPlayerCities:table = Players[ownerID]:GetCities();
+		for i,city in localPlayerCities:Members() do
+			local outgoingRoutes = city:GetTrade():GetOutgoingRoutes();
+			for j,route in ipairs(outgoingRoutes) do
+				if route.TraderUnitID == unitID then
 
-	m_processingTurn = false;
-end
-
-function OnUnitOperationsCleared(playerID, unitID, hOperation, iData1)
-	if playerID == Game.GetLocalPlayer() then
-		local pPlayer:table = Players[playerID];
-		local pUnit:table = pPlayer:GetUnits():FindID(unitID);
-
-		if pUnit ~= nil then
-			local unitInfo:table = GameInfo.Units[pUnit:GetUnitType()];
-			
-			if (unitInfo.MakeTradeRoute == true) then
-				-- Remove entry from local players running routes
-				for i, route in ipairs(m_LocalPlayerRunningRoutes) do
-					if route.TraderUnitID == unitID then
-						print("Removing route: " .. GetTradeRouteString(route) .. " since it completed.");
-						LuaEvents.TradeOverview_SetLastRoute(route);
-						table.remove(m_LocalPlayerRunningRoutes, i);
-						return;
+					-- Remove it from the available routes
+					if m_groupBySelected == GROUP_BY_SETTINGS.NONE then
+						RemoveRouteFromTable(route, m_AvailableTradeRoutes, false);
+					else
+						RemoveRouteFromTable(route, m_AvailableTradeRoutes, true);
 					end
 				end
-
-				print("Error: Could not find the route in m_LocalPlayerRunningRoutes");
 			end
+		end
+
+		-- Dont refresh, if the window is hidden
+		if not ContextPtr:IsHidden() then
+			Refresh();
 		end
 	end
 end
@@ -2947,6 +2253,12 @@ end
 function KeyUpHandler( key:number )
 	if key == Keys.VK_SHIFT then
 		m_shiftDown = false;
+
+		if m_changedSortSettings then
+			Refresh();
+			m_changedSortSettings = false;
+		end
+
 		if not showSortOrdersPermanently then 
 			HideSortOrderLabels();
 		end
@@ -3006,30 +2318,6 @@ function OnGameDebugReturn( context:string, contextTable:table )
 	end
 end
 
-function OnUnitOperationStarted( ownerID:number, unitID:number, operationID:number )
-	if ownerID == Game.GetLocalPlayer() and operationID == UnitOperationTypes.MAKE_TRADE_ROUTE then
-		-- Unit was just started a trade route. Find the route, and update the tables
-		local localPlayerCities:table = Players[ownerID]:GetCities();
-		for i,city in localPlayerCities:Members() do
-			local outgoingRoutes = city:GetTrade():GetOutgoingRoutes();
-			for j,route in ipairs(outgoingRoutes) do
-				if route.TraderUnitID == unitID then
-					-- Add it to the local players runnning routes
-					AddRouteWithTurnsRemaining( route, m_LocalPlayerRunningRoutes );
-
-					-- Remove it from the available routes
-					RemoveRouteFromTable(route, m_AvailableTradeRoutes);
-				end
-			end
-		end
-
-		-- Dont refresh, if the window is hidden
-		if not ContextPtr:IsHidden() then
-			Refresh();
-		end
-	end
-end
-
 function OnPolicyChanged( ePlayer )
 	if m_AnimSupport.IsVisible() and ePlayer == Game.GetLocalPlayer() then
 		Refresh();
@@ -3037,9 +2325,10 @@ function OnPolicyChanged( ePlayer )
 end
 
 function Initialize()
-	-- Load Previous Routes
-	LoadRunningRoutesInfo();
+	print("Initializing BTS Trade Overview");	
 
+	-- Initialize tracker
+	TradeSupportTracker_Initialize();
 
 	-- Input handler
 	ContextPtr:SetInputHandler( OnInputHandler, true );
@@ -3089,14 +2378,16 @@ function Initialize()
 	Controls.OverviewGroupByButton:RegisterCallback( eLClick, UpdateGroupByArrow );
 	Controls.OverviewGroupByPulldown:RegisterSelectionCallback( OnGroupBySelected );
 
-	Controls.GroupShowAllCheckBox:RegisterCallback( eLClick, OnGroupShowAll );
-	Controls.GroupShowAllCheckBox:RegisterCallback( Mouse.eMouseEnter, function() UI.PlaySound("Main_Menu_Mouse_Over"); end);
+	Controls.GroupExpandAllCheckBox:RegisterCallback( eLClick, OnGroupExpandAll );
+	Controls.GroupExpandAllCheckBox:RegisterCallback( Mouse.eMouseEnter, function() UI.PlaySound("Main_Menu_Mouse_Over"); end);
+
+	Controls.GroupCollapseAllCheckBox:RegisterCallback( eLClick, OnGroupCollapseAll );
+	Controls.GroupCollapseAllCheckBox:RegisterCallback( Mouse.eMouseEnter, function() UI.PlaySound("Main_Menu_Mouse_Over"); end);
 
 	-- Lua Events
 	LuaEvents.PartialScreenHooks_OpenTradeOverview.Add( OnOpen );
 	LuaEvents.PartialScreenHooks_CloseTradeOverview.Add( OnClose );
 	LuaEvents.PartialScreenHooks_CloseAllExcept.Add( OnCloseAllExcept );
-	LuaEvents.TradeRouteChooser_TraderAutomated.Add( OnTraderAutomated );
 
 	-- Animation Controller
 	m_AnimSupport = CreateScreenAnimation(Controls.SlideAnim);
@@ -3112,8 +2403,6 @@ function Initialize()
 	Events.GovernmentPolicyObsoleted.Add( OnPolicyChanged );
 	Events.LocalPlayerTurnEnd.Add( OnLocalPlayerTurnEnd );
 	Events.InterfaceModeChanged.Add( OnInterfaceModeChanged );
-	Events.LocalPlayerTurnBegin.Add ( OnLocalPlayerTurnBegin );
- 	Events.UnitOperationsCleared.Add( OnUnitOperationsCleared );
 
 	-- Hot-Reload Events
 	ContextPtr:SetInitHandler(OnInit);

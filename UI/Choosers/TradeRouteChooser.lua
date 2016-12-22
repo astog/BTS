@@ -1,5 +1,3 @@
-print("Better Trade Screen loaded")
-
 -- ===========================================================================
 --	Settings
 -- ===========================================================================
@@ -7,20 +5,30 @@ print("Better Trade Screen loaded")
 local alignTradeRouteYields = true
 local showSortOrdersPermanently = false
 
--------------------------------------------------------------------------------
--- TRADE PANEL
--------------------------------------------------------------------------------
+-- ===========================================================================
+--	INCLUDES
+-- ===========================================================================
 
 include("InstanceManager");
 include("SupportFunctions");
+include("TradeSupport");
+
+-- ===========================================================================
+--	CONSTANTS
+-- ===========================================================================
+
+local SORT_BY_ID:table = GetSortByIdConstants();
+local SORT_ASCENDING = GetSortAscendingIdConstant();
+local SORT_DESCENDING = GetSortDescendingIdConstant();
+
+-- ===========================================================================
+--	VARIABLES
+-- ===========================================================================
 
 local m_RouteChoiceIM			: table = InstanceManager:new("RouteChoiceInstance", "Top", Controls.RouteChoiceStack);
 local m_originCity				: table = nil;	-- City where the trade route will begin
 local m_destinationCity			: table = nil;	-- City where the trade route will end, nil if none selected
 local m_pTradeOverviewContext	: table = nil;	-- Trade Overview context
-local m_LastRouteForTrader		: table = {};	-- Last route taken by the trader.
-local m_TraderAutomated			: table = {};
-local m_TraderAutomatedSettings	: table = {};
 
 -- These can be set by other contexts to have a route selected automatically after the chooser opens
 local m_postOpenSelectPlayerID:number = -1;
@@ -35,23 +43,6 @@ local m_filterList:table = {};
 local m_filterCount:number = 0;
 local m_filterSelected:number = 1;
 
--- This is updated from the Trade Overview panel, to stop UI bugs.
-local m_TradeOverviewIsOpen:boolean = false;
-
--- SORT CONSTANTS
-local SORT_BY_ID:table = {
-	FOOD = 1;
-	PRODUCTION = 2;
-	GOLD = 3;
-	SCIENCE = 4;
-	CULTURE = 5;
-	FAITH = 6;
-	TURNS_TO_COMPLETE = 7;
-}
-
-local SORT_ASCENDING = 1
-local SORT_DESCENDING = -1
-
 local m_shiftDown:boolean = false;
 
 -- Stores the sort settings.
@@ -63,18 +54,8 @@ m_SortBySettings[1] = {
 	SortOrder = SORT_ASCENDING
 };
 
-local m_CompareFunctionByID	= {};
-
-m_CompareFunctionByID[SORT_BY_ID.FOOD]				= function(a, b) return CompareByFood(a, b); 			end;
-m_CompareFunctionByID[SORT_BY_ID.PRODUCTION]		= function(a, b) return CompareByProduction(a, b); 		end;
-m_CompareFunctionByID[SORT_BY_ID.GOLD]				= function(a, b) return CompareByGold(a, b); 			end;
-m_CompareFunctionByID[SORT_BY_ID.SCIENCE]			= function(a, b) return CompareByScience(a, b); 		end;
-m_CompareFunctionByID[SORT_BY_ID.CULTURE]			= function(a, b) return CompareByCulture(a, b); 		end;
-m_CompareFunctionByID[SORT_BY_ID.FAITH]				= function(a, b) return CompareByFaith(a, b); 			end;
-m_CompareFunctionByID[SORT_BY_ID.TURNS_TO_COMPLETE]	= function(a, b) return CompareByTurnsToComplete(a, b); end;
-
 -- ===========================================================================
---	Refresh
+--	Refresh functions
 -- ===========================================================================
 function Refresh()
 	local selectedUnit:table = UI.GetHeadSelectedUnit();
@@ -593,168 +574,6 @@ function FilterByCityStatesWithTradeQuest()
 end
 
 -- ===========================================================================
---	Trade Routes Sorter
--- ===========================================================================
-
-function SortTradeRoutes( tradeRoutes:table, sortSettings:table )
-	if tableLength(m_SortBySettings) > 0 then
-		table.sort(tradeRoutes, function(a, b) return CompleteCompareBy(a, b, sortSettings); end )
-	end
-end
-
-function InsertSortEntry( sortByID:number, sortOrder:number, sortSettings:table )
-	local sortEntry = {
-		SortByID = sortByID,
-		SortOrder = sortOrder
-	};
-
-	-- Only insert if it does not exist
-	local sortEntryIndex = findIndex (sortSettings, sortEntry, CompareSortEntries);
-	if sortEntryIndex == -1 then
-		-- print("Inserting " .. sortEntry.SortByID);
-		table.insert(sortSettings, sortEntry);
-	else
-		-- If it exists, just update the sort oder
-		-- print("Index: " .. sortEntryIndex);
-		sortSettings[sortEntryIndex].SortOrder = sortOrder;
-	end
-end
-
-function RemoveSortEntry( sortByID:number, sortSettings:table  )
-	local sortEntry = {
-		SortByID = sortByID,
-		SortOrder = sortOrder
-	};
-
-	-- Only delete if it exists
-	local sortEntryIndex:number = findIndex(sortSettings, sortEntry, CompareSortEntries);
-
-	if (sortEntryIndex > 0) then
-		table.remove(sortSettings, sortEntryIndex);
-	end
-end
-
--- ---------------------------------------------------------------------------
--- Compare functions
--- ---------------------------------------------------------------------------
-
--- Checks for the same ID, not the same order
-function CompareSortEntries( sortEntry1:table, sortEntry2:table)
-	if sortEntry1.SortByID == sortEntry2.SortByID then
-		return true;
-	end
-
-	return false;
-end
-
--- Uses the list of compare functions, to make one global compare function
-function CompleteCompareBy( tradeRoute1:table, tradeRoute2:table, sortSettings:table )
-	for index, sortEntry in ipairs(sortSettings) do
-		local compareFunction = m_CompareFunctionByID[sortEntry.SortByID];
-		local compareResult:boolean = compareFunction(tradeRoute1, tradeRoute2);
-
-		if compareResult then
-			if (sortEntry.SortOrder == SORT_DESCENDING) then
-				return false;
-			else
-				return true;
-			end
-		elseif not CheckEquality( tradeRoute1, tradeRoute2, compareFunction ) then
-			if (sortEntry.SortOrder == SORT_DESCENDING) then
-				return true;
-			else
-				return false;
-			end
-		end
-	end
-
-	-- If it reaches here, we used all the settings, and all of them were equal. 
-	-- Do net yield compare. 'not' because order should be in descending
-	return CompareByNetYield(tradeRoute1, tradeRoute2);
-end
-
-function CompareByFood( tradeRoute1:table, tradeRoute2:table )
-	return CompareByYield (GameInfo.Yields["YIELD_FOOD"].Index, tradeRoute1, tradeRoute2);
-end
-
-function CompareByProduction( tradeRoute1:table, tradeRoute2:table )
-	return CompareByYield (GameInfo.Yields["YIELD_PRODUCTION"].Index, tradeRoute1, tradeRoute2);
-end
-
-function CompareByGold( tradeRoute1:table, tradeRoute2:table )
-	return CompareByYield (GameInfo.Yields["YIELD_GOLD"].Index, tradeRoute1, tradeRoute2);
-end
-
-function CompareByScience( tradeRoute1:table, tradeRoute2:table )
-	return CompareByYield (GameInfo.Yields["YIELD_SCIENCE"].Index, tradeRoute1, tradeRoute2);
-end
-
-function CompareByCulture( tradeRoute1:table, tradeRoute2:table )
-	return CompareByYield (GameInfo.Yields["YIELD_CULTURE"].Index, tradeRoute1, tradeRoute2);
-end
-
-function CompareByFaith( tradeRoute1:table, tradeRoute2:table )
-	return CompareByYield (GameInfo.Yields["YIELD_FAITH"].Index, tradeRoute1, tradeRoute2);
-end
-
-function CompareByYield( yieldIndex:number, tradeRoute1:table, tradeRoute2:table )
-	local originPlayer1:table = Players[tradeRoute1.OriginCityPlayer];
-	local destinationPlayer1:table = Players[tradeRoute1.DestinationCityPlayer];
-	local originCity1:table = originPlayer1:GetCities():FindID(tradeRoute1.OriginCityID);
-	local destinationCity1:table = destinationPlayer1:GetCities():FindID(tradeRoute1.DestinationCityID);
-
-	local originPlayer2:table = Players[tradeRoute2.OriginCityPlayer];
-	local destinationPlayer2:table = Players[tradeRoute2.DestinationCityPlayer];
-	local originCity2:table = originPlayer2:GetCities():FindID(tradeRoute2.OriginCityID);
-	local destinationCity2:table = destinationPlayer2:GetCities():FindID(tradeRoute2.DestinationCityID);
-
-	local yieldForRoute1 = GetYieldFromCity(yieldIndex, originCity1, destinationCity1);
-	local yieldForRoute2 = GetYieldFromCity(yieldIndex, originCity2, destinationCity2);
-
-	return yieldForRoute1 < yieldForRoute2;
-end
-
-function CompareByTurnsToComplete( tradeRoute1:table, tradeRoute2:table )
-	local originPlayer1:table = Players[tradeRoute1.OriginCityPlayer];
-	local destinationPlayer1:table = Players[tradeRoute1.DestinationCityPlayer];
-	local originCity1:table = originPlayer1:GetCities():FindID(tradeRoute1.OriginCityID);
-	local destinationCity1:table = destinationPlayer1:GetCities():FindID(tradeRoute1.DestinationCityID);
-
-	local originPlayer2:table = Players[tradeRoute2.OriginCityPlayer];
-	local destinationPlayer2:table = Players[tradeRoute2.DestinationCityPlayer];
-	local originCity2:table = originPlayer2:GetCities():FindID(tradeRoute2.OriginCityID);
-	local destinationCity2:table = destinationPlayer2:GetCities():FindID(tradeRoute2.DestinationCityID);
-
-	local tradePathLength1, tripsToDestination1, turnsToCompleteRoute1 = GetRouteInfo(originCity1, destinationCity1);
-	local tradePathLength2, tripsToDestination2, turnsToCompleteRoute2 = GetRouteInfo(originCity2, destinationCity2);
-
-	return turnsToCompleteRoute1 < turnsToCompleteRoute2;
-end
-
-function CompareByNetYield( tradeRoute1:table, tradeRoute2:table )
-	local originPlayer1:table = Players[tradeRoute1.OriginCityPlayer];
-	local destinationPlayer1:table = Players[tradeRoute1.DestinationCityPlayer];
-	local originCity1:table = originPlayer1:GetCities():FindID(tradeRoute1.OriginCityID);
-	local destinationCity1:table = destinationPlayer1:GetCities():FindID(tradeRoute1.DestinationCityID);
-
-	local originPlayer2:table = Players[tradeRoute2.OriginCityPlayer];
-	local destinationPlayer2:table = Players[tradeRoute2.DestinationCityPlayer];
-	local originCity2:table = originPlayer2:GetCities():FindID(tradeRoute2.OriginCityID);
-	local destinationCity2:table = destinationPlayer2:GetCities():FindID(tradeRoute2.DestinationCityID);
-
-	local yieldForRoute1:number = 0;
-	local yieldForRoute2:number = 0;
-
-	for yieldInfo in GameInfo.Yields() do
-		yieldForRoute1 = yieldForRoute1 + GetYieldFromCity(yieldInfo.Index, originCity1, destinationCity1);
-		yieldForRoute2 = yieldForRoute2 + GetYieldFromCity(yieldInfo.Index, originCity2, destinationCity2);
-	end
-
-	-- Flipped comparison because it should be descending
-	return yieldForRoute1 > yieldForRoute2;
-end
-
--- ===========================================================================
 --	Sort bar functions
 -- ===========================================================================
 
@@ -891,58 +710,6 @@ end
 --	General Helper functions
 -- ===========================================================================
 
-function FormatYieldText(yieldInfo, yieldAmount)
-	local text:string = "";
-
-	local iconString = "";
-	if (yieldInfo.YieldType == "YIELD_FOOD") then
-		iconString = "[ICON_Food]";
-	elseif (yieldInfo.YieldType == "YIELD_PRODUCTION") then
-		iconString = "[ICON_Production]";
-	elseif (yieldInfo.YieldType == "YIELD_GOLD") then
-		iconString = "[ICON_Gold]";
-	elseif (yieldInfo.YieldType == "YIELD_SCIENCE") then
-		iconString = "[ICON_Science]";
-	elseif (yieldInfo.YieldType == "YIELD_CULTURE") then
-		iconString = "[ICON_Culture]";
-	elseif (yieldInfo.YieldType == "YIELD_FAITH") then
-		iconString = "[ICON_Faith]";
-	end
-
-	if (yieldAmount >= 0) then
-		text = text .. "+";
-	end
-
-	text = text .. yieldAmount;
-	return iconString, text;
-end
-
-function tableLength(T)
-	local count = 0
-	for _ in pairs(T) do count = count + 1 end
-	return count
-end
-
-function reverseTable(T)
-	table_length = tableLength(T);
-
-	for i=1, math.floor(table_length / 2) do
-		local tmp = T[i]
-		T[i] = T[table_length - i + 1]
-		T[table_length - i + 1] = tmp
-	end
-end
-
-function findIndex(T, searchItem, compareFunc)
-	for index, item in ipairs(T) do
-		if compareFunc(item, searchItem) then
-			return index;
-		end
-	end
-
-	return -1;
-end
-
 -- Checks if the player is a civ, other than the local player
 function IsOtherCiv( player:table )
 	if player:GetID() ~= Game.GetLocalPlayer() then
@@ -979,98 +746,6 @@ end
 -- ---------------------------------------------------------------------------
 -- Trade route helper functions
 -- ---------------------------------------------------------------------------
-function RenewTradeRoutes()
-	local renewedRoute:boolean = false;
-
-	local pPlayerUnits:table = Players[Game.GetLocalPlayer()]:GetUnits();
-	for i, pUnit in pPlayerUnits:Members() do
-		-- Find Each Trade Unit
-		local unitInfo:table = GameInfo.Units[pUnit:GetUnitType()];
-		local unitID:number = pUnit:GetID();
-		if unitInfo.MakeTradeRoute == true and m_TraderAutomated[unitID] then
-			-- Ignore trade units that have a pending operation
-			if not pUnit:HasPendingOperations() then
-				local destinationCity:table = nil;
-				local tradeManager:table = Game.GetTradeManager();
-				local originCity:table = Cities.GetCityInPlot(pUnit:GetX(), pUnit:GetY());
-
-				if m_TraderAutomatedSettings[unitID] ~= nil and tableLength(m_TraderAutomatedSettings[unitID]) > 0 then
-					
-					local tradeRoutes:table = {};
-					local players:table = Game:GetPlayers();
-
-					-- Build list of trade routes
-					for i, player in ipairs(players) do
-						local cities:table = player:GetCities();
-						for j, city in cities:Members() do
-							-- Can we start a trade route with this city?
-							if tradeManager:CanStartRoute(originCity:GetOwner(), originCity:GetID(), city:GetOwner(), city:GetID()) then
-								local tradeRoute = {
-									OriginCityPlayer 		= originCity:GetOwner(),
-									OriginCityID 			= originCity:GetID(),
-									DestinationCityPlayer 	= city:GetOwner(),
-									DestinationCityID 		= city:GetID()
-								};
-
-								table.insert(tradeRoutes, tradeRoute);
-							end
-						end
-					end
-
-					-- Sort them based on the settings saved when the route was begun
-					SortTradeRoutes( tradeRoutes, m_TraderAutomatedSettings[unitID] );
-
-					-- Get destination based on the top entry
-					local destinationPlayer:table = Players[tradeRoutes[1].DestinationCityPlayer];
-					destinationCity = destinationPlayer:GetCities():FindID(tradeRoutes[1].DestinationCityID);
-
-				elseif m_LastRouteForTrader[unitID] ~= nil then
-					local destinationPlayer:table = Players[m_LastRouteForTrader[unitID].DestinationCityPlayer];
-					destinationCity = destinationPlayer:GetCities():FindID(m_LastRouteForTrader[unitID].DestinationCityID);
-				end
-
-				if destinationCity ~= nil and tradeManager:CanStartRoute(originCity:GetOwner(), originCity:GetID(), destinationCity:GetOwner(), destinationCity:GetID()) then
-					local operationParams = {};
-					operationParams[UnitOperationTypes.PARAM_X0] = destinationCity:GetX();
-					operationParams[UnitOperationTypes.PARAM_Y0] = destinationCity:GetY();
-					operationParams[UnitOperationTypes.PARAM_X1] = originCity:GetX();
-					operationParams[UnitOperationTypes.PARAM_Y1] = originCity:GetY();
-
-					if (UnitManager.CanStartOperation(pUnit, UnitOperationTypes.MAKE_TRADE_ROUTE, nil, operationParams)) then
-						print("Trader " .. unitID .. " renewed its trade route: " .. GetTradeRouteString(m_LastRouteForTrader[unitID]))
-						-- TODO: Send notification for renewing routes
-						UnitManager.RequestOperation(pUnit, UnitOperationTypes.MAKE_TRADE_ROUTE, operationParams);
-					
-						if not renewedRoute then
-							renewedRoute = true;
-						end
-					else
-						print("Could not start a route");
-					end
-				else
-					print("Could not renew a route. Missing route info, or the destination is no longer a valid trade route destination.");
-				end
-			end
-		end
-	end
-
-	-- Play sound, if a route was renewed.
-	if renewedRoute then
-		UI.PlaySound("START_TRADE_ROUTE");
-	end
-end
-
-function SetLastRouteForTrader( routeInfo:table )
-	m_LastRouteForTrader[routeInfo.TraderUnitID] = routeInfo;
-end
-
-function SetTraderAutomated( traderID:number, isAutomated:boolean )
-	m_TraderAutomated[traderID] = isAutomated;
-
-	if (not isAutomated) then
-		m_TraderAutomatedSettings[traderID] = nil;
-	end
-end
 
 function TradeRouteSelected( cityOwner:number, cityID:number )
 	local player:table = Players[cityOwner];
@@ -1137,75 +812,6 @@ function GetYieldForCity(yieldIndex:number, city:table, originCity:boolean)
 	return totalValue, sourceText;
 end
 
--- Returns yield for the origin city
-function GetYieldFromCity( yieldIndex:number, originCity:table, destinationCity:table )
-	local tradeManager = Game.GetTradeManager();
-
-	-- From route
-	local yieldValue = tradeManager:CalculateOriginYieldFromPotentialRoute(originCity:GetOwner(), originCity:GetID(), destinationCity:GetOwner(), destinationCity:GetID(), yieldIndex);
-	-- From path
-	yieldValue = yieldValue + tradeManager:CalculateOriginYieldFromPath(originCity:GetOwner(), originCity:GetID(), destinationCity:GetOwner(), destinationCity:GetID(), yieldIndex);
-	-- From modifiers
-	local resourceID = -1;
-	yieldValue = yieldValue + tradeManager:CalculateOriginYieldFromModifiers(originCity:GetOwner(), originCity:GetID(), destinationCity:GetOwner(), destinationCity:GetID(), yieldIndex, resourceID);
-
-	return yieldValue;
-end
-
--- Returns length of trade path, number of trips to destination, turns to complete route
-function GetRouteInfo(originCity:table, destinationCity:table)
-	local eSpeed = GameConfiguration.GetGameSpeedType();
-	
-	if GameInfo.GameSpeeds[eSpeed] ~= nil then
-		local iSpeedCostMultiplier = GameInfo.GameSpeeds[eSpeed].CostMultiplier;
-		local tradeManager = Game.GetTradeManager();
-		local pathPlots = tradeManager:GetTradeRoutePath(originCity:GetOwner(), originCity:GetID(), destinationCity:GetOwner(), destinationCity:GetID() );
-		local tradePathLength:number = tableLength(pathPlots) - 1;
-		local multiplierConstant:number = 0.1;
-
-		local tripsToDestination = 1 + math.floor(iSpeedCostMultiplier/tradePathLength * multiplierConstant);
-		
-		--print("Error: Playing on an unrecognized speed. Defaulting to standard for route turns calculation");
-		local turnsToCompleteRoute = (tradePathLength * 2 * tripsToDestination);
-		return tradePathLength, tripsToDestination, turnsToCompleteRoute;
-	else
-		print("Speed type index " .. eSpeed);
-		print("Error: Could not find game speed type. Defaulting to first entry in table");
-		local iSpeedCostMultiplier =  GameInfo.GameSpeeds[1].CostMultiplier;
-		local tradeManager = Game.GetTradeManager();
-		local pathPlots = tradeManager:GetTradeRoutePath(originCity:GetOwner(), originCity:GetID(), destinationCity:GetOwner(), destinationCity:GetID() );
-		local tradePathLength:number = tableLength(pathPlots) - 1;
-		local multiplierConstant:number = 0.1;
-
-		local tripsToDestination = 1 + math.floor(iSpeedCostMultiplier/tradePathLength * multiplierConstant);
-		local turnsToCompleteRoute = (tradePathLength * 2 * tripsToDestination);
-		return tradePathLength, tripsToDestination, turnsToCompleteRoute;
-	end
-end
-
-function GetTradeRouteString( tradeRoute:table )
-	local originPlayer:table = Players[tradeRoute.OriginCityPlayer];
-	local originCity:table = originPlayer:GetCities():FindID(tradeRoute.OriginCityID);
-
-	local destinationPlayer:table = Players[tradeRoute.DestinationCityPlayer];
-	local destinationCity:table = destinationPlayer:GetCities():FindID(tradeRoute.DestinationCityID);
-
-
-	local s:string = Locale.Lookup(originCity:GetName()) .. "-" .. Locale.Lookup(destinationCity:GetName())
-	return s;
-end
-
--- Checks equality with the passed sorting compare function
-function CheckEquality( tradeRoute1:table, tradeRoute2:table, compareFunction )
-	if not compareFunction(tradeRoute1, tradeRoute2) then
-		if not compareFunction(tradeRoute2, tradeRoute1) then
-			return true;
-		end
-	end
-
-	return false;
-end
-
 -- ===========================================================================
 --	Look at the plot of the destination city.
 --	Not always done when selected, as sometimes the TradeOverview will be
@@ -1265,21 +871,13 @@ function RequestTradeRoute()
 			UI.SetInterfaceMode(InterfaceModeTypes.SELECTION);
 			UI.PlaySound("START_TRADE_ROUTE");
 
-			-- Add the automated settings
-			local selectedUnitID:number = selectedUnit:GetID();
-			if Controls.RepeatRouteCheckbox:IsChecked() then
-				m_TraderAutomated[selectedUnitID] = true;
-				LuaEvents.TradeRouteChooser_TraderAutomated(selectedUnitID, true);
-
-				if Controls.FromTopSortEntryCheckbox:IsChecked() then
-					-- Store a copy of the sort settings.
-					m_TraderAutomatedSettings[selectedUnitID] = DeepCopy(m_SortBySettings);
-				else
-					m_TraderAutomatedSettings[selectedUnitID] = nil;
-				end
+			-- Automated Handlers
+			if Controls.RepeatRouteCheckbox:IsChecked() and Controls.FromTopSortEntryCheckbox:IsChecked() then
+				AutomateTrader(selectedUnit:GetID(), true, m_SortBySettings);
+			elseif Controls.RepeatRouteCheckbox:IsChecked() then
+				AutomateTrader(selectedUnit:GetID(), true);
 			else
-				m_TraderAutomated[selectedUnitID] = false;
-				LuaEvents.TradeRouteChooser_TraderAutomated(selectedUnitID, false);
+				AutomateTrader(selectedUnit:GetID(), false);
 			end
 		end
 
@@ -1518,17 +1116,23 @@ function Open()
 
 	LuaEvents.TradeRouteChooser_Open();
 
-	if not m_TradeOverviewIsOpen then
-		local selectedUnit:table = UI.GetHeadSelectedUnit();
-		local selectedUnitID:number = selectedUnit:GetID();
+	local selectedUnit:table = UI.GetHeadSelectedUnit();
+	local selectedUnitID:number = selectedUnit:GetID();
 
-		if m_LastRouteForTrader[selectedUnitID] ~= nil then
-			print("Last route for trader " .. selectedUnitID .. ": " .. GetTradeRouteString(m_LastRouteForTrader[selectedUnitID]));
-			local destinationPlayer:table = Players[m_LastRouteForTrader[selectedUnitID].DestinationCityPlayer];
-			m_destinationCity = destinationPlayer:GetCities():FindID(m_LastRouteForTrader[selectedUnitID].DestinationCityID);
+	local lastRoute:table = GetLastRouteForTrader(selectedUnitID);
+
+	if lastRoute ~= nil then
+		print("Last route for trader " .. selectedUnitID .. ": " .. GetTradeRouteString(lastRoute));
+		originCity = Cities.GetCityInPlot(selectedUnit:GetX(), selectedUnit:GetY());
+
+		if IsRoutePossible(originCity:GetOwner(), originCity:GetID(), lastRoute.DestinationCityPlayer, DestinationCityID) then
+			local destinationPlayer:table = Players[lastRoute.DestinationCityPlayer];
+			m_destinationCity = destinationPlayer:GetCities():FindID(lastRoute.DestinationCityID);
 		else
-			print("No last route was found for trader " .. selectedUnitID);
+			print("Route is no longer valid.");
 		end
+	else
+		print("No last route was found for trader " .. selectedUnitID);
 	end
 
 	Refresh();
@@ -1558,10 +1162,6 @@ function CheckNeedsToOpen()
 	if not ContextPtr:IsHidden() then
 		Close();
 	end
-end
-
-function SetTradeOverviewStatus( isOpen:boolean )
-	m_TradeOverviewIsOpen = isOpen;
 end
 
 -- ===========================================================================
@@ -1621,7 +1221,8 @@ function OnUnitSelectionChanged( playerID : number, unitID : number, hexI : numb
 		return;
 	end
 
-	if not m_TradeOverviewIsOpen then
+	-- Only open if TradeOverview is hidden
+	if m_pTradeOverviewContext == nil or m_pTradeOverviewContext:IsHidden() then
 		CheckNeedsToOpen();
 	else
 		print("Trade Overview was open. Not auto opening trade panel.")
@@ -1631,12 +1232,6 @@ end
 function OnLocalPlayerTurnEnd()
 	if(GameConfiguration.IsHotseat()) then
 		OnClose();
-	end
-end
-
-function OnPlayerTurnActivated( playerID:number, isFirstTime:boolean )
-	if playerID == Game.GetLocalPlayer() then
-		RenewTradeRoutes();
 	end
 end
 
@@ -1718,6 +1313,10 @@ end
 --	Setup
 -- ===========================================================================
 function Initialize()
+	print("Initializing BTS Trade Route Chooser");
+	
+	TradeSupportAutomater_Initialize();
+
 	-- Context Events
 	ContextPtr:SetInitHandler( OnInit );
 	ContextPtr:SetShutdown( OnShutdown );
@@ -1728,9 +1327,6 @@ function Initialize()
 
 	-- Context Events
 	LuaEvents.TradeOverview_SelectRouteFromOverview.Add( OnSelectRouteFromOverview );
-	LuaEvents.TradeOverview_UpdateContextStatus.Add( SetTradeOverviewStatus );
-	LuaEvents.TradeOverview_SetLastRoute.Add( SetLastRouteForTrader );
-	LuaEvents.TraderOverview_SetTraderAutomated.Add( SetTraderAutomated );
 
 	-- Game Engine Events	
 	Events.InterfaceModeChanged.Add( OnInterfaceModeChanged );
@@ -1740,7 +1336,6 @@ function Initialize()
 	Events.LocalPlayerTurnEnd.Add( OnLocalPlayerTurnEnd );
 	Events.GovernmentPolicyChanged.Add( OnPolicyChanged );
 	Events.GovernmentPolicyObsoleted.Add( OnPolicyChanged );
-	Events.PlayerTurnActivated.Add( OnPlayerTurnActivated );
 
 	-- Control Events
 	Controls.BeginRouteButton:RegisterCallback( eLClick, RequestTradeRoute );

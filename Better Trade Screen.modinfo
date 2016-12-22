@@ -13,18 +13,13 @@
 			<Items>
 				<File>UI/TradeOverview.xml</File>
 				<File>UI/TradeOverview.lua</File>
+				<File>UI/TradeSupport.lua</File>
 				<File>UI/Choosers/TradeRouteChooser.xml</File>
 				<File>UI/Choosers/TradeRouteChooser.lua</File>
 				<File>UI/Choosers/TradeOriginChooser.xml</File>
 				<File>UI/Choosers/TradeOriginChooser.lua</File>
 			</Items>
 		</ImportFiles>
-
-		<GameplayScripts id="BTS_SCRIPTS">
-			<Items>
-				<File>Scripts/BTS_Scripts.lua</File>
-			</Items>
-		</GameplayScripts>
 
 		<LocalizedText id="BTS_TEXT">
 			<Items>
@@ -38,7 +33,6 @@
 			<Items>
 				<Component>BTS_IMPORT_FILES</Component>
 				<Component>BTS_TEXT</Component>
-				<Component>BTS_SCRIPTS</Component>
 			</Items>
 		</Custom>
 	</Settings>
@@ -64,11 +58,11 @@
 	<Files>
 		<File>UI/TradeOverview.xml</File>
 		<File>UI/TradeOverview.lua</File>
+		<File>UI/TradeSupport.lua</File>
 		<File>UI/Choosers/TradeRouteChooser.xml</File>
 		<File>UI/Choosers/TradeRouteChooser.lua</File>
 		<File>UI/Choosers/TradeOriginChooser.xml</File>
 		<File>UI/Choosers/TradeOriginChooser.lua</File>
-		<File>Scripts/BTS_Scripts.lua</File>
 		<File>Text/BTS_Text.xml</File>
 	</Files>
 </Mod>

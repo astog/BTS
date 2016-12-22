@@ -279,6 +279,8 @@ end
 --	INIT
 -- ===========================================================================
 function Initialize()
+	print("Initializing BTS Trade Origin Chooser");
+
 	-- Hot-reload events
 	ContextPtr:SetInitHandler(OnInit);
 	ContextPtr:SetShutdown(OnShutdown);
