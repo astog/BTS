@@ -123,7 +123,14 @@ function RefreshTopPanel()
 		end
 
 		-- Update turns to complete route
-		local tradePathLength, tripsToDestination, turnsToCompleteRoute = GetRouteInfo(m_originCity, m_destinationCity);
+		local tradeRoute = {
+			OriginCityPlayer 		= m_originCity:GetOwner(),
+			OriginCityID 			= m_originCity:GetID(),
+			DestinationCityPlayer 	= m_destinationCity:GetOwner(),
+			DestinationCityID 		= m_destinationCity:GetID()
+		};
+
+		local tradePathLength, tripsToDestination, turnsToCompleteRoute = GetRouteInfo(tradeRoute);
 		Controls.TurnsToComplete:SetColor( frontColor );
 		Controls.TurnsToComplete:SetText(turnsToCompleteRoute);
 
@@ -219,7 +226,7 @@ function RefreshChooserPanel()
 
 	-- Update Filters
 	RefreshFilters();
-	
+
 	-- Update Destination Choice Stack
 	RefreshStack();
 
@@ -232,7 +239,7 @@ function RefreshChooserPanel()
 		local kVariations:table = {};
 		local lastElement : number = table.count(pathPlots);
 		table.insert(kVariations, {"TradeRoute_Destination", pathPlots[lastElement]} );
-		UILens.SetLayerHexesPath( LensLayers.TRADE_ROUTE, Game.GetLocalPlayer(), pathPlots, kVariations );	
+		UILens.SetLayerHexesPath( LensLayers.TRADE_ROUTE, Game.GetLocalPlayer(), pathPlots, kVariations );
 	end
 end
 
@@ -271,10 +278,10 @@ function RefreshStack()
 	local numberOfDestinations:number = 0;
 	for index, tradeRoute in ipairs(tradeRoutes) do
 		-- print("Adding route: " .. getTradeRouteString( tradeRoute ))
-		
+
 		local destinationPlayer:table = Players[tradeRoute.DestinationCityPlayer];
 		local destinationCity:table = destinationPlayer:GetCities():FindID(tradeRoute.DestinationCityID);
-		
+
 		AddCityToDestinationStack(destinationCity);
 		numberOfDestinations = numberOfDestinations + 1;
 	end
@@ -344,13 +351,19 @@ function AddCityToDestinationStack(city:table)
 	end
 
 	-- Update turns to complete route
-	local tradePathLength, tripsToDestination, turnsToCompleteRoute = GetRouteInfo(m_originCity, city);
-	local tooltipString = (	"Total amount of[ICON_Turn]to complete this trade route[NEWLINE]" .. 
+	local tradeRoute = {
+		OriginCityPlayer 		= m_originCity:GetOwner(),
+		OriginCityID 			= m_originCity:GetID(),
+		DestinationCityPlayer 	= city:GetOwner(),
+		DestinationCityID 		= city:GetID()
+	};
+	local tradePathLength, tripsToDestination, turnsToCompleteRoute = GetRouteInfo(tradeRoute);
+	local tooltipString = (	"Total amount of[ICON_Turn]to complete this trade route[NEWLINE]" ..
 							"--------------------------------------------------------[NEWLINE]" ..
-							"Trade Route[ICON_Movement]: " .. tradePathLength .. "[NEWLINE]" .. 
-							"Trips to destination: " .. tripsToDestination .. "[NEWLINE]" .. 
+							"Trade Route[ICON_Movement]: " .. tradePathLength .. "[NEWLINE]" ..
+							"Trips to destination: " .. tripsToDestination .. "[NEWLINE]" ..
 							"If started, route will complete in[ICON_Turn]: " .. Game.GetCurrentGameTurn() + turnsToCompleteRoute);
-	
+
 	cityEntry.TurnsToComplete:SetText(turnsToCompleteRoute);
 	cityEntry.TurnsToComplete:SetToolTipString( tooltipString );
 	cityEntry.TurnsToComplete:SetColor( frontColor );
@@ -381,7 +394,7 @@ end
 function AddResourceEntry(yieldInfo:table, yieldValue:number, sourceText:string, stackControl:table, customOffset)
 	local entryInstance:table = {};
 	ContextPtr:BuildInstanceForControl( "ResourceEntryInstance", entryInstance, stackControl );
-	
+
 	local icon:string, text:string = FormatYieldText(yieldInfo, yieldValue);
 	if yieldValue > 0 then
 		entryInstance.ResourceEntryIcon:SetText(icon);
@@ -512,7 +525,7 @@ function FilterByInternational()
 	-- Filter by Yield Index
 	for index, city in ipairs(m_unfilteredDestinations) do
 		local player:table = Players[city:GetOwner()];
-		
+
 		if player:GetID() ~= Game.GetLocalPlayer() then
 			table.insert(m_filteredDestinations, city);
 		end
@@ -752,12 +765,12 @@ function TradeRouteSelected( cityOwner:number, cityID:number )
 	if player then
 		local pCity:table = player:GetCities():FindID(cityID);
 		if pCity then
-			m_destinationCity = pCity;			
+			m_destinationCity = pCity;
 		else
 			error("Unable to find city '"..tostring(cityID).."' for creating a trade route.");
 		end
 	end
-	
+
 	Refresh();
 end
 
@@ -821,12 +834,12 @@ function RealizeLookAtDestinationCity()
 	if m_destinationCity == nil then
 		UI.DataError("TradeRouteChooser cannot look at a NIL destination.");
 		return;
-	end			
+	end
 
 	local locX		:number = m_destinationCity:GetX();
-	local locY		:number = m_destinationCity:GetY();	
+	local locY		:number = m_destinationCity:GetY();
 	local screenXOff:number = 0.6;
-	
+
 	-- Change offset if the TradeOveriew (exists and) is open as well.
 	if m_pTradeOverviewContext and (not m_pTradeOverviewContext:IsHidden()) then
 		screenXOff = 0.42;
@@ -1017,7 +1030,7 @@ end
 -- ---------------------------------------------------------------------------
 function OnNotSortByFood()
 	RemoveSortEntry( SORT_BY_ID.FOOD, m_SortBySettings);
-	
+
 	Refresh();
 end
 
@@ -1168,8 +1181,8 @@ end
 --	UI Events
 -- ===========================================================================
 function OnInit( isReload:boolean )
-	if isReload then		
-		LuaEvents.GameDebug_GetValues( "TradeRouteChooser" );	
+	if isReload then
+		LuaEvents.GameDebug_GetValues( "TradeRouteChooser" );
 	end
 end
 
@@ -1209,7 +1222,7 @@ end
 --	Unit was selected so close route chooser
 -- ===========================================================================
 function OnUnitSelectionChanged( playerID : number, unitID : number, hexI : number, hexJ : number, hexK : number, bSelected : boolean, bEditable : boolean )
-	
+
 	-- Make sure we're the local player and not observing
 	if playerID ~= Game.GetLocalPlayer() or playerID == -1 then
 		return;
@@ -1268,7 +1281,7 @@ end
 function KeyUpHandler( key:number )
 	if key == Keys.VK_SHIFT then
 		m_shiftDown = false;
-		if not showSortOrdersPermanently then 
+		if not showSortOrdersPermanently then
 			HideSortOrderLabels();
 		end
 		-- let it fall through
@@ -1290,7 +1303,7 @@ end
 function OnInputHandler( pInputStruct:table )
 	local uiMsg = pInputStruct:GetMessageType();
 	if uiMsg == KeyEvents.KeyDown then return KeyDownHandler( pInputStruct:GetKey() ); end
-	if uiMsg == KeyEvents.KeyUp then return KeyUpHandler( pInputStruct:GetKey() ); end	
+	if uiMsg == KeyEvents.KeyUp then return KeyUpHandler( pInputStruct:GetKey() ); end
 	return false;
 end
 
@@ -1306,7 +1319,7 @@ function OnSelectRouteFromOverview( destinationOwnerID:number, destinationCityID
 
 		-- Check to see if we need to open
 		CheckNeedsToOpen();
-	end	
+	end
 end
 
 -- ===========================================================================
@@ -1314,7 +1327,7 @@ end
 -- ===========================================================================
 function Initialize()
 	print("Initializing BTS Trade Route Chooser");
-	
+
 	TradeSupportAutomater_Initialize();
 
 	-- Context Events
@@ -1328,10 +1341,10 @@ function Initialize()
 	-- Context Events
 	LuaEvents.TradeOverview_SelectRouteFromOverview.Add( OnSelectRouteFromOverview );
 
-	-- Game Engine Events	
+	-- Game Engine Events
 	Events.InterfaceModeChanged.Add( OnInterfaceModeChanged );
 	Events.CitySelectionChanged.Add( OnCitySelectionChanged );
-	Events.UnitSelectionChanged.Add( OnUnitSelectionChanged );	
+	Events.UnitSelectionChanged.Add( OnUnitSelectionChanged );
 	Events.UnitActivityChanged.Add( OnUnitActivityChanged );
 	Events.LocalPlayerTurnEnd.Add( OnLocalPlayerTurnEnd );
 	Events.GovernmentPolicyChanged.Add( OnPolicyChanged );
@@ -1354,11 +1367,11 @@ function Initialize()
 	Controls.FoodSortButton:RegisterCallback( Mouse.eLClick, OnSortByFood);
 	Controls.FoodSortButton:RegisterCallback( Mouse.eRClick, OnNotSortByFood);
 	Controls.FoodSortButton:RegisterCallback( Mouse.eMouseEnter, function() UI.PlaySound("Main_Menu_Mouse_Over"); end);
-	
+
 	Controls.ProductionSortButton:RegisterCallback( Mouse.eLClick, OnSortByProduction);
 	Controls.ProductionSortButton:RegisterCallback( Mouse.eRClick, OnNotSortByProduction);
 	Controls.ProductionSortButton:RegisterCallback( Mouse.eMouseEnter, function() UI.PlaySound("Main_Menu_Mouse_Over"); end);
-	
+
 	Controls.GoldSortButton:RegisterCallback( Mouse.eLClick, OnSortByGold);
 	Controls.GoldSortButton:RegisterCallback( Mouse.eRClick, OnNotSortByGold);
 	Controls.GoldSortButton:RegisterCallback( Mouse.eMouseEnter, function() UI.PlaySound("Main_Menu_Mouse_Over"); end);

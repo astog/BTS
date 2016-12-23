@@ -71,16 +71,10 @@ function GetLastRouteForTrader( traderID:number )
 end
 
 -- Adds the route turns remaining to the table, if it does not exist already
-function AddRouteWithTurnsRemaining( routeInfo:table, routesTable:table, addedFromConsistencyCheck:boolean)
+function AddRouteWithTurnsRemaining( routeInfo:table, routesTable:table)
 	-- print("Adding route: " .. GetTradeRouteString(routeInfo));
 
-	local originPlayer:table = Players[routeInfo.OriginCityPlayer];
-	local originCity:table = originPlayer:GetCities():FindID(routeInfo.OriginCityID);
-
-	local destinationPlayer:table = Players[routeInfo.DestinationCityPlayer];
-	local destinationCity:table = destinationPlayer:GetCities():FindID(routeInfo.DestinationCityID);
-
-	local tradePathLength, tripsToDestination, turnsToCompleteRoute = GetRouteInfo( originCity, destinationCity );
+	local tradePathLength, tripsToDestination, turnsToCompleteRoute = GetRouteInfo( routeInfo );
 
 	local routeIndex = findIndex ( routesTable, routeInfo, CheckRouteEquality );
 
@@ -94,11 +88,6 @@ function AddRouteWithTurnsRemaining( routeInfo:table, routesTable:table, addedFr
 			TraderUnitID 			= routeInfo.TraderUnitID;
 			TurnsRemaining 			= turnsToCompleteRoute;
 		};
-
-		-- Optional flag
-		if addedFromConsistencyCheck ~= nil then
-			routeEntry.AddedFromCheck = addedFromConsistencyCheck;
-		end
 
 		-- Append entry
 		table.insert(routesTable, routeEntry);
@@ -116,7 +105,7 @@ function UpdateRoutesWithTurnsRemaining( routesTable:table )
 		if routesTable[i].TurnsRemaining ~= nil then
 			routesTable[i].TurnsRemaining = routesTable[i].TurnsRemaining - 1;
 			print("Updated route " .. GetTradeRouteString(routesTable[i]) .. " with turns remaining " .. routesTable[i].TurnsRemaining)
-			
+
 			if routesTable[i].TurnsRemaining <= 0 then
 				print("Removing route: " .. GetTradeRouteString(routesTable[i]));
 				table.remove(routesTable, i);
@@ -234,7 +223,7 @@ local function TradeSupportTracker_OnUnitOperationsCleared(ownerID:number, unitI
 							-- Create a new entry for this trader
 							print("Couldn't find trader automated info. Creating one.")
 							m_TradersAutomatedSettings[unitID] = { IsAutomated=false; };
-							m_TradersAutomatedSettings[unitID].LastRouteInfo = route;							
+							m_TradersAutomatedSettings[unitID].LastRouteInfo = route;
 						end
 
 						SaveTraderAutomatedInfo();
@@ -351,7 +340,7 @@ function RenewTradeRoutes()
 						print("Trader " .. unitID .. " renewed its trade route to " .. Locale.Lookup(destinationCity:GetName()));
 						-- TODO: Send notification for renewing routes
 						UnitManager.RequestOperation(pUnit, UnitOperationTypes.MAKE_TRADE_ROUTE, operationParams);
-					
+
 						if not renewedRoute then
 							renewedRoute = true;
 						end
@@ -528,18 +517,8 @@ function CompareByTurnsToComplete( tradeRoute1:table, tradeRoute2:table )
 		return tradeRoute1.TurnsRemaining < tradeRoute2.TurnsRemaining;
 	end
 
-	local originPlayer1:table = Players[tradeRoute1.OriginCityPlayer];
-	local destinationPlayer1:table = Players[tradeRoute1.DestinationCityPlayer];
-	local originCity1:table = originPlayer1:GetCities():FindID(tradeRoute1.OriginCityID);
-	local destinationCity1:table = destinationPlayer1:GetCities():FindID(tradeRoute1.DestinationCityID);
-
-	local originPlayer2:table = Players[tradeRoute2.OriginCityPlayer];
-	local destinationPlayer2:table = Players[tradeRoute2.DestinationCityPlayer];
-	local originCity2:table = originPlayer2:GetCities():FindID(tradeRoute2.OriginCityID);
-	local destinationCity2:table = destinationPlayer2:GetCities():FindID(tradeRoute2.DestinationCityID);
-
-	local tradePathLength1, tripsToDestination1, turnsToCompleteRoute1 = GetRouteInfo(originCity1, destinationCity1);
-	local tradePathLength2, tripsToDestination2, turnsToCompleteRoute2 = GetRouteInfo(originCity2, destinationCity2);
+	local tradePathLength1, tripsToDestination1, turnsToCompleteRoute1 = GetRouteInfo(tradeRoute1);
+	local tradePathLength2, tripsToDestination2, turnsToCompleteRoute2 = GetRouteInfo(tradeRoute2);
 
 	return turnsToCompleteRoute1 < turnsToCompleteRoute2;
 end
@@ -593,7 +572,7 @@ function CompleteCompareBy( tradeRoute1:table, tradeRoute2:table, sortSettings:t
 		end
 	end
 
-	-- If it reaches here, we used all the settings, and all of them were equal. 
+	-- If it reaches here, we used all the settings, and all of them were equal.
 	-- Do net yield compare. because order should be in descending
 	if CompareByNetYield(tradeRoute1, tradeRoute2) then
 		return false;
@@ -687,7 +666,7 @@ function RemoveRouteFromTable( routeToDelete:table , routeTable:table, groupedRo
 		for i, route in ipairs(routeTable) do
 			if CheckRouteEquality( route, routeToDelete ) then
 				targetIndex = i;
-			end		
+			end
 		end
 
 		-- Remove route
@@ -748,7 +727,7 @@ function GetTradeRouteString( routeInfo:table )
 	if destinationCity ~= nil then
 		destinationCityName = Locale.Lookup(destinationCity:GetName());
 	end
-	
+
 	return originCityName .. "-" .. destinationCityName;
 end
 
@@ -763,9 +742,9 @@ function GetTradeRouteYieldString( routeInfo )
 
 	for yieldInfo in GameInfo.Yields() do
 		local originCityYieldValue = GetYieldForOriginCity(yieldInfo.Index, originCity, destinationCity);
-		
+
 		local iconString, text = FormatYieldText(yieldInfo, originCityYieldValue);
-		
+
 		if originCityYieldValue == 0 then
 			iconString = "";
 			text = "";
@@ -843,9 +822,15 @@ function GetYieldForDestinationCity( yieldIndex:number, originCity:table, destin
 end
 
 -- Returns length of trade path, number of trips to destination, turns to complete route
-function GetRouteInfo(originCity:table, destinationCity:table)
+function GetRouteInfo(routeInfo)
+	local originPlayer:table = Players[routeInfo.OriginCityPlayer];
+	local originCity:table = originPlayer:GetCities():FindID(routeInfo.OriginCityID);
+
+	local destinationPlayer:table = Players[routeInfo.DestinationCityPlayer];
+	local destinationCity:table = destinationPlayer:GetCities():FindID(routeInfo.DestinationCityID);
+
 	local eSpeed = GameConfiguration.GetGameSpeedType();
-	
+
 	if GameInfo.GameSpeeds[eSpeed] ~= nil then
 		local iSpeedCostMultiplier = GameInfo.GameSpeeds[eSpeed].CostMultiplier;
 		local tradeManager = Game.GetTradeManager();
@@ -854,7 +839,7 @@ function GetRouteInfo(originCity:table, destinationCity:table)
 		local multiplierConstant:number = 0.1;
 
 		local tripsToDestination = 1 + math.floor(iSpeedCostMultiplier/tradePathLength * multiplierConstant);
-		
+
 		--print("Error: Playing on an unrecognized speed. Defaulting to standard for route turns calculation");
 		local turnsToCompleteRoute = (tradePathLength * 2 * tripsToDestination);
 		return tradePathLength, tripsToDestination, turnsToCompleteRoute;
@@ -961,7 +946,7 @@ local dumplua_closure = [[
 local lua_reserved_keywords = {
   'and', 'break', 'do', 'else', 'elseif', 'end', 'false', 'for',
   'function', 'if', 'in', 'local', 'nil', 'not', 'or', 'repeat',
-  'return', 'then', 'true', 'until', 'while' 
+  'return', 'then', 'true', 'until', 'while'
 }
 
 local function keys(t)
