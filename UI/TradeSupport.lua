@@ -17,13 +17,13 @@ local SORT_DESCENDING = 2;
 
 local CompareFunctionByID	= {};
 
-CompareFunctionByID[SORT_BY_ID.FOOD]				= function(a, b) return CompareByFood(a, b) end;
-CompareFunctionByID[SORT_BY_ID.PRODUCTION]			= function(a, b) return CompareByProduction(a, b) end;
-CompareFunctionByID[SORT_BY_ID.GOLD]				= function(a, b) return CompareByGold(a, b) end;
-CompareFunctionByID[SORT_BY_ID.SCIENCE]				= function(a, b) return CompareByScience(a, b) end;
-CompareFunctionByID[SORT_BY_ID.CULTURE]				= function(a, b) return CompareByCulture(a, b) end;
-CompareFunctionByID[SORT_BY_ID.FAITH]				= function(a, b) return CompareByFaith(a, b) end;
-CompareFunctionByID[SORT_BY_ID.TURNS_TO_COMPLETE]	= function(a, b) return CompareByTurnsToComplete(a, b) end;
+CompareFunctionByID[SORT_BY_ID.FOOD]				= function(a, b) return CompareByYield (GameInfo.Yields["YIELD_FOOD"].Index, a, b); end;
+CompareFunctionByID[SORT_BY_ID.PRODUCTION]			= function(a, b) return CompareByYield (GameInfo.Yields["YIELD_PRODUCTION"].Index, a, b); end;
+CompareFunctionByID[SORT_BY_ID.GOLD]				= function(a, b) return CompareByYield (GameInfo.Yields["YIELD_GOLD"].Index, a, b); end;
+CompareFunctionByID[SORT_BY_ID.SCIENCE]				= function(a, b) return CompareByYield (GameInfo.Yields["YIELD_SCIENCE"].Index, a, b); end;
+CompareFunctionByID[SORT_BY_ID.CULTURE]				= function(a, b) return CompareByYield (GameInfo.Yields["YIELD_CULTURE"].Index, a, b); end;
+CompareFunctionByID[SORT_BY_ID.FAITH]				= function(a, b) return CompareByYield (GameInfo.Yields["YIELD_FAITH"].Index, a, b); end;
+CompareFunctionByID[SORT_BY_ID.TURNS_TO_COMPLETE]	= function(a, b) return CompareByTurnsToComplete(a, b); end;
 
 -- ===========================================================================
 --	Variables
@@ -31,6 +31,7 @@ CompareFunctionByID[SORT_BY_ID.TURNS_TO_COMPLETE]	= function(a, b) return Compar
 
 local m_LocalPlayerRunningRoutes	:table 	= {};	-- Tracks local players active routes
 local m_TradersAutomatedSettings	:table	= {};	-- Tracks traders, and if they are automated
+local m_Cache						:table 	= {};	-- Cache
 
 -- ===========================================================================
 --	Constants Getter Functions
@@ -136,7 +137,7 @@ function CheckConsistencyWithMyRunningRoutes( routesTable:table )
 
 		-- Is the route not present?
 		if routeIndex == -1 then
-			-- Add it to the list, and set the optional flag
+			-- Add it to the list
 			print(GetTradeRouteString(route) .. " was not present. Adding it to the table.");
 			AddRouteWithTurnsRemaining( route, routesTable, true);
 		end
@@ -402,6 +403,60 @@ local function TradeSupportAutomater_OnPlayerTurnActivated( playerID:number, isF
 end
 
 -- ===========================================================================
+--	Cache Functions
+-- ===========================================================================
+function CacheRoutesInfo(tRoutes)
+	-- Update turn built
+	print("Caching routes")
+	m_Cache.TurnBuilt = Game.GetCurrentGameTurn();
+
+	for i, routeInfo in ipairs(tRoutes) do
+		CacheRoute(routeInfo)
+	end
+
+	-- TODO - Cache player colors
+
+	-- TODO - Cache player icons
+
+	-- TODO - Cache diplomacy and trading post status
+end
+
+function CacheRoute(routeInfo)
+	local originPlayer:table = Players[routeInfo.OriginCityPlayer];
+	local originCity:table = originPlayer:GetCities():FindID(routeInfo.OriginCityID);
+	local destinationPlayer:table = Players[routeInfo.DestinationCityPlayer];
+	local destinationCity:table = destinationPlayer:GetCities():FindID(routeInfo.DestinationCityID);
+
+	local key:string = GetRouteKey(routeInfo);
+	-- print("Key for " .. GetTradeRouteString(routeInfo) .. " is " .. key)
+
+	m_Cache[key] = {}
+
+	-- Cache yields
+	m_Cache[key].Yields = {}
+	for yieldInfo in GameInfo.Yields() do
+		m_Cache[key].Yields[yieldInfo.Index] = {
+			Origin = GetYieldForOriginCity(yieldInfo.Index, routeInfo),
+			Destination = GetYieldForDestinationCity(yieldInfo.Index, routeInfo)
+		}
+	end
+
+	-- Cache other route info
+	local tradePathLength, tripsToDestination, turnsToCompleteRoute = GetAdvancedRouteInfo(routeInfo);
+	m_Cache[key].TurnsToCompleteRoute = turnsToCompleteRoute;
+	m_Cache[key].TripsToDestination = tripsToDestination;
+	m_Cache[key].TradePathLength = tradePathLength;
+
+	-- print("KEY == " .. key)
+	-- dump(m_Cache[key])
+end
+
+function GetRouteKey(routeInfo)
+	return tostring(routeInfo.OriginCityPlayer) .. "_" .. tostring(routeInfo.OriginCityID) .. "_" ..
+				tostring(routeInfo.DestinationCityPlayer) .. "_" .. tostring(routeInfo.DestinationCityID);
+end
+
+-- ===========================================================================
 --	Trade Route Sorter
 -- ===========================================================================
 
@@ -470,43 +525,7 @@ end
 -- Yield/Turn Compare functions
 -- ---------------------------------------------------------------------------
 
-function CompareByFood( tradeRoute1:table, tradeRoute2:table )
-	return CompareByYield (GameInfo.Yields["YIELD_FOOD"].Index, tradeRoute1, tradeRoute2);
-end
-
-function CompareByProduction( tradeRoute1:table, tradeRoute2:table )
-	return CompareByYield (GameInfo.Yields["YIELD_PRODUCTION"].Index, tradeRoute1, tradeRoute2);
-end
-
-function CompareByGold( tradeRoute1:table, tradeRoute2:table )
-	return CompareByYield (GameInfo.Yields["YIELD_GOLD"].Index, tradeRoute1, tradeRoute2);
-end
-
-function CompareByScience( tradeRoute1:table, tradeRoute2:table )
-	return CompareByYield (GameInfo.Yields["YIELD_SCIENCE"].Index, tradeRoute1, tradeRoute2);
-end
-
-function CompareByCulture( tradeRoute1:table, tradeRoute2:table )
-	return CompareByYield (GameInfo.Yields["YIELD_CULTURE"].Index, tradeRoute1, tradeRoute2);
-end
-
-function CompareByFaith( tradeRoute1:table, tradeRoute2:table )
-	return CompareByYield (GameInfo.Yields["YIELD_FAITH"].Index, tradeRoute1, tradeRoute2);
-end
-
-function CompareByYield( yieldIndex:number, tradeRoute1:table, tradeRoute2:table )
-	local originPlayer1:table = Players[tradeRoute1.OriginCityPlayer];
-	local destinationPlayer1:table = Players[tradeRoute1.DestinationCityPlayer];
-	local originCity1:table = originPlayer1:GetCities():FindID(tradeRoute1.OriginCityID);
-	local destinationCity1:table = destinationPlayer1:GetCities():FindID(tradeRoute1.DestinationCityID);
-
-	local originPlayer2:table = Players[tradeRoute2.OriginCityPlayer];
-	local destinationPlayer2:table = Players[tradeRoute2.DestinationCityPlayer];
-	local originCity2:table = originPlayer2:GetCities():FindID(tradeRoute2.OriginCityID);
-	local destinationCity2:table = destinationPlayer2:GetCities():FindID(tradeRoute2.DestinationCityID);
-
-	local yieldForRoute1 = GetYieldForOriginCity(yieldIndex, originCity1, destinationCity1);
-	local yieldForRoute2 = GetYieldForOriginCity(yieldIndex, originCity2, destinationCity2);
+function CompareByYield( yieldIndex:number, tradeRoute1:table, tradeRoute2:table)
 
 	return yieldForRoute1 < yieldForRoute2;
 end
@@ -517,29 +536,17 @@ function CompareByTurnsToComplete( tradeRoute1:table, tradeRoute2:table )
 		return tradeRoute1.TurnsRemaining < tradeRoute2.TurnsRemaining;
 	end
 
-	local tradePathLength1, tripsToDestination1, turnsToCompleteRoute1 = GetRouteInfo(tradeRoute1);
-	local tradePathLength2, tripsToDestination2, turnsToCompleteRoute2 = GetRouteInfo(tradeRoute2);
+	local turnsToCompleteRoute1 = GetTurnsToComplete(tradeRoute1);
+	local turnsToCompleteRoute2 = GetTurnsToComplete(tradeRoute2);
 
 	return turnsToCompleteRoute1 < turnsToCompleteRoute2;
 end
 
 function CompareByNetYield( tradeRoute1:table, tradeRoute2:table )
-	local originPlayer1:table = Players[tradeRoute1.OriginCityPlayer];
-	local destinationPlayer1:table = Players[tradeRoute1.DestinationCityPlayer];
-	local originCity1:table = originPlayer1:GetCities():FindID(tradeRoute1.OriginCityID);
-	local destinationCity1:table = destinationPlayer1:GetCities():FindID(tradeRoute1.DestinationCityID);
-
-	local originPlayer2:table = Players[tradeRoute2.OriginCityPlayer];
-	local destinationPlayer2:table = Players[tradeRoute2.DestinationCityPlayer];
-	local originCity2:table = originPlayer2:GetCities():FindID(tradeRoute2.OriginCityID);
-	local destinationCity2:table = destinationPlayer2:GetCities():FindID(tradeRoute2.DestinationCityID);
-
 	local yieldForRoute1:number = 0;
 	local yieldForRoute2:number = 0;
 
 	for yieldInfo in GameInfo.Yields() do
-		yieldForRoute1 = yieldForRoute1 + GetYieldForOriginCity(yieldInfo.Index, originCity1, destinationCity1);
-		yieldForRoute2 = yieldForRoute2 + GetYieldForOriginCity(yieldInfo.Index, originCity2, destinationCity2);
 	end
 
 	return yieldForRoute1 < yieldForRoute2;
@@ -573,7 +580,7 @@ function CompleteCompareBy( tradeRoute1:table, tradeRoute2:table, sortSettings:t
 	end
 
 	-- If it reaches here, we used all the settings, and all of them were equal.
-	-- Do net yield compare. because order should be in descending
+	-- Do net yield compare
 	if CompareByNetYield(tradeRoute1, tradeRoute2) then
 		return false;
 	end
@@ -791,38 +798,8 @@ function CheckEqualityWithCompare( tradeRoute1:table, tradeRoute2:table, compare
 	return false;
 end
 
--- Returns yield for the origin city
-function GetYieldForOriginCity( yieldIndex:number, originCity:table, destinationCity:table )
-	local tradeManager = Game.GetTradeManager();
-
-	-- From route
-	local yieldValue = tradeManager:CalculateOriginYieldFromPotentialRoute(originCity:GetOwner(), originCity:GetID(), destinationCity:GetOwner(), destinationCity:GetID(), yieldIndex);
-	-- From path
-	yieldValue = yieldValue + tradeManager:CalculateOriginYieldFromPath(originCity:GetOwner(), originCity:GetID(), destinationCity:GetOwner(), destinationCity:GetID(), yieldIndex);
-	-- From modifiers
-	local resourceID = -1;
-	yieldValue = yieldValue + tradeManager:CalculateOriginYieldFromModifiers(originCity:GetOwner(), originCity:GetID(), destinationCity:GetOwner(), destinationCity:GetID(), yieldIndex, resourceID);
-
-	return yieldValue;
-end
-
--- Returns yield for the destination city
-function GetYieldForDestinationCity( yieldIndex:number, originCity:table, destinationCity:table )
-	local tradeManager = Game.GetTradeManager();
-
-	-- From route
-	local yieldValue = tradeManager:CalculateDestinationYieldFromPotentialRoute(originCity:GetOwner(), originCity:GetID(), destinationCity:GetOwner(), destinationCity:GetID(), yieldIndex);
-	-- From path
-	yieldValue = yieldValue + tradeManager:CalculateDestinationYieldFromPath(originCity:GetOwner(), originCity:GetID(), destinationCity:GetOwner(), destinationCity:GetID(), yieldIndex);
-	-- From modifiers
-	local resourceID = -1;
-	yieldValue = yieldValue + tradeManager:CalculateDestinationYieldFromModifiers(originCity:GetOwner(), originCity:GetID(), destinationCity:GetOwner(), destinationCity:GetID(), yieldIndex, resourceID);
-
-	return yieldValue;
-end
-
 -- Returns length of trade path, number of trips to destination, turns to complete route
-function GetRouteInfo(routeInfo)
+function GetAdvancedRouteInfo(routeInfo)
 	local originPlayer:table = Players[routeInfo.OriginCityPlayer];
 	local originCity:table = originPlayer:GetCities():FindID(routeInfo.OriginCityID);
 
@@ -855,6 +832,93 @@ function GetRouteInfo(routeInfo)
 		local tripsToDestination = 1 + math.floor(iSpeedCostMultiplier/tradePathLength * multiplierConstant);
 		local turnsToCompleteRoute = (tradePathLength * 2 * tripsToDestination);
 		return tradePathLength, tripsToDestination, turnsToCompleteRoute;
+	end
+end
+
+-- Returns yield for the origin city
+function GetYieldForOriginCity( yieldIndex:number, routeInfo:table, checkCache)
+	if checkCache then
+		local key:string = GetRouteKey(routeInfo)
+		if m_Cache[key] ~= nil and m_Cache[key].Yields[yieldIndex] ~= nil and m_Cache[key].Yields[yieldIndex].Origin ~= nil then
+			-- print("CACHE HIT for " .. GetTradeRouteString(routeInfo))
+			return m_Cache[key].Yields[yieldIndex].Origin
+		else
+			print("CACHE MISS for " .. GetTradeRouteString(routeInfo))
+			CacheRoute(routeInfo);
+			return m_Cache[key].Yields[yieldIndex].Origin
+		end
+	else
+		local tradeManager = Game.GetTradeManager();
+
+		-- From route
+		local yieldValue = tradeManager:CalculateOriginYieldFromPotentialRoute(routeInfo.OriginCityPlayer, routeInfo.OriginCityID, routeInfo.DestinationCityPlayer, routeInfo.DestinationCityID, yieldIndex);
+		-- From path
+		yieldValue = yieldValue + tradeManager:CalculateOriginYieldFromPath(routeInfo.OriginCityPlayer, routeInfo.OriginCityID, routeInfo.DestinationCityPlayer, routeInfo.DestinationCityID, yieldIndex);
+		-- From modifiers
+		local resourceID = -1;
+		yieldValue = yieldValue + tradeManager:CalculateOriginYieldFromModifiers(routeInfo.OriginCityPlayer, routeInfo.OriginCityID, routeInfo.DestinationCityPlayer, routeInfo.DestinationCityID, yieldIndex, resourceID);
+
+		return yieldValue;
+	end
+end
+
+-- Returns yield for the destination city
+function GetYieldForDestinationCity( yieldIndex:number, routeInfo:table, checkCache )
+	if checkCache then
+		local key:string = GetRouteKey(routeInfo)
+		if m_Cache[key] ~= nil and m_Cache[key].Yields[yieldIndex] ~= nil and m_Cache[key].Yields[yieldIndex].Destination ~= nil then
+			-- print("CACHE HIT for " .. GetTradeRouteString(routeInfo))
+			return m_Cache[key].Yields[yieldIndex].Destination
+		else
+			print("CACHE MISS for " .. GetTradeRouteString(routeInfo))
+			CacheRoute(routeInfo);
+			return m_Cache[key].Yields[yieldIndex].Destination
+		end
+	else
+		local tradeManager = Game.GetTradeManager();
+
+		-- From route
+		local yieldValue = tradeManager:CalculateDestinationYieldFromPotentialRoute(routeInfo.OriginCityPlayer, routeInfo.OriginCityID, routeInfo.DestinationCityPlayer, routeInfo.DestinationCityID, yieldIndex);
+		-- From path
+		yieldValue = yieldValue + tradeManager:CalculateDestinationYieldFromPath(routeInfo.OriginCityPlayer, routeInfo.OriginCityID, routeInfo.DestinationCityPlayer, routeInfo.DestinationCityID, yieldIndex);
+		-- From modifiers
+		local resourceID = -1;
+		yieldValue = yieldValue + tradeManager:CalculateDestinationYieldFromModifiers(routeInfo.OriginCityPlayer, routeInfo.OriginCityID, routeInfo.DestinationCityPlayer, routeInfo.DestinationCityID, yieldIndex, resourceID);
+
+		return yieldValue;
+	end
+end
+
+function GetTurnsToComplete(routeInfo, checkCache)
+	if checkCache then
+		local key = GetRouteKey(routeInfo)
+		if m_Cache[key] ~= nil and m_Cache[key].TurnsToComplete ~= nil then
+			-- print("CACHE HIT for " .. GetTradeRouteString(routeInfo))
+			return m_Cache[key].TurnsToComplete
+		else
+			print("CACHE MISS for " .. GetTradeRouteString(routeInfo))
+			CacheRoute(routeInfo);
+			return m_Cache[key].TurnsToComplete
+		end
+	else
+		local tradePathLength, tripsToDestination, turnsToCompleteRoute = GetAdvancedRouteInfo(routeInfo);
+		return turnsToCompleteRoute
+	end
+end
+
+function GetRouteInfo(routeInfo, checkCache)
+	if checkCache then
+		local key = GetRouteKey(routeInfo)
+		if m_Cache ~= nil and m_Cache[key] ~= nil then
+			-- print("CACHE HIT for " .. GetTradeRouteString(routeInfo))
+			return m_Cache[key].TurnsToCompleteRoute, m_Cache[key].TripsToDestination, m_Cache[key].TradePathLength
+		else
+			print("CACHE MISS for " .. GetTradeRouteString(routeInfo))
+			CacheRoute(routeInfo)
+			return m_Cache[key].TurnsToCompleteRoute, m_Cache[key].TripsToDestination, m_Cache[key].TradePathLength
+		end
+	else
+		return GetAdvancedRouteInfo(routeInfo)
 	end
 end
 

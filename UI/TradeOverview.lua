@@ -105,7 +105,6 @@ local m_HasBuiltTradeRouteTable:boolean	= false;
 local m_LastTurnBuiltTradeRouteTable:number = -1;
 local m_LastTurnUpdatedMyRoutes:number = -1;
 
-
 -- Stores the sort settings.
 local m_SortBySettings = {};
 local m_GroupSortBySettings = {};
@@ -129,6 +128,9 @@ m_GroupSortBySettings[1] = {
 -- Finds and adds all possible trade routes
 function RebuildAvailableTradeRoutesTable()
 	print ("Rebuilding Trade Routes table");
+
+	local preRefreshClock = os.clock();
+
 	m_AvailableTradeRoutes = {};
 
 	local sourcePlayerID = Game.GetLocalPlayer();
@@ -162,6 +164,9 @@ function RebuildAvailableTradeRoutesTable()
 			end
 		end
 	end
+
+	local postRefreshClock = os.clock();
+	print("Time taken to build routes: " .. (postRefreshClock- preRefreshClock) .. " secs");
 
 	m_HasBuiltTradeRouteTable = true;
 	m_LastTurnBuiltTradeRouteTable = Game.GetCurrentGameTurn();
@@ -399,11 +404,22 @@ function ViewAvailableRoutes()
 
 	-- dump(m_AvailableTradeRoutes)
 
+	local preCacheClock = os.clock();
+	CacheRoutesInfo(m_AvailableTradeRoutes);
+	local postCacheClock = os.clock();
+	print("Time taken to cache routes: " .. (postCacheClock- preCacheClock) .. " secs");
+
 	-- Filter the routes
 	local filteredRoutes:table = FilterTradeRoutes(m_AvailableTradeRoutes);
 
 	if m_groupByList[m_groupBySelected].groupByID ~= GROUP_BY_SETTINGS.NONE then
+
+		local preGroupClock = os.clock();
+
 		local groupedRoutes = GroupRoutes(filteredRoutes, m_groupByList[m_groupBySelected].groupByID)
+
+		local postGroupClock = os.clock();
+		print("Time taken to group routes: " .. (postGroupClock- preGroupClock) .. " secs");
 		-- dump(groupedRoutes)
 
 		-- Sort the order of groups
@@ -524,9 +540,8 @@ function AddProduceTradeUnitButtonInstance()
 	simpleButtonInstance.GridButton:SetDisabled(true);
 end
 
-function AddRouteInstancesFromTable ( tradeRoutes:table, showCount:number )
+function AddRouteInstancesFromTable( tradeRoutes:table, showCount:number )
 	for index, tradeRoute in ipairs(tradeRoutes) do
-
 		if showCount then
 			if index <= showCount then
 				AddRouteInstanceFromRouteInfo(tradeRoute);
@@ -540,7 +555,6 @@ function AddRouteInstancesFromTable ( tradeRoutes:table, showCount:number )
 end
 
 function AddRouteInstanceFromRouteInfo( routeInfo:table )
-
 	-- Get all the info, to build the route
 	local originPlayer:table = Players[routeInfo.OriginCityPlayer];
 	local originCity:table = originPlayer:GetCities():FindID(routeInfo.OriginCityID);
@@ -588,8 +602,8 @@ function AddRouteInstanceFromRouteInfo( routeInfo:table )
 	ContextPtr:BuildInstanceForControl( "RouteYieldInstance", destinationYieldInstance, routeInstance.ResourceStack );
 
 	for yieldInfo in GameInfo.Yields() do
-		local originCityYieldValue = GetYieldForOriginCity(yieldInfo.Index, originCity, destinationCity);
-		local destinationCityYieldValue = GetYieldForDestinationCity(yieldInfo.Index, originCity, destinationCity);
+		local originCityYieldValue = GetYieldForOriginCity(yieldInfo.Index, routeInfo, true);
+		local destinationCityYieldValue = GetYieldForDestinationCity(yieldInfo.Index, routeInfo, true);
 
 		SetRouteInstanceYields(originYieldInstance, yieldInfo, originCityYieldValue);
 		SetRouteInstanceYields(destinationYieldInstance, yieldInfo, destinationCityYieldValue);
@@ -615,7 +629,9 @@ function AddRouteInstanceFromRouteInfo( routeInfo:table )
 
 	-- TODO - Can we make this simpler?
 	-- Do we display the tourism or visibilty bonus? Hide them if we are showing them somewhere else, or it is a city state, or it is domestic route
-	if IsCityState(originPlayer) or  IsCityState(destinationPlayer) or routeInfo.OriginCityPlayer == routeInfo.DestinationCityPlayer or m_groupByList[m_groupBySelected].groupByID == GROUP_BY_SETTINGS.DESTINATION or m_currentTab ~= TRADE_TABS.AVAILABLE_ROUTES then
+	if IsCityState(destinationPlayer) or routeInfo.OriginCityPlayer == routeInfo.DestinationCityPlayer
+		or m_groupByList[m_groupBySelected].groupByID == GROUP_BY_SETTINGS.DESTINATION or m_currentTab ~= TRADE_TABS.AVAILABLE_ROUTES then
+
 		routeInstance.VisibilityBonusGrid:SetHide(true);
 		routeInstance.TourismBonusGrid:SetHide(true);
 
@@ -681,7 +697,6 @@ function AddRouteInstanceFromRouteInfo( routeInfo:table )
 
 	-- Update turns to complete route
 	local tooltipString:string;
-	local tradePathLength, tripsToDestination, turnsToCompleteRoute = GetRouteInfo(routeInfo);
 	if routeInfo.TurnsRemaining ~= nil then
 		routeInstance.TurnsToComplete:SetText(routeInfo.TurnsRemaining);
 		tooltipString = (	Locale.Lookup("LOC_TRADE_TURNS_REMAINING_ALT_HELP_TOOLTIP", routeInfo.TurnsRemaining) .. "[NEWLINE]" ..
@@ -1347,6 +1362,7 @@ function GroupRoutes( routesTable, groupSetting )
 	local groupKey:table = {}
 
 	for i, route in ipairs(routesTable) do
+		-- Cant use contor key here since we DONT want a unique key for every route
 		local key:string;
 		if groupSetting == GROUP_BY_SETTINGS.ORIGIN then
 			key = tostring(route.OriginCityPlayer) .. "_" .. tostring(route.OriginCityID)

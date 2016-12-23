@@ -29,18 +29,18 @@
               <Box Size="40,parent" Offset="40,0" Color="0,0,0,22"/>
               <Box Size="40,parent" Offset="120,0" Color="0,0,0,22"/>
               <Box Size="40,parent" Offset="200,0" Color="0,0,0,22"/>
-              
+
               <Label ID="DestinationResourceHeader" Size="300,20" Anchor="L,T" Offset="2,-15" Style="FontNormal14" Color="0,0,0,150" String="$Destination$ receives:"/>
               <Stack ID="DestinationResourceList" Anchor="L,C" Offset="4,-1" StackGrowth="Right" WrapWidth="280" WrapGrowth="Bottom"/>
               <Label ID="DestinationReceivesNoBenefitsLabel" Anchor="C,C" Offset="-4,0" Style="FontNormal16" FontStyle="Shadow" EffectColor="Black" String="LOC_ROUTECHOOSER_NO_BENEFITS_FROM_ROUTE" Hidden="1"/>
             </Grid>
-          
+
             <Grid	ID="OriginResources" Size="290,35" Anchor="C,T"	Offset="0,111"		Texture="Controls_ItemContainerOrigin" SliceCorner="14,2" SliceSize="3,31" SliceTextureSize="24,35" >
               <!-- Column Background -->
               <Box Size="40,parent" Offset="40,0" Color="0,0,0,22"/>
               <Box Size="40,parent" Offset="120,0" Color="0,0,0,22"/>
               <Box Size="40,parent" Offset="200,0" Color="0,0,0,22"/>
-              
+
               <Label ID="OriginResourceHeader" Size="250,20" Anchor="L,T" Offset="10,-15" Style="FontNormal14" Color="0,0,0,150" String="$Origin$ receives:"/>
               <Stack ID="OriginResourceList" Anchor="L,C" Offset="0,1" StackGrowth="Right" WrapWidth="280" WrapGrowth="Bottom"/>
               <Label ID="OriginReceivesNoBenefitsLabel" Anchor="C,C" Style="FontNormal16" FontStyle="Shadow" EffectColor="Black" String="LOC_ROUTECHOOSER_NO_BENEFITS_FROM_ROUTE" Hidden="1"/>
@@ -69,7 +69,7 @@
 
         <!-- Bottom Panel -->
         <Grid Size="316,parent-275" Offset="-2,218" Texture="Controls_ContainerBlue" SliceStart="0,0" SliceCorner="3,3" SliceSize="9,9" SliceTextureSize="16,16">
-          
+
           <!-- Filter Pulldown -->
           <PullDown ID="DestinationFilterPulldown" ConsumeMouse="0" Offset="1,28" Anchor="C,T" Size="300,26" AutoSizePopUp="1" AutoFlip="1" ScrollThreshold="400">
             <ButtonData>
@@ -97,7 +97,7 @@
           </PullDown>
 
           <!-- Sort Yield Stack -->
-          <Stack Anchor="L,T" StackGrowth="Right" Offset="0,31" StackPadding="2">
+          <Stack Anchor="L,T" StackGrowth="Right" Offset="-6,31" StackPadding="2">
             <GridButton ID="FoodSortButton" ToolTip="LOC_TRADE_SORT_BY_FOOD_TOOLTIP" Offset="28,0" Size="38,18" Color="255,255,255,255" Style="PanelButtonLightweight">
               <Label ID="FoodSortLabel" Anchor="C,C" Offset="10,1" Style="FontNormal12" String="[Icon_Food]"/>
               <Label ID="FoodSortOrder" Hidden="1" Anchor="C,C" Offset="-1,7" String="9" Style="FontNormal12"/>
@@ -193,26 +193,26 @@
 				<Image Texture="Tutorial_ArrowH" Offset="0,0" Size="58,44" FlipX="1"/>
 			</SlideAnim>
 		</Tutorial>
-		
+
     </Container>
   </SlideAnim>
 
   <!-- Instances -->
   <Instance				Name="RouteChoiceInstance">
     <Container ID="Top"	Size="290,78" Offset="10,2">
-      <GridButton ID="Button" Size="parent,parent" Anchor="C,T"> 
+      <GridButton ID="Button" Size="parent,parent" Anchor="C,T">
         <GridData Texture="DestinationChooser_Button" StateOffsetIncrement="0,76" SliceCorner="14,14" SliceSize="19,44" SliceTextureSize="48,76"/>
 
         <!-- Selector Brace -->
         <Grid ID="SelectorBrace" Size="parent+4,parent+4" Anchor="C,C" Texture="Controls_SelectorBrace" SliceCorner="29,29" SliceSize="2,2" SliceTextureSize="62,62"/>
-        
+
         <!-- City Banner -->
         <Grid								ID="BannerBase"								Anchor="C,T" Offset="-1,4"		Size="280,33"								Texture="CityPanel_BannerBase"				SliceCorner="20,10" SliceSize="160,1" SliceTextureSize="199,33" Color="150,170,100,255">
           <Grid							ID="BannerDarker"													Anchor="L,T" Offset="4,2"			Size="parent-8,parent-10"		Texture="CityPanel_BannerDarker"			SliceCorner="95,10" SliceSize="1,1" SliceTextureSize="191,23" Color="0,0,0,100" />
           <Grid							ID="BannerLighter"													Anchor="L,T" Offset="4,2"			Size="parent-8,parent-10"		Texture="CityPanel_BannerLighter"			SliceCorner="95,10" SliceSize="1,1" SliceTextureSize="191,23" Color="255,255,255,255" />
           <Grid																				Anchor="L,T" Offset="6,2"			Size="parent-10,parent-8"		Texture="CityPanel_BannerNone"				SliceCorner="70,10" SliceSize="1,1" SliceTextureSize="179,20" Color="255,0,0,255" />
           <Label						ID="CityName"							Anchor="L,C" Offset="34,-2"		Style="FontFlair16"					FontStyle="Stroke" EffectColor="0,0,0,25" String="$CityName$" SmallCaps="20" SmallCapsType="EveryWord" TruncateWidth="225"/>
-          
+
           <Label						ID="TradingPostIcon"	Anchor="L,C" Offset="10,-4"	Style="FontNormal16" FontStyle="Shadow" String="[ICON_TradingPost]" Color="255,0,0,255" EffectColor="255,0,0,255" GradientColor="255,0,0,255" />
           <Label						ID="CityStateQuestIcon"	Anchor="L,C" Offset="-2,-12"	Style="FontNormal16" FontStyle="Shadow" String="[ICON_CityStateQuest]" Color="255,0,0,255" EffectColor="255,0,0,255" GradientColor="255,0,0,255" />
 
@@ -228,7 +228,7 @@
           <Box Size="40,parent" Offset="40,0" Color="0,0,0,22"/>
           <Box Size="40,parent" Offset="120,0" Color="0,0,0,22"/>
           <Box Size="40,parent" Offset="200,0" Color="0,0,0,22"/>
-          
+
           <Stack ID="ResourceList" Anchor="L,C" Offset="1,1" StackGrowth="Right" WrapWidth="280" WrapGrowth="Bottom"/>
         </Grid>
       </GridButton>
