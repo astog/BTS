@@ -526,6 +526,8 @@ end
 -- ---------------------------------------------------------------------------
 
 function CompareByYield( yieldIndex:number, tradeRoute1:table, tradeRoute2:table)
+	local yieldForRoute1 = GetYieldForOriginCity(yieldIndex, tradeRoute1, true);
+	local yieldForRoute2 = GetYieldForOriginCity(yieldIndex, tradeRoute2, true);
 
 	return yieldForRoute1 < yieldForRoute2;
 end
@@ -547,6 +549,8 @@ function CompareByNetYield( tradeRoute1:table, tradeRoute2:table )
 	local yieldForRoute2:number = 0;
 
 	for yieldInfo in GameInfo.Yields() do
+		yieldForRoute1 = yieldForRoute1 + GetYieldForOriginCity(yieldInfo.Index, tradeRoute1, true);
+		yieldForRoute2 = yieldForRoute2 + GetYieldForOriginCity(yieldInfo.Index, tradeRoute2, true);
 	end
 
 	return yieldForRoute1 < yieldForRoute2;
@@ -562,15 +566,14 @@ function CompleteCompareBy( tradeRoute1:table, tradeRoute2:table, sortSettings:t
 
 	for index, sortEntry in ipairs(sortSettings) do
 		local compareFunction = CompareFunctionByID[sortEntry.SortByID];
-		local compareResult:boolean = compareFunction(tradeRoute1, tradeRoute2);
 
-		if compareResult then
+		if compareFunction(tradeRoute1, tradeRoute2) then
 			if (sortEntry.SortOrder == SORT_DESCENDING) then
 				return false;
 			else
 				return true;
 			end
-		elseif not CheckEqualityWithCompare( tradeRoute1, tradeRoute2, compareFunction ) then
+		elseif compareFunction(tradeRoute2, tradeRoute1) then
 			if (sortEntry.SortOrder == SORT_DESCENDING) then
 				return true;
 			else
@@ -738,7 +741,7 @@ function GetTradeRouteString( routeInfo:table )
 	return originCityName .. "-" .. destinationCityName;
 end
 
-function GetTradeRouteYieldString( routeInfo )
+function GetTradeRouteYieldString( routeInfo:table )
 	local returnString:string = "";
 	local originPlayer:table = Players[routeInfo.OriginCityPlayer];
 	local originCity:table = originPlayer:GetCities():FindID(routeInfo.OriginCityID);
@@ -748,7 +751,7 @@ function GetTradeRouteYieldString( routeInfo )
 
 
 	for yieldInfo in GameInfo.Yields() do
-		local originCityYieldValue = GetYieldForOriginCity(yieldInfo.Index, originCity, destinationCity);
+		local originCityYieldValue = GetYieldForOriginCity(yieldInfo.Index, routeInfo, true);
 
 		local iconString, text = FormatYieldText(yieldInfo, originCityYieldValue);
 

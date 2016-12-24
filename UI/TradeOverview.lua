@@ -121,6 +121,8 @@ m_GroupSortBySettings[1] = {
 	SortOrder = SORT_DESCENDING;
 };
 
+local preRefreshClock;
+
 -- ===========================================================================
 --	Refresh functions
 -- ===========================================================================
@@ -173,8 +175,8 @@ function RebuildAvailableTradeRoutesTable()
 end
 
 function Refresh()
-	local preRefreshClock = os.clock();
-
+	preRefreshClock = os.clock();
+	print("Refresh start")
 	-- Build a custom dialog
 	PreRefresh();
 
@@ -193,9 +195,8 @@ function Refresh()
 	end
 
 	PostRefresh();
-	local postRefreshClock = os.clock();
 
-	print("Time taken to refresh: " .. (postRefreshClock- preRefreshClock) .. " secs");
+	print("Time taken to refresh: " .. (os.clock() - preRefreshClock) .. " secs");
 end
 
 function PreRefresh()
@@ -402,52 +403,58 @@ function ViewAvailableRoutes()
 		RebuildAvailableTradeRoutesTable();
 	end
 
-	-- dump(m_AvailableTradeRoutes)
-
-	local preCacheClock = os.clock();
+	-- Cache routes info
 	CacheRoutesInfo(m_AvailableTradeRoutes);
-	local postCacheClock = os.clock();
-	print("Time taken to cache routes: " .. (postCacheClock- preCacheClock) .. " secs");
+	print("Time taken till cache: " .. (os.clock() - preRefreshClock) .. " secs")
 
 	-- Filter the routes
 	local filteredRoutes:table = FilterTradeRoutes(m_AvailableTradeRoutes);
+	print("Time taken till filter: " .. (os.clock() - preRefreshClock) .. " secs")
 
+	-- Sort and display the routes
 	if m_groupByList[m_groupBySelected].groupByID ~= GROUP_BY_SETTINGS.NONE then
 
-		local preGroupClock = os.clock();
-
+		-- Group the routes
 		local groupedRoutes = GroupRoutes(filteredRoutes, m_groupByList[m_groupBySelected].groupByID)
+		print("Time taken till group: " .. (os.clock() - preRefreshClock) .. " secs")
 
-		local postGroupClock = os.clock();
-		print("Time taken to group routes: " .. (postGroupClock- preGroupClock) .. " secs");
-		-- dump(groupedRoutes)
+		-- Sort the routes
+		local preSortClock = os.clock();
+		for i, routes in ipairs(groupedRoutes) do
+			SortTradeRoutes(routes, m_SortBySettings)
+		end
+		print("Time taken till within group sort: " .. (os.clock() - preRefreshClock) .. " secs")
 
 		-- Sort the order of groups
 		SortGroupedRoutes(groupedRoutes);
+		print("Time taken till group sort: " .. (os.clock()- preRefreshClock) .. " secs");
 
-		for i, filteredSortedRoutes in ipairs(groupedRoutes) do
+		for i, routes in ipairs(groupedRoutes) do
 			-- dump(filteredSortedRoutes)
 			if m_groupByList[m_groupBySelected].groupByID == GROUP_BY_SETTINGS.ORIGIN then
-				local originPlayer:table = Players[filteredSortedRoutes[1].OriginCityPlayer];
-				local originCity:table = originPlayer:GetCities():FindID(filteredSortedRoutes[1].OriginCityID);
+				local originPlayer:table = Players[routes[1].OriginCityPlayer];
+				local originCity:table = originPlayer:GetCities():FindID(routes[1].OriginCityID);
 
-				DisplayGroup(filteredSortedRoutes, originCity);
+				DisplayGroup(routes, originCity);
 			elseif m_groupByList[m_groupBySelected].groupByID == GROUP_BY_SETTINGS.DESTINATION then
-				local destinationPlayer:table = Players[filteredSortedRoutes[1].DestinationCityPlayer];
-				local destinationCity:table = destinationPlayer:GetCities():FindID(filteredSortedRoutes[1].DestinationCityID);
+				local destinationPlayer:table = Players[routes[1].DestinationCityPlayer];
+				local destinationCity:table = destinationPlayer:GetCities():FindID(routes[1].DestinationCityID);
 
-				DisplayGroup(filteredSortedRoutes, destinationCity);
+				DisplayGroup(routes, destinationCity);
 			end
 		end
 	else
 		if tableLength(filteredRoutes) > 0 then
 			SortTradeRoutes(filteredRoutes, m_GroupSortBySettings);
+			print("Time taken till sort: " .. (os.clock() - preRefreshClock) .. " secs")
+
 			AddRouteInstancesFromTable(filteredRoutes, SEMI_EXPAND_SETTINGS[GROUP_BY_SETTINGS.NONE]);
 		end
 	end
 end
 
 function DisplayGroup(routesTable:table, city:table)
+	-- dump(routesTable[1])
 
 	local routeCount:number = tableLength(routesTable);
 	if routeCount > 0 then
@@ -460,17 +467,12 @@ function DisplayGroup(routesTable:table, city:table)
 		local groupExpandIndex = findIndex(m_GroupsFullyExpanded, cityEntry, CompareCityEntries);
 		local groupCollapseIndex = findIndex(m_GroupsFullyCollapsed, cityEntry, CompareCityEntries);
 
-		-- If not collapsed, sort the routes
-		if groupCollapseIndex == -1 then
-			SortTradeRoutes(routesTable, m_SortBySettings);
-		end
-
 		-- print(Locale.Lookup(city:GetName()) .. ": " .. groupExpandIndex .. " " .. groupCollapseIndex )
 		if (groupExpandIndex > 0) then
 			CreateCityHeader(city, routeCount, routeCount, "");
 			AddRouteInstancesFromTable(routesTable);
 		elseif (groupCollapseIndex > 0) then
-			CreateCityHeader(city, 0, routeCount, GetCityHeaderTooltipString(routesTable));
+			CreateCityHeader(city, 0, routeCount, GetCityHeaderTooltipString(routesTable[1]));
 			AddRouteInstancesFromTable(routesTable, 0);
 		else
 			if m_GroupExpandAll then
@@ -481,7 +483,7 @@ function DisplayGroup(routesTable:table, city:table)
 			elseif m_GroupCollapseAll then
 				-- If hiding all, add city to collapse list, and hide it
 				table.insert(m_GroupsFullyCollapsed, cityEntry);
-				CreateCityHeader(city, 0, routeCount, GetCityHeaderTooltipString(routesTable));
+				CreateCityHeader(city, 0, routeCount, GetCityHeaderTooltipString(routesTable[1]));
 				AddRouteInstancesFromTable(routesTable, 0);
 			else
 				CreateCityHeader(city, math.min(SEMI_EXPAND_SETTINGS[m_groupBySelected], routeCount), routeCount, "");
@@ -515,9 +517,9 @@ function SetAvailableRoutesTabSelected( isSelected:boolean )
 	Controls.AvailableRoutesTabSelectedLabel:SetHide(not isSelected);
 end
 
-function GetCityHeaderTooltipString( tradeRoutes:table )
-	local topRoute = GetTopRouteFromSortSettings(tradeRoutes, m_SortBySettings);
-	return "Top Route: " .. GetTradeRouteString(topRoute) .. "[NEWLINE]" .. Locale.Lookup("LOC_TRADE_TURNS_REMAINING_TOOLTIP_BREAKER") .. "[NEWLINE]" .. GetTradeRouteYieldString(topRoute);
+function GetCityHeaderTooltipString( routeInfo:table )
+	return "Top Route: " .. GetTradeRouteString(routeInfo) .. "[NEWLINE]" .. Locale.Lookup("LOC_TRADE_TURNS_REMAINING_TOOLTIP_BREAKER")
+				 .. "[NEWLINE]" .. GetTradeRouteYieldString(routeInfo);
 end
 
 -- ===========================================================================
@@ -697,6 +699,7 @@ function AddRouteInstanceFromRouteInfo( routeInfo:table )
 
 	-- Update turns to complete route
 	local tooltipString:string;
+	local tradePathLength, tripsToDestination, turnsToCompleteRoute = GetRouteInfo(routeInfo, true);
 	if routeInfo.TurnsRemaining ~= nil then
 		routeInstance.TurnsToComplete:SetText(routeInfo.TurnsRemaining);
 		tooltipString = (	Locale.Lookup("LOC_TRADE_TURNS_REMAINING_ALT_HELP_TOOLTIP", routeInfo.TurnsRemaining) .. "[NEWLINE]" ..
@@ -1391,20 +1394,18 @@ end
 -- Gets top route from each group and sorts them based on that
 function SortGroupedRoutes( groupedRoutes:table )
 	if tableLength(m_GroupSortBySettings) > 0 then
-		table.sort(groupedRoutes, CompareGroupedRoutes)
+		table.sort(groupedRoutes, CompareGroups)
 	end
 end
 
--- Compares the top route of passed groups
-function CompareGroupedRoutes( groupedRoutes1:table, groupedRoutes2:table )
+-- Compares the first route of passed groups
+function CompareGroups( groupedRoutes1:table, groupedRoutes2:table )
 	if groupedRoutes1 == nil or groupedRoutes2 == nil then
 		-- print("Error: Passed group was nil");
 		return false;
 	end
 
-	local group1_topRoute = GetTopRouteFromSortSettings(groupedRoutes1, m_GroupSortBySettings)
-	local group2_topRoute = GetTopRouteFromSortSettings(groupedRoutes2, m_GroupSortBySettings)
-	return CompleteCompareBy(group1_topRoute, group2_topRoute, m_GroupSortBySettings);
+	return CompleteCompareBy(groupedRoutes1[1], groupedRoutes2[1], m_GroupSortBySettings);
 end
 
 -- ===========================================================================
