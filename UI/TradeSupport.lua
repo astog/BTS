@@ -25,6 +25,9 @@ CompareFunctionByID[SORT_BY_ID.CULTURE]				= function(a, b) return CompareByYiel
 CompareFunctionByID[SORT_BY_ID.FAITH]				= function(a, b) return CompareByYield (GameInfo.Yields["YIELD_FAITH"].Index, a, b); end;
 CompareFunctionByID[SORT_BY_ID.TURNS_TO_COMPLETE]	= function(a, b) return CompareByTurnsToComplete(a, b); end;
 
+local START_INDEX:number = GameInfo.Yields["YIELD_FOOD"].Index;
+local END_INDEX:number = GameInfo.Yields["YIELD_FAITH"].Index;
+
 -- ===========================================================================
 --	Variables
 -- ===========================================================================
@@ -32,6 +35,9 @@ CompareFunctionByID[SORT_BY_ID.TURNS_TO_COMPLETE]	= function(a, b) return Compar
 local m_LocalPlayerRunningRoutes	:table 	= {};	-- Tracks local players active routes
 local m_TradersAutomatedSettings	:table	= {};	-- Tracks traders, and if they are automated
 local m_Cache						:table 	= {};	-- Cache
+
+local debug_func_calls:number = 0;
+local debug_total_calls:number = 0;
 
 -- ===========================================================================
 --	Constants Getter Functions
@@ -406,19 +412,24 @@ end
 --	Cache Functions
 -- ===========================================================================
 function CacheRoutesInfo(tRoutes)
-	-- Update turn built
-	print("Caching routes")
-	m_Cache.TurnBuilt = Game.GetCurrentGameTurn();
+	if m_Cache.TurnBuilt ~= nil and m_Cache.TurnBuilt >= Game.GetCurrentGameTurn() then
+		print("OPT: Cache table already upto date")
+		return false
+	else
+		print("Caching routes")
+		for i, routeInfo in ipairs(tRoutes) do
+			CacheRoute(routeInfo)
+		end
 
-	for i, routeInfo in ipairs(tRoutes) do
-		CacheRoute(routeInfo)
+		-- TODO - Cache player colors
+
+		-- TODO - Cache player icons
+
+		-- TODO - Cache diplomacy and trading post status
+
+		m_Cache.TurnBuilt = Game.GetCurrentGameTurn()
+		return true
 	end
-
-	-- TODO - Cache player colors
-
-	-- TODO - Cache player icons
-
-	-- TODO - Cache diplomacy and trading post status
 end
 
 function CacheRoute(routeInfo)
@@ -434,10 +445,11 @@ function CacheRoute(routeInfo)
 
 	-- Cache yields
 	m_Cache[key].Yields = {}
-	for yieldInfo in GameInfo.Yields() do
-		m_Cache[key].Yields[yieldInfo.Index] = {
-			Origin = GetYieldForOriginCity(yieldInfo.Index, routeInfo),
-			Destination = GetYieldForDestinationCity(yieldInfo.Index, routeInfo)
+	local netYield:number = 0;
+	for iI = START_INDEX, END_INDEX do
+		m_Cache[key].Yields[iI] = {
+			Origin = GetYieldForOriginCity(iI, routeInfo),
+			Destination = GetYieldForDestinationCity(iI, routeInfo)
 		}
 	end
 
@@ -446,6 +458,8 @@ function CacheRoute(routeInfo)
 	m_Cache[key].TurnsToCompleteRoute = turnsToCompleteRoute;
 	m_Cache[key].TripsToDestination = tripsToDestination;
 	m_Cache[key].TradePathLength = tradePathLength;
+
+	m_Cache[key].TurnBuilt = Game.GetCurrentGameTurn()
 
 	-- print("KEY == " .. key)
 	-- dump(m_Cache[key])
@@ -461,11 +475,23 @@ end
 -- ===========================================================================
 
 -- This requires sort settings table passed.
-function SortTradeRoutes( tradeRoutes:table, sortSettings:table )
-	if tableLength(sortSettings) > 0 then
+function SortTradeRoutes( tradeRoutes:table, sortSettings:table, settingsChanged)
+	if (settingsChanged ~= nil and (not settingsChanged)) then
+		print("OPT: Not sorting")
+		return
+	end
+
+	-- if tableLength(sortSettings) > 0 then
+	if #sortSettings > 0 then
 		table.sort(tradeRoutes, function(a, b) return CompleteCompareBy(a, b, sortSettings); end );
 	end
+
+	-- print("Total func calls: " .. debug_func_calls)
+	-- debug_total_calls = debug_total_calls + debug_func_calls
+	-- print("Total calls: " .. debug_total_calls)
+	-- debug_func_calls = 0;
 end
+
 
 function GetTopRouteFromSortSettings( tradeRoutes:table, sortSettings:table )
 	if tableLength(sortSettings) > 0 then
@@ -529,6 +555,7 @@ function CompareByYield( yieldIndex:number, tradeRoute1:table, tradeRoute2:table
 	local yieldForRoute1 = GetYieldForOriginCity(yieldIndex, tradeRoute1, true);
 	local yieldForRoute2 = GetYieldForOriginCity(yieldIndex, tradeRoute2, true);
 
+	debug_func_calls = debug_func_calls + 1
 	return yieldForRoute1 < yieldForRoute2;
 end
 
@@ -541,6 +568,7 @@ function CompareByTurnsToComplete( tradeRoute1:table, tradeRoute2:table )
 	local turnsToCompleteRoute1 = GetTurnsToComplete(tradeRoute1);
 	local turnsToCompleteRoute2 = GetTurnsToComplete(tradeRoute2);
 
+	debug_func_calls = debug_func_calls + 1
 	return turnsToCompleteRoute1 < turnsToCompleteRoute2;
 end
 
@@ -548,11 +576,12 @@ function CompareByNetYield( tradeRoute1:table, tradeRoute2:table )
 	local yieldForRoute1:number = 0;
 	local yieldForRoute2:number = 0;
 
-	for yieldInfo in GameInfo.Yields() do
-		yieldForRoute1 = yieldForRoute1 + GetYieldForOriginCity(yieldInfo.Index, tradeRoute1, true);
-		yieldForRoute2 = yieldForRoute2 + GetYieldForOriginCity(yieldInfo.Index, tradeRoute2, true);
+	for iI = START_INDEX, END_INDEX do
+		yieldForRoute1 = yieldForRoute1 + GetYieldForOriginCity(iI, tradeRoute1, true);
+		yieldForRoute2 = yieldForRoute2 + GetYieldForOriginCity(iI, tradeRoute2, true);
 	end
 
+	debug_func_calls = debug_func_calls + 1
 	return yieldForRoute1 < yieldForRoute2;
 end
 
@@ -583,12 +612,13 @@ function CompleteCompareBy( tradeRoute1:table, tradeRoute2:table, sortSettings:t
 	end
 
 	-- If it reaches here, we used all the settings, and all of them were equal.
-	-- Do net yield compare
-	if CompareByNetYield(tradeRoute1, tradeRoute2) then
-		return false;
-	end
+	-- FAST MODE
+	return false
 
-	return true;
+	-- ALTERNATE
+	-- TODO - Write this
+
+	-- return true;
 end
 
 -- ===========================================================================
@@ -842,7 +872,7 @@ end
 function GetYieldForOriginCity( yieldIndex:number, routeInfo:table, checkCache)
 	if checkCache then
 		local key:string = GetRouteKey(routeInfo)
-		if m_Cache[key] ~= nil and m_Cache[key].Yields[yieldIndex] ~= nil and m_Cache[key].Yields[yieldIndex].Origin ~= nil then
+		if m_Cache[key] ~= nil and m_Cache[key].TurnBuilt >= Game.GetCurrentGameTurn()then
 			-- print("CACHE HIT for " .. GetTradeRouteString(routeInfo))
 			return m_Cache[key].Yields[yieldIndex].Origin
 		else
@@ -869,7 +899,7 @@ end
 function GetYieldForDestinationCity( yieldIndex:number, routeInfo:table, checkCache )
 	if checkCache then
 		local key:string = GetRouteKey(routeInfo)
-		if m_Cache[key] ~= nil and m_Cache[key].Yields[yieldIndex] ~= nil and m_Cache[key].Yields[yieldIndex].Destination ~= nil then
+		if m_Cache[key] ~= nil and m_Cache[key].TurnBuilt >= Game.GetCurrentGameTurn()then
 			-- print("CACHE HIT for " .. GetTradeRouteString(routeInfo))
 			return m_Cache[key].Yields[yieldIndex].Destination
 		else
@@ -895,7 +925,7 @@ end
 function GetTurnsToComplete(routeInfo, checkCache)
 	if checkCache then
 		local key = GetRouteKey(routeInfo)
-		if m_Cache[key] ~= nil and m_Cache[key].TurnsToComplete ~= nil then
+		if m_Cache[key] ~= nil and m_Cache[key].TurnBuilt <= Game.GetCurrentGameTurn()then
 			-- print("CACHE HIT for " .. GetTradeRouteString(routeInfo))
 			return m_Cache[key].TurnsToComplete
 		else
@@ -912,13 +942,13 @@ end
 function GetRouteInfo(routeInfo, checkCache)
 	if checkCache then
 		local key = GetRouteKey(routeInfo)
-		if m_Cache ~= nil and m_Cache[key] ~= nil then
+		if m_Cache[key] ~= nil and m_Cache[key].TurnBuilt <= Game.GetCurrentGameTurn()then
 			-- print("CACHE HIT for " .. GetTradeRouteString(routeInfo))
-			return m_Cache[key].TurnsToCompleteRoute, m_Cache[key].TripsToDestination, m_Cache[key].TradePathLength
+			return m_Cache[key].TradePathLength, m_Cache[key].TripsToDestination, m_Cache[key].TurnsToCompleteRoute
 		else
 			print("CACHE MISS for " .. GetTradeRouteString(routeInfo))
 			CacheRoute(routeInfo)
-			return m_Cache[key].TurnsToCompleteRoute, m_Cache[key].TripsToDestination, m_Cache[key].TradePathLength
+			return m_Cache[key].TradePathLength, m_Cache[key].TripsToDestination, m_Cache[key].TurnsToCompleteRoute
 		end
 	else
 		return GetAdvancedRouteInfo(routeInfo)

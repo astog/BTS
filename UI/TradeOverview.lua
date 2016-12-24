@@ -59,7 +59,7 @@ local SORT_ASCENDING = GetSortAscendingIdConstant();
 local SORT_DESCENDING = GetSortDescendingIdConstant();
 
 local SEMI_EXPAND_SETTINGS:table = {};
-SEMI_EXPAND_SETTINGS[GROUP_BY_SETTINGS.NONE] = 100;
+SEMI_EXPAND_SETTINGS[GROUP_BY_SETTINGS.NONE] = 10000;    -- 100 * 100 possible cities. It can never be higher than this, right?
 SEMI_EXPAND_SETTINGS[GROUP_BY_SETTINGS.ORIGIN] = 4;
 SEMI_EXPAND_SETTINGS[GROUP_BY_SETTINGS.DESTINATION] = 2;
 
@@ -76,10 +76,15 @@ local m_currentTab:number = TRADE_TABS.MY_ROUTES;
 
 local m_shiftDown:boolean = false;
 local m_ctrlDown:boolean = false;
-local m_changedSortSettings:boolean = false;
+local m_sortCallRefresh:boolean = false;
 
 -- Trade Routes Tables
 local m_AvailableTradeRoutes:table = {};		-- Stores all available routes
+local m_AvailableGroupedRoutes:table = {}; 		-- Similiar to above, but is grouped.
+												-- These two are base routes, and should not rebuilt unless turn change.
+
+local m_FinalTradeRoutes:table = {};
+local m_GroupedFinalRoutes:table = {};
 local m_TraderAutomated:table = {};
 
 -- Stores filter list and tracks the currently selected list
@@ -103,7 +108,8 @@ local m_DisplayedTradeRoutes:number = 0;
 
 local m_HasBuiltTradeRouteTable:boolean	= false;
 local m_LastTurnBuiltTradeRouteTable:number = -1;
-local m_LastTurnUpdatedMyRoutes:number = -1;
+local m_SortSettingsChanged:boolean = true;
+local m_FilterSettingsChanged:boolean = true;
 
 -- Stores the sort settings.
 local m_SortBySettings = {};
@@ -121,7 +127,7 @@ m_GroupSortBySettings[1] = {
 	SortOrder = SORT_DESCENDING;
 };
 
-local preRefreshClock;
+local preRefreshClock = 0;
 
 -- ===========================================================================
 --	Refresh functions
@@ -401,36 +407,62 @@ function ViewAvailableRoutes()
 	if (not m_HasBuiltTradeRouteTable) or Game.GetCurrentGameTurn() > m_LastTurnBuiltTradeRouteTable then
 		print("Trade Route table last built on: " .. m_LastTurnBuiltTradeRouteTable .. ". Current game turn: " .. Game.GetCurrentGameTurn());
 		RebuildAvailableTradeRoutesTable();
+
+		-- Just rebuilt base routes table. need to do everything again
+		m_SortSettingsChanged = true;
+		m_FilterSettingsChanged = true;
+		m_GroupSettingsChanged = true;
+	else
+		print("OPT: Not Rebuilding routes table")
 	end
 
-	-- Cache routes info
-	CacheRoutesInfo(m_AvailableTradeRoutes);
-	print("Time taken till cache: " .. (os.clock() - preRefreshClock) .. " secs")
+	-- Cache routes info.
+	if CacheRoutesInfo(m_AvailableTradeRoutes) then
+		print("Time taken till cache: " .. (os.clock() - preRefreshClock) .. " secs")
+	end
+
+	-- Group routes.
+	if m_GroupSettingsChanged then
+		m_AvailableGroupedRoutes = GroupRoutes(m_AvailableTradeRoutes, m_groupByList[m_groupBySelected].groupByID)
+		print("Time taken till group: " .. (os.clock() - preRefreshClock) .. " secs")
+	else
+		print("OPT: Not grouping routes")
+	end
 
 	-- Filter the routes
-	local filteredRoutes:table = FilterTradeRoutes(m_AvailableTradeRoutes);
-	print("Time taken till filter: " .. (os.clock() - preRefreshClock) .. " secs")
+	if m_FilterSettingsChanged then
+		m_FinalTradeRoutes = FilterTradeRoutes(m_AvailableTradeRoutes);
+		print("Time taken till filter: " .. (os.clock() - preRefreshClock) .. " secs")
+	else
+		print("OPT: Not refiltering routes")
+	end
 
 	-- Sort and display the routes
 	if m_groupByList[m_groupBySelected].groupByID ~= GROUP_BY_SETTINGS.NONE then
+		-- Filter and sort are tied here. Need to rebuild if the grouping occured
+		if m_GroupSettingsChanged or m_FilterSettingsChanged or m_SortSettingsChanged then
+			m_GroupedFinalRoutes = {};
+			-- Filter and then sort the routes. TODO - possible see to untie them?
+			for i, routes in ipairs(m_AvailableGroupedRoutes) do
+				-- Filter the routes
+				local filteredRoutes = FilterTradeRoutes(routes)
 
-		-- Group the routes
-		local groupedRoutes = GroupRoutes(filteredRoutes, m_groupByList[m_groupBySelected].groupByID)
-		print("Time taken till group: " .. (os.clock() - preRefreshClock) .. " secs")
-
-		-- Sort the routes
-		local preSortClock = os.clock();
-		for i, routes in ipairs(groupedRoutes) do
-			SortTradeRoutes(routes, m_SortBySettings)
+				-- Sort and insert into table
+				if filteredRoutes ~= nil then
+					SortTradeRoutes(filteredRoutes, m_SortBySettings, m_SortSettingsChanged)
+					table.insert(m_GroupedFinalRoutes, filteredRoutes)
+				end
+			end
+			print("Time taken till within group sort and filter: " .. (os.clock() - preRefreshClock) .. " secs")
+		else
+			print("OPT: Not filtering and sorting within groups")
 		end
-		print("Time taken till within group sort: " .. (os.clock() - preRefreshClock) .. " secs")
 
-		-- Sort the order of groups
-		SortGroupedRoutes(groupedRoutes);
+		-- Sort the order of groups. You need to do this AFTER each group has been sorted
+		SortGroupedRoutes(m_GroupedFinalRoutes, m_GroupSortBySettings, m_SortSettingsChanged);
 		print("Time taken till group sort: " .. (os.clock()- preRefreshClock) .. " secs");
 
-		for i, routes in ipairs(groupedRoutes) do
-			-- dump(filteredSortedRoutes)
+		for i, routes in ipairs(m_GroupedFinalRoutes) do
 			if m_groupByList[m_groupBySelected].groupByID == GROUP_BY_SETTINGS.ORIGIN then
 				local originPlayer:table = Players[routes[1].OriginCityPlayer];
 				local originCity:table = originPlayer:GetCities():FindID(routes[1].OriginCityID);
@@ -444,19 +476,25 @@ function ViewAvailableRoutes()
 			end
 		end
 	else
-		if tableLength(filteredRoutes) > 0 then
-			SortTradeRoutes(filteredRoutes, m_GroupSortBySettings);
+		if m_FinalTradeRoutes ~= nil then
+			SortTradeRoutes(m_FinalTradeRoutes, m_GroupSortBySettings, (m_SortSettingsChanged or m_GroupSettingsChanged));
 			print("Time taken till sort: " .. (os.clock() - preRefreshClock) .. " secs")
 
-			AddRouteInstancesFromTable(filteredRoutes, SEMI_EXPAND_SETTINGS[GROUP_BY_SETTINGS.NONE]);
+			AddRouteInstancesFromTable(m_FinalTradeRoutes, SEMI_EXPAND_SETTINGS[GROUP_BY_SETTINGS.NONE]);
 		end
 	end
+
+	-- Routes are sorted if it reaches here
+	m_SortSettingsChanged = false;
+	m_FilterSettingsChanged = false;
+	m_GroupSettingsChanged = false;
 end
 
 function DisplayGroup(routesTable:table, city:table)
 	-- dump(routesTable[1])
 
-	local routeCount:number = tableLength(routesTable);
+	-- local routeCount:number = tableLength(routesTable);
+	local routeCount:number = #routesTable;
 	if routeCount > 0 then
 		-- Find if the city is in exclusion list
 		local cityEntry:table = {
@@ -1257,15 +1295,21 @@ function FilterTradeRoutes ( tradeRoutes:table )
 	end
 
 	local filtertedRoutes:table = {};
+	local hasEntry:boolean = false
 
 	for index, tradeRoute in ipairs(tradeRoutes) do
 		local pPlayer = Players[tradeRoute.DestinationCityPlayer];
 		if m_filterList[m_filterSelected].FilterFunction and m_filterList[m_filterSelected].FilterFunction(pPlayer) then
 			table.insert(filtertedRoutes, tradeRoute);
+			hasEntry = true
 		end
 	end
 
-	return filtertedRoutes;
+	if hasEntry then
+		return filtertedRoutes;
+	else
+		return nil
+	end
 end
 
 -- ---------------------------------------------------------------------------
@@ -1392,8 +1436,14 @@ function GroupRoutes( routesTable, groupSetting )
 end
 
 -- Gets top route from each group and sorts them based on that
-function SortGroupedRoutes( groupedRoutes:table )
-	if tableLength(m_GroupSortBySettings) > 0 then
+function SortGroupedRoutes( groupedRoutes:table, sortSettings:table, sortSettingsChanged:boolean )
+	if (sortSettingsChanged ~= nil and (not sortSettingsChanged)) then
+		print("OPT: Not sorting groups")
+		return
+	end
+
+	-- if tableLength(m_GroupSortBySettings) > 0 then
+	if #sortSettings > 0 then
 		table.sort(groupedRoutes, CompareGroups)
 	end
 end
@@ -1562,7 +1612,6 @@ function Open()
 
 	m_AnimSupport.Show();
 	UI.PlaySound("CityStates_Panel_Open");
-	LuaEvents.TradeOverview_UpdateContextStatus(true);
 	Refresh();
 end
 
@@ -1571,7 +1620,6 @@ function Close()
         UI.PlaySound("CityStates_Panel_Close");
     end
 	m_AnimSupport.Hide();
-	LuaEvents.TradeOverview_UpdateContextStatus(false);
 end
 
 -- ===========================================================================
@@ -1658,6 +1706,7 @@ function OnFilterSelected( index:number, filterIndex:number )
 	m_filterSelected = filterIndex;
 	Controls.OverviewFilterButton:SetText(m_filterList[m_filterSelected].FilterText);
 
+	m_FilterSettingsChanged = true;
 	Refresh();
 end
 
@@ -1666,7 +1715,7 @@ function OnGroupBySelected( index:number, groupByIndex:number )
 	Controls.OverviewGroupByButton:SetText(m_groupByList[m_groupBySelected].groupByString);
 
 	-- Have to rebuild table
-	m_HasBuiltTradeRouteTable = false;
+	m_GroupSettingsChanged = true;
 	Refresh();
 end
 
@@ -1714,7 +1763,9 @@ end
 -- ---------------------------------------------------------------------------
 -- Sort bar insert buttons
 -- ---------------------------------------------------------------------------
-function OnSortByFood()
+
+function OnGeneralSortBy(sortDescArrow, sortByID)
+	m_SortSettingsChanged = true;
 	-- If shift is not being pressed, reset sort settings
 	if not m_shiftDown then
 		if not m_ctrlDown then
@@ -1726,16 +1777,16 @@ function OnSortByFood()
 	RemoveSortEntry(SORT_BY_ID.TURNS_TO_COMPLETE, m_SortBySettings);
 
 	-- Sort based on currently showing icon toggled
-	if Controls.FoodDescArrow:IsHidden() then
+	if sortDescArrow:IsHidden() then
 		if not m_ctrlDown then
-			InsertSortEntry(SORT_BY_ID.FOOD, SORT_DESCENDING, m_GroupSortBySettings);
+			InsertSortEntry(sortByID, SORT_DESCENDING, m_GroupSortBySettings);
 		end
-		InsertSortEntry(SORT_BY_ID.FOOD, SORT_DESCENDING, m_SortBySettings);
+		InsertSortEntry(sortByID, SORT_DESCENDING, m_SortBySettings);
 	else
 		if not m_ctrlDown then
-			InsertSortEntry(SORT_BY_ID.FOOD, SORT_ASCENDING, m_GroupSortBySettings);
+			InsertSortEntry(sortByID, SORT_ASCENDING, m_GroupSortBySettings);
 		end
-		InsertSortEntry(SORT_BY_ID.FOOD, SORT_ASCENDING, m_SortBySettings);
+		InsertSortEntry(sortByID, SORT_ASCENDING, m_SortBySettings);
 	end
 
 	InsertSortEntry(SORT_BY_ID.TURNS_TO_COMPLETE, SORT_ASCENDING, m_SortBySettings);
@@ -1745,326 +1796,84 @@ function OnSortByFood()
 	if not m_shiftDown then
 		Refresh();
 	else
-		m_changedSortSettings = true;
+		m_sortCallRefresh = true;
 	end
+end
+
+function OnSortByFood()
+	OnGeneralSortBy(Controls.FoodDescArrow, SORT_BY_ID.FOOD)
 end
 
 function OnSortByProduction()
-	-- If shift is not being pressed, reset sort settings
-	if not m_shiftDown then
-		if not m_ctrlDown then
-			m_GroupSortBySettings = {};
-		end
-		m_SortBySettings = {};
-	end
-
-	RemoveSortEntry(SORT_BY_ID.TURNS_TO_COMPLETE, m_SortBySettings);
-
-	-- Sort based on currently showing icon toggled
-	if Controls.ProductionDescArrow:IsHidden() then
-		if not m_ctrlDown then
-			InsertSortEntry(SORT_BY_ID.PRODUCTION, SORT_DESCENDING, m_GroupSortBySettings);
-		end
-		InsertSortEntry(SORT_BY_ID.PRODUCTION, SORT_DESCENDING, m_SortBySettings);
-	else
-		if not m_ctrlDown then
-			InsertSortEntry(SORT_BY_ID.PRODUCTION, SORT_ASCENDING, m_GroupSortBySettings);
-		end
-		InsertSortEntry(SORT_BY_ID.PRODUCTION, SORT_ASCENDING, m_SortBySettings);
-	end
-
-	InsertSortEntry(SORT_BY_ID.TURNS_TO_COMPLETE, SORT_ASCENDING, m_SortBySettings);
-
-	RefreshSortBar();
-	-- Dont call refresh while shift is held
-	if not m_shiftDown then
-		Refresh();
-	else
-		m_changedSortSettings = true;
-	end
+	OnGeneralSortBy(Controls.ProductionDescArrow, SORT_BY_ID.PRODUCTION)
 end
 
 function OnSortByGold()
-	-- If shift is not being pressed, reset sort settings
-	if not m_shiftDown then
-		if not m_ctrlDown then
-			m_GroupSortBySettings = {};
-		end
-		m_SortBySettings = {};
-	end
-
-	RemoveSortEntry(SORT_BY_ID.TURNS_TO_COMPLETE, m_SortBySettings);
-
-	-- Sort based on currently showing icon toggled
-	if Controls.GoldDescArrow:IsHidden() then
-		if not m_ctrlDown then
-			InsertSortEntry(SORT_BY_ID.GOLD, SORT_DESCENDING, m_GroupSortBySettings);
-		end
-		InsertSortEntry(SORT_BY_ID.GOLD, SORT_DESCENDING, m_SortBySettings);
-	else
-		if not m_ctrlDown then
-			InsertSortEntry(SORT_BY_ID.GOLD, SORT_ASCENDING, m_GroupSortBySettings);
-		end
-		InsertSortEntry(SORT_BY_ID.GOLD, SORT_ASCENDING, m_SortBySettings);
-	end
-
-	InsertSortEntry(SORT_BY_ID.TURNS_TO_COMPLETE, SORT_ASCENDING, m_SortBySettings);
-
-	RefreshSortBar();
-	-- Dont call refresh while shift is held
-	if not m_shiftDown then
-		Refresh();
-	else
-		m_changedSortSettings = true;
-	end
+	OnGeneralSortBy(Controls.GoldDescArrow, SORT_BY_ID.GOLD)
 end
 
 function OnSortByScience()
-	-- If shift is not being pressed, reset sort settings
-	if not m_shiftDown then
-		if not m_ctrlDown then
-			m_GroupSortBySettings = {};
-		end
-		m_SortBySettings = {};
-	end
-
-	RemoveSortEntry(SORT_BY_ID.TURNS_TO_COMPLETE, m_SortBySettings);
-
-	-- Sort based on currently showing icon toggled
-	if Controls.ScienceDescArrow:IsHidden() then
-		if not m_ctrlDown then
-			InsertSortEntry(SORT_BY_ID.SCIENCE, SORT_DESCENDING, m_GroupSortBySettings);
-		end
-		InsertSortEntry(SORT_BY_ID.SCIENCE, SORT_DESCENDING, m_SortBySettings);
-	else
-		if not m_ctrlDown then
-			InsertSortEntry(SORT_BY_ID.SCIENCE, SORT_ASCENDING, m_GroupSortBySettings);
-		end
-		InsertSortEntry(SORT_BY_ID.SCIENCE, SORT_ASCENDING, m_SortBySettings);
-	end
-
-	InsertSortEntry(SORT_BY_ID.TURNS_TO_COMPLETE, SORT_ASCENDING, m_SortBySettings);
-
-	RefreshSortBar();
-	-- Dont call refresh while shift is held
-	if not m_shiftDown then
-		Refresh();
-	else
-		m_changedSortSettings = true;
-	end
+	OnGeneralSortBy(Controls.ScienceDescArrow, SORT_BY_ID.SCIENCE)
 end
 
 function OnSortByCulture()
-	-- If shift is not being pressed, reset sort settings
-	if not m_shiftDown then
-		if not m_ctrlDown then
-			m_GroupSortBySettings = {};
-		end
-		m_SortBySettings = {};
-	end
-
-	RemoveSortEntry(SORT_BY_ID.TURNS_TO_COMPLETE, m_SortBySettings);
-
-	-- Sort based on currently showing icon toggled
-	if Controls.CultureDescArrow:IsHidden() then
-		if not m_ctrlDown then
-			InsertSortEntry(SORT_BY_ID.CULTURE, SORT_DESCENDING, m_GroupSortBySettings);
-		end
-		InsertSortEntry(SORT_BY_ID.CULTURE, SORT_DESCENDING, m_SortBySettings);
-	else
-		if not m_ctrlDown then
-			InsertSortEntry(SORT_BY_ID.CULTURE, SORT_ASCENDING, m_GroupSortBySettings);
-		end
-		InsertSortEntry(SORT_BY_ID.CULTURE, SORT_ASCENDING, m_SortBySettings);
-	end
-
-	InsertSortEntry(SORT_BY_ID.TURNS_TO_COMPLETE, SORT_ASCENDING, m_SortBySettings);
-
-	RefreshSortBar();
-	-- Dont call refresh while shift is held
-	if not m_shiftDown then
-		Refresh();
-	else
-		m_changedSortSettings = true;
-	end
+	OnGeneralSortBy(Controls.CultureDescArrow, SORT_BY_ID.CULTURE)
 end
 
 function OnSortByFaith()
-	-- If shift is not being pressed, reset sort settings
-	if not m_shiftDown then
-		if not m_ctrlDown then
-			m_GroupSortBySettings = {};
-		end
-		m_SortBySettings = {};
-	end
-
-	RemoveSortEntry(SORT_BY_ID.TURNS_TO_COMPLETE, m_SortBySettings);
-
-	-- Sort based on currently showing icon toggled
-	if Controls.FaithDescArrow:IsHidden() then
-		if not m_ctrlDown then
-			InsertSortEntry(SORT_BY_ID.FAITH, SORT_DESCENDING, m_GroupSortBySettings);
-		end
-		InsertSortEntry(SORT_BY_ID.FAITH, SORT_DESCENDING, m_SortBySettings);
-	else
-		if not m_ctrlDown then
-			InsertSortEntry(SORT_BY_ID.FAITH, SORT_ASCENDING, m_GroupSortBySettings);
-		end
-		InsertSortEntry(SORT_BY_ID.FAITH, SORT_ASCENDING, m_SortBySettings);
-	end
-
-	InsertSortEntry(SORT_BY_ID.TURNS_TO_COMPLETE, SORT_ASCENDING, m_SortBySettings);
-
-	RefreshSortBar();
-	-- Dont call refresh while shift is held
-	if not m_shiftDown then
-		Refresh();
-	else
-		m_changedSortSettings = true;
-	end
+	OnGeneralSortBy(Controls.FaithDescArrow, SORT_BY_ID.FAITH)
 end
 
 function OnSortByTurnsToComplete()
-	-- If shift is not being pressed, reset sort settings
-	if not m_shiftDown then
-		if not m_ctrlDown then
-			m_GroupSortBySettings = {};
-		end
-		m_SortBySettings = {};
-	end
-
-	RemoveSortEntry(SORT_BY_ID.TURNS_TO_COMPLETE, m_SortBySettings);
-
-	-- Sort based on currently showing icon toggled
-	if Controls.TurnsToCompleteDescArrow:IsHidden() then
-		if not m_ctrlDown then
-			InsertSortEntry(SORT_BY_ID.TURNS_TO_COMPLETE, SORT_DESCENDING, m_GroupSortBySettings);
-		end
-		InsertSortEntry(SORT_BY_ID.TURNS_TO_COMPLETE, SORT_DESCENDING, m_SortBySettings);
-	else
-		if not m_ctrlDown then
-			InsertSortEntry(SORT_BY_ID.TURNS_TO_COMPLETE, SORT_ASCENDING, m_GroupSortBySettings);
-		end
-		InsertSortEntry(SORT_BY_ID.TURNS_TO_COMPLETE, SORT_ASCENDING, m_SortBySettings);
-	end
-
-	InsertSortEntry(SORT_BY_ID.TURNS_TO_COMPLETE, SORT_ASCENDING, m_SortBySettings);
-
-	RefreshSortBar();
-	-- Dont call refresh while shift is held
-	if not m_shiftDown then
-		Refresh();
-	else
-		m_changedSortSettings = true;
-	end
+	OnGeneralSortBy(Controls.TurnsToCompleteDescArrow, SORT_BY_ID.TURNS_TO_COMPLETE)
 end
 
 -- ---------------------------------------------------------------------------
 -- Sort bar delete buttons
 -- ---------------------------------------------------------------------------
-function OnNotSortByFood()
+
+function OnGeneralNotSortBy(sortByID)
+	m_SortSettingsChanged = true;
 	if not m_ctrlDown then
-		RemoveSortEntry( SORT_BY_ID.FOOD, m_GroupSortBySettings);
+		RemoveSortEntry( sortByID, m_GroupSortBySettings);
 	end
-	RemoveSortEntry( SORT_BY_ID.FOOD, m_SortBySettings);
+	RemoveSortEntry( sortByID, m_SortBySettings);
 
 	RefreshSortBar();
 	-- Dont call refresh while shift is held
 	if not m_shiftDown then
 		Refresh();
 	else
-		m_changedSortSettings = true;
+		m_sortCallRefresh = true;
 	end
+end
+
+function OnNotSortByFood()
+	OnGeneralNotSortBy(SORT_BY_ID.FOOD)
 end
 
 function OnNotSortByProduction()
-	if not m_ctrlDown then
-		RemoveSortEntry( SORT_BY_ID.PRODUCTION, m_GroupSortBySettings);
-	end
-	RemoveSortEntry( SORT_BY_ID.PRODUCTION, m_SortBySettings);
-
-	RefreshSortBar();
-	-- Dont call refresh while shift is held
-	if not m_shiftDown then
-		Refresh();
-	else
-		m_changedSortSettings = true;
-	end
+	OnGeneralNotSortBy(SORT_BY_ID.PRODUCTION)
 end
 
 function OnNotSortByGold()
-	if not m_ctrlDown then
-		RemoveSortEntry( SORT_BY_ID.GOLD, m_GroupSortBySettings);
-	end
-	RemoveSortEntry( SORT_BY_ID.GOLD, m_SortBySettings);
-
-	RefreshSortBar();
-	-- Dont call refresh while shift is held
-	if not m_shiftDown then
-		Refresh();
-	else
-		m_changedSortSettings = true;
-	end
+	OnGeneralNotSortBy(SORT_BY_ID.GOLD)
 end
 
 function OnNotSortByScience()
-	if not m_ctrlDown then
-		RemoveSortEntry( SORT_BY_ID.SCIENCE, m_GroupSortBySettings);
-	end
-	RemoveSortEntry( SORT_BY_ID.SCIENCE, m_SortBySettings);
-
-	RefreshSortBar();
-	-- Dont call refresh while shift is held
-	if not m_shiftDown then
-		Refresh();
-	else
-		m_changedSortSettings = true;
-	end
+	OnGeneralNotSortBy(SORT_BY_ID.SCIENCE)
 end
 
 function OnNotSortByCulture()
-	if not m_ctrlDown then
-		RemoveSortEntry( SORT_BY_ID.CULTURE, m_GroupSortBySettings);
-	end
-	RemoveSortEntry( SORT_BY_ID.CULTURE, m_SortBySettings);
-
-	RefreshSortBar();
-	-- Dont call refresh while shift is held
-	if not m_shiftDown then
-		Refresh();
-	else
-		m_changedSortSettings = true;
-	end
+	OnGeneralNotSortBy(SORT_BY_ID.CULTURE)
 end
 
 function OnNotSortByFaith()
-	if not m_ctrlDown then
-		RemoveSortEntry( SORT_BY_ID.FAITH, m_GroupSortBySettings);
-	end
-	RemoveSortEntry( SORT_BY_ID.FAITH, m_SortBySettings);
-
-	RefreshSortBar();
-	-- Dont call refresh while shift is held
-	if not m_shiftDown then
-		Refresh();
-	else
-		m_changedSortSettings = true;
-	end
+	OnGeneralNotSortBy(SORT_BY_ID.FAITH)
 end
 
 function OnNotSortByTurnsToComplete()
-	if not m_ctrlDown then
-		RemoveSortEntry( SORT_BY_ID.TURNS_TO_COMPLETE, m_GroupSortBySettings);
-	end
-	RemoveSortEntry( SORT_BY_ID.TURNS_TO_COMPLETE, m_SortBySettings);
-
-	RefreshSortBar();
-	-- Dont call refresh while shift is held
-	if not m_shiftDown then
-		Refresh();
-	else
-		m_changedSortSettings = true;
-	end
+	OnGeneralNotSortBy(SORT_BY_ID.TURNS_TO_COMPLETE)
 end
 
 -- ===========================================================================
@@ -2103,12 +1912,11 @@ function OnUnitOperationStarted( ownerID:number, unitID:number, operationID:numb
 			local outgoingRoutes = city:GetTrade():GetOutgoingRoutes();
 			for j,route in ipairs(outgoingRoutes) do
 				if route.TraderUnitID == unitID then
-
 					-- Remove it from the available routes
-					if m_groupBySelected == GROUP_BY_SETTINGS.NONE then
-						RemoveRouteFromTable(route, m_AvailableTradeRoutes, false);
+					if m_groupByList[m_groupBySelected].groupByID ~= GROUP_BY_SETTINGS.NONE then
+						RemoveRouteFromTable(route, m_AvailableGroupedRoutes, true);
 					else
-						RemoveRouteFromTable(route, m_AvailableTradeRoutes, true);
+						RemoveRouteFromTable(route, m_AvailableTradeRoutes, false);
 					end
 				end
 			end
@@ -2160,9 +1968,9 @@ function KeyUpHandler( key:number )
 	if key == Keys.VK_SHIFT then
 		m_shiftDown = false;
 
-		if m_changedSortSettings then
+		if m_sortCallRefresh then
 			Refresh();
-			m_changedSortSettings = false;
+			m_sortCallRefresh = false;
 		end
 
 		if not showSortOrdersPermanently then
