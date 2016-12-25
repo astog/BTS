@@ -148,13 +148,14 @@ function RebuildAvailableTradeRoutesTable()
 
     print("Group setting: " .. m_groupByList[m_groupBySelected].groupByString);
 
-    for i, sourceCity in sourceCities:Members() do
+    for _, sourceCity in sourceCities:Members() do
         local sourceCityID:number = sourceCity:GetID();
-        for j, destinationPlayer in ipairs(players) do
+        for _, destinationPlayer in ipairs(players) do
             local destinationPlayerID:number = destinationPlayer:GetID()
+            -- Check for war, met, etc
             if CanPossiblyTradeWithPlayer(sourcePlayerID, destinationPlayerID) then
                 local destinationCities:table = destinationPlayer:GetCities();
-                for k, destinationCity in destinationCities:Members() do
+                for _, destinationCity in destinationCities:Members() do
                     local destinationCityID:number = destinationCity:GetID();
                     -- Can we trade with this city / civ
                     if tradeManager:CanStartRoute(sourcePlayerID, sourceCityID, destinationPlayerID, destinationCityID) then
@@ -166,7 +167,7 @@ function RebuildAvailableTradeRoutesTable()
                             DestinationCityID       = destinationCityID
                         };
 
-                        table.insert(m_AvailableTradeRoutes, tradeRoute);
+                        m_AvailableTradeRoutes[#m_AvailableTradeRoutes + 1] = tradeRoute;
                     end
                 end
             end
@@ -581,15 +582,14 @@ function AddProduceTradeUnitButtonInstance()
 end
 
 function AddRouteInstancesFromTable( tradeRoutes:table, showCount:number )
-    for index, tradeRoute in ipairs(tradeRoutes) do
-        if showCount then
-            if index <= showCount then
-                AddRouteInstanceFromRouteInfo(tradeRoute);
-            else
-                return;
-            end
-        else
-            AddRouteInstanceFromRouteInfo(tradeRoute);
+    if showCount then
+        local len = math.min(showCount, #tradeRoutes)
+        for i=1, len do
+            AddRouteInstanceFromRouteInfo(tradeRoutes[i]);
+        end
+    else
+        for i=1, #tradeRoutes do
+            AddRouteInstanceFromRouteInfo(tradeRoutes[i]);
         end
     end
 end
@@ -603,36 +603,31 @@ function AddRouteInstanceFromRouteInfo( routeInfo:table )
 
 
     local routeInstance:table = m_RouteInstanceIM:GetInstance();
-    local backColor, frontColor = UI.GetPlayerColors( routeInfo.DestinationCityPlayer );
-    local darkerBackColor:number = DarkenLightenColor(backColor,(-85),238);
-    local brighterBackColor:number = DarkenLightenColor(backColor,90,250);
+    local destinationBackColor, destinationFrontColor = UI.GetPlayerColors(routeInfo.DestinationCityPlayer);
+    local originBackColor, originFrontColor = UI.GetPlayerColors(routeInfo.OriginCityPlayer);
+    local darkerBackColor:number = DarkenLightenColor(destinationBackColor,(-85),238);
+    local brighterBackColor:number = DarkenLightenColor(destinationBackColor,90,250);
 
     -- Update colors
-    tintBackColor = DarkenLightenColor(backColor, tintColorOffset, tintColorOpacity);
-    tintFrontColor = DarkenLightenColor(frontColor, tintLabelColorOffset, tintLabelColorOpacity);
+    tintBackColor = DarkenLightenColor(destinationBackColor, tintColorOffset, tintColorOpacity);
+    tintFrontColor = DarkenLightenColor(destinationFrontColor, tintLabelColorOffset, tintLabelColorOpacity);
 
     routeInstance.GridButton:SetColor(tintBackColor);
-    routeInstance.RouteLabel:SetColor(tintFrontColor);
-    routeInstance.TurnsToComplete:SetColor( frontColor );
+    -- routeInstance.RouteLabel:SetColor(tintFrontColor);
+    routeInstance.TurnsToComplete:SetColor( destinationFrontColor );
 
-    routeInstance.BannerBase:SetColor(  DarkenLightenColor(backColor,-10, 200) );
+    routeInstance.BannerBase:SetColor(  destinationBackColor );
     routeInstance.BannerDarker:SetColor( darkerBackColor );
     routeInstance.BannerLighter:SetColor( brighterBackColor );
 
-    routeInstance.RouteLabel:SetColor(frontColor);
-
-    routeInstance.BannerBase:SetHide(false);
-    routeInstance.BannerDarker:SetHide(false);
-    routeInstance.BannerLighter:SetHide(false);
+    routeInstance.RouteLabel:SetColor(destinationFrontColor);
 
     -- Update Route Label
     routeInstance.RouteLabel:SetText(Locale.ToUpper(originCity:GetName()) .. " " .. Locale.ToUpper("LOC_TRADE_OVERVIEW_TO") .. " " .. Locale.ToUpper(destinationCity:GetName()));
 
     -- Update yield directional arrows
-    local originBackColor, originFrontColor = UI.GetPlayerColors( routeInfo.OriginCityPlayer );
-    local destinationBackColor, destinationFrontColor = UI.GetPlayerColors( routeInfo.DestinationCityPlayer );
-    routeInstance.OriginCivArrow:SetColor(DarkenLightenColor(originFrontColor, 30, 255));
-    routeInstance.DestinationCivArrow:SetColor(DarkenLightenColor(destinationFrontColor, 30, 255));
+    routeInstance.OriginCivArrow:SetColor(originFrontColor);
+    routeInstance.DestinationCivArrow:SetColor(destinationFrontColor);
 
     routeInstance.ResourceStack:DestroyAllChildren();
 
@@ -683,16 +678,10 @@ function AddRouteInstanceFromRouteInfo( routeInfo:table )
         end
     else
         -- Determine are diplomatic visibility status
-        local visibilityIndex:number = originPlayer:GetDiplomacy():GetVisibilityOn(destinationPlayer);
+        local visibilityIndex:number = GetVisibilityIndex(playerID, true)
 
         -- Determine this player has a trade route with the local player
-        local hasTradeRoute:boolean = false;
-        local playerCities:table = destinationPlayer:GetCities();
-        for i,city in playerCities:Members() do
-            if city:GetTrade():HasActiveTradingPost(routeInfo.OriginCityPlayer) then
-                hasTradeRoute = true;
-            end
-        end
+        local hasTradeRoute:boolean = GetHasActiveRoute(routeInfo, true)
 
         -- Display trade route tourism modifier
         local baseTourismModifier = GlobalParameters.TOURISM_TRADE_ROUTE_BONUS;
@@ -727,7 +716,7 @@ function AddRouteInstanceFromRouteInfo( routeInfo:table )
         routeInstance.TradingPostIndicator:SetHide(true);
     end
 
-    if destinationCity:GetTrade():HasActiveTradingPost(originPlayer) then
+    if destinationCity:GetTrade():HasActiveTradingPost(routeInfo.OriginCityPlayer) then
         routeInstance.TradingPostIndicator:SetAlpha(1.0);
         routeInstance.TradingPostIndicator:LocalizeAndSetToolTip("LOC_TRADE_OVERVIEW_TOOLTIP_TRADE_POST_ESTABLISHED");
     else
@@ -880,8 +869,8 @@ end
 
 function CreatePlayerHeader( player:table )
     local headerInstance:table = m_HeaderInstanceIM:GetInstance();
-
-    local pPlayerConfig:table = PlayerConfigurations[player:GetID()];
+    local playerID = player:GetID()
+    local pPlayerConfig:table = PlayerConfigurations[playerID];
     headerInstance.HeaderLabel:SetText(Locale.ToUpper(pPlayerConfig:GetPlayerName()));
 
     -- If the current tab is not available routes, hide the collapse button, and trading post
@@ -893,7 +882,7 @@ function CreatePlayerHeader( player:table )
 
     if colorCityPlayerHeader then
         headerInstance.CityBannerFill:SetHide(false);
-        local backColor, frontColor = UI.GetPlayerColors( player:GetID() );
+        local backColor, frontColor = UI.GetPlayerColors( playerID );
         headerBackColor = DarkenLightenColor(backColor, backdropColorOffset, backdropColorOpacity);
         headerFrontColor = DarkenLightenColor(frontColor, labelColorOffset, labelColorOpacity);
         gridBackColor = DarkenLightenColor(backColor, backdropGridColorOffset, backdropGridColorOpacity);
@@ -908,20 +897,14 @@ function CreatePlayerHeader( player:table )
     end
 
     -- If not local player or a city state
-    if (player:GetID() ~=  Game.GetLocalPlayer() and (not IsCityState(player))) then
+    if (playerID ~=  Game.GetLocalPlayer() and (not IsCityState(player))) then
         -- Determine are diplomatic visibility status
         headerInstance.TourismBonusGrid:SetHide(false);
         headerInstance.VisibilityBonusGrid:SetHide(false)
-        local visibilityIndex:number = Players[Game.GetLocalPlayer()]:GetDiplomacy():GetVisibilityOn(player);
+        local visibilityIndex:number = GetVisibilityIndex(playerID, true)
 
         -- Determine this player has a trade route with the local player
-        local hasTradeRoute:boolean = false;
-        local playerCities:table = player:GetCities();
-        for i,city in playerCities:Members() do
-            if city:GetTrade():HasActiveTradingPost(Game.GetLocalPlayer()) then
-                hasTradeRoute = true;
-            end
-        end
+        local hasTradeRoute:boolean = GetHasActiveRoute(playerID, true)
 
         -- Display trade route tourism modifier
         local baseTourismModifier = GlobalParameters.TOURISM_TRADE_ROUTE_BONUS;
@@ -995,9 +978,9 @@ end
 
 function CreateCityHeader( city:table , currentRouteShowCount:number, totalRoutes:number, tooltipString:string )
     local headerInstance:table = m_HeaderInstanceIM:GetInstance();
-
     local playerID:number = city:GetOwner();
     local pPlayer = Players[playerID];
+
     headerInstance.HeaderLabel:SetText(Locale.ToUpper(city:GetName()));
 
     if tooltipString ~= nil then
@@ -1035,16 +1018,10 @@ function CreateCityHeader( city:table , currentRouteShowCount:number, totalRoute
             headerInstance.TourismBonusGrid:SetHide(true);
         else
             -- Determine are diplomatic visibility status
-            local visibilityIndex:number = Players[Game.GetLocalPlayer()]:GetDiplomacy():GetVisibilityOn(pPlayer);
+            local visibilityIndex:number = GetVisibilityIndex(playerID, true)
 
             -- Determine this player has a trade route with the local player
-            local hasTradeRoute:boolean = false;
-            local playerCities:table = pPlayer:GetCities();
-            for i,pCity in playerCities:Members() do
-                if pCity:GetTrade():HasActiveTradingPost(Game.GetLocalPlayer()) then
-                    hasTradeRoute = true;
-                end
-            end
+            local hasTradeRoute:boolean = GetHasActiveRoute(playerID, true)
 
             -- Display trade route tourism modifier
             local baseTourismModifier = GlobalParameters.TOURISM_TRADE_ROUTE_BONUS;

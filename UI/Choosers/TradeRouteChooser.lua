@@ -75,7 +75,9 @@ function Refresh()
     -- Rebuild if turn has advanced or unit has changed
     if m_LastTrader ~= selectedUnit:GetID() or m_TurnBuiltRouteTable < Game.GetCurrentGameTurn() then
         m_LastTrader = selectedUnit:GetID()
+        -- Rebuild and re-sort
         m_RebuildAvailableRoutes = true
+        m_SortSettingsChanged = true
     else
         m_RebuildAvailableRoutes = false
     end
@@ -242,7 +244,7 @@ function RefreshChooserPanel()
 
         m_TurnBuiltRouteTable = Game.GetCurrentGameTurn()
     else
-        print("OPT: Not rebuilding routes")
+        -- print("OPT: Not rebuilding routes")
     end
 
     -- Update Filters
@@ -268,19 +270,30 @@ function RefreshStack()
     -- Send Trade Route Paths to Engine (after filter applied)
     UILens.ClearLayerHexes(LensLayers.TRADE_ROUTE);
 
+    -- If not sort settings, sort by destination city name
     SortTradeRoutes(tradeRoutes, m_SortBySettings, m_SortSettingsChanged);
     m_SortSettingsChanged = false
 
-    local numberOfDestinations:number = 0;
-    for i, tradeRoute in ipairs(tradeRoutes) do
-        local pathPlots = tradeManager:GetTradeRoutePath(tradeRoute.OriginCityPlayer, tradeRoute.OriginCityID, tradeRoute.DestinationCityPlayer, tradeRoute.DestinationCityID);
+    -- If a destination City is chosen, send path only for that
+    if m_destinationCity ~= nil and m_originCity ~= nil then
+        local pathPlots = tradeManager:GetTradeRoutePath(m_originCity:GetOwner(), m_originCity:GetID(), m_destinationCity:GetOwner(), m_destinationCity:GetID());
         local kVariations:table = {};
         local lastElement:number = table.count(pathPlots);
         table.insert(kVariations, {"TradeRoute_Destination", pathPlots[lastElement]} );
-        UILens.SetLayerHexesPath( LensLayers.TRADE_ROUTE, tradeRoute.OriginCityPlayer, pathPlots, kVariations );
+        UILens.SetLayerHexesPath( LensLayers.TRADE_ROUTE, m_originCity:GetOwner(), pathPlots, kVariations );
+    end
 
-        AddRouteToDestinationStack(tradeRoute);
-        numberOfDestinations = numberOfDestinations + 1;
+    -- for i, tradeRoute in ipairs(tradeRoutes) do
+    for i=1, #tradeRoutes do
+        if m_destinationCity == nil then
+            local pathPlots = tradeManager:GetTradeRoutePath(tradeRoutes[i].OriginCityPlayer, tradeRoutes[i].OriginCityID, tradeRoutes[i].DestinationCityPlayer, tradeRoutes[i].DestinationCityID);
+            local kVariations:table = {};
+            local lastElement:number = table.count(pathPlots);
+            table.insert(kVariations, {"TradeRoute_Destination", pathPlots[lastElement]} );
+            UILens.SetLayerHexesPath( LensLayers.TRADE_ROUTE, tradeRoutes[i].OriginCityPlayer, pathPlots, kVariations );
+        end
+
+        AddRouteToDestinationStack(tradeRoutes[i]);
     end
 
     Controls.RouteChoiceStack:CalculateSize();
@@ -296,7 +309,7 @@ function RefreshStack()
     end
 
     -- Show No Available Trade Routes message if nothing to select
-    if numberOfDestinations > 0 then
+    if #tradeRoutes > 0 then
         Controls.StatusMessage:SetText(Locale.Lookup("LOC_ROUTECHOOSER_SELECT_DESTINATION"));
     else
         Controls.StatusMessage:SetText(Locale.Lookup("LOC_ROUTECHOOSER_NO_TRADE_ROUTES"));
@@ -535,7 +548,7 @@ function OnFilterSelected( index:number, filterIndex:number )
     m_filterSelected = filterIndex;
     Controls.FilterButton:SetText(m_filterList[m_filterSelected].FilterText);
 
-    m_FilterSettingsChanged = true;
+    m_SortSettingsChanged = true;
     Refresh();
 end
 
@@ -874,6 +887,7 @@ end
 -- ---------------------------------------------------------------------------
 function OnGeneralNotSortBy(sortByID)
     RemoveSortEntry(sortByID, m_SortBySettings);
+    m_SortSettingsChanged = true
     Refresh();
 end
 

@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Context xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="..\..\..\..\..\CivTech\Libs\ForgeUI\ForgeUI_Assets\Controls.xsd">
-  
+
   <SlideAnim Style="ChooserAnim">
     <Stack ID="RouteOriginChooser" StackGrowth="Bottom">
       <!-- Header Container -->
@@ -29,7 +29,7 @@
           <GridData Texture="Controls_ConfirmSmall" StateOffsetIncrement="0,26" SliceCorner="26,13" SliceSize="2,2" SliceTextureSize="51,26"/>
         </GridButton>
       </Container>
-      
+
       <!-- Body Container -->
       <Grid ID="RouteOriginChooserBody" Texture="Controls_ContainerBlue" SliceStart="0,0" SliceCorner="3,3" SliceSize="9,9" SliceTextureSize="16,16" Anchor="C,T" Offset="0,0" Size="parent,parent-150" AutoSize="1">
         <ScrollPanel    ID="CityScrollPanel"  Offset="18,10" Size="parent-22,parent-35" Vertical="1" AutoScrollBar="0">

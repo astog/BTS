@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Context xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="..\..\..\..\..\CivTech\Libs\ForgeUI\ForgeUI_Assets\Controls.xsd" Style="FontNormal20">
   <!-- Left Panel -->
-  <SlideAnim ID="RouteChooserSlideAnim" Anchor="L,T" Begin="-350,0" End="0,0" Cycle="Once" Speed="1" Function="OutQuint">
+  <SlideAnim ID="RouteChooserSlideAnim" Anchor="L,T" Begin="-350,0" End="0,0" Cycle="Once" Speed="2" Function="OutQuint">
     <Container ID="RouteChooser" Offset="-3,54">
       <!-- Body container-->
       <Container AutoSize="1" ConsumeAllMouse="1">
@@ -66,7 +66,7 @@
         </Grid>
 
         <!-- Bottom Panel -->
-        <Grid Size="395,parent-295" Anchor="L,T" Offset="-8,237" Texture="Controls_ContainerBlue" SliceStart="0,0" SliceCorner="3,3" SliceSize="9,9" SliceTextureSize="16,16">
+        <Grid Size="395,parent-294" Anchor="L,T" Offset="-8,237" Texture="Controls_ContainerBlue" SliceStart="0,0" SliceCorner="3,3" SliceSize="9,9" SliceTextureSize="16,16">
 
           <!-- Filter Pulldown -->
           <PullDown ID="DestinationFilterPulldown" ConsumeMouse="0" Offset="5,28" Anchor="C,T" Size="360,30" AutoSizePopUp="1" AutoFlip="1" ScrollThreshold="400">
@@ -147,7 +147,7 @@
           </Stack>
 
           <!-- Destination List -->
-          <ScrollPanel ID="RouteChoiceScrollPanel" Offset="0,52" Size="parent,parent-54" Vertical="1" AutoScrollBar="1" AutoSizeScrollBar="1">
+          <ScrollPanel ID="RouteChoiceScrollPanel" Offset="0,54" Size="parent,parent-54" Vertical="1" AutoScrollBar="1" AutoSizeScrollBar="1">
             <ScrollBar Style="ScrollVerticalBacking" Anchor="L,T" AnchorSide="O,I" Color="28,60,90,255" Offset="-7,2">
               <Thumb Style="ScrollThumbAlt" Color="28,60,90,255" />
             </ScrollBar>
@@ -163,7 +163,7 @@
       </Container>
 
       <!-- Header container-->
-      <Grid ID="HeaderBannerGrid" Size="387,60" Offset="3,-25" Style="HeaderBannerLeft" ConsumeAllMouse="1">
+      <Grid ID="HeaderBannerGrid" Size="400,60" Offset="3,-25" Style="HeaderBannerLeft" ConsumeAllMouse="1">
         <Label ID="Header_OriginText" Size="200, 50" Offset="0,7" Anchor="C,T" Style="FontFlair16" Color0="0,59,77,255" SmallCaps="20" SmallCapsType="FirstOnly" String="$Origin To...$"/>
         <Button ID="Header_CloseButton" Size="32,32" Offset="10,-2" Anchor="R,T" Texture="Controls_CloseButtonAlt"/>
       </Grid>

@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Context>
-  <SlideAnim Style="RundownAnimBG">
+  <SlideAnim Style="RundownAnimBG" Speed="5">
     <!-- Title Area -->
     <Grid Anchor="C,T" Size="parent-6,140" Offset="0,50" Texture="Controls_TitleBarDark" SliceCorner="21,17" SliceTextureSize="42,34">
       <!-- ================================================================== -->
@@ -45,7 +45,7 @@
       <!-- ================================================================== -->
       <!--  Sub Header - Contains Column Names, Filter Pulldown, Sort Bar     -->
       <!-- ================================================================== -->
-      
+
       <!-- Group by Pulldown -->
       <PullDown ID="OverviewGroupByPulldown" ConsumeMouse="0" Anchor="L,B" Offset="18,5" Size="parent-360,26" AutoSizePopUp="1" AutoFlip="1" ScrollThreshold="400">
         <ButtonData>
@@ -178,7 +178,7 @@
         <Stack ID="BodyStack" StackGrowth="Down"/>
       </ScrollPanel>
     </Container>
-    
+
   </SlideAnim>
 
   <!-- ================================================================== -->
@@ -224,7 +224,7 @@
       </Grid>
     </Container>
   </Instance>
-  
+
   <!-- Route Entry -->
   <Instance Name="RouteInstance">
     <Container ID="Top" Size="485,78" Offset="10,2">
@@ -257,7 +257,7 @@
             <Image Size="48,parent-34" Anchor="L,B" Texture="Espionage_ColumnShading"/>
             <Box Size="1,parent-34" Anchor="L,B" Color="50,53,54,150"/>
           </Stack>
-          
+
           <!-- Route Status Font Icon -->
           <Label ID="RouteStatusFontIcon" Anchor="L,T" Offset="10,8" String="[Icon_TradeRouteLarge]" Hidden="1"/>
 
@@ -300,7 +300,7 @@
           <!-- Route Duration -->
           <Label Anchor="R,T" Offset="26,7" Style="FontNormal16" String="[Icon_Turn]" Hidden="1"/>
           <Label Anchor="R,T" Offset="10,8" Style="FontNormal16" String="00" Hidden="1"/>
-          
+
           <!-- Origin Civ Icon -->
           <Image ID="OriginCivIconBacking" Anchor="L,B" Size="30,30" Offset="8,12" Texture="CircleBacking30" Color="100,100,100,255">
             <Image ID="OriginCivIcon" Anchor="C,C" Size="30,30" Offset="0,0" Icon="ICON_CIVILIZATION_UNKNOWN" IconSize="30"/>
@@ -319,7 +319,7 @@
 
           <!-- Origin/Destination Divider Box -->
           <Box Size="300,2" Anchor="C,C" Offset="0,13" Color="50,53,54,255"/>
-            
+
           <!-- Resource Stack -->
           <Stack ID="ResourceStack" StackGrowth="Down" Anchor="C,T" Offset="0,31" StackPadding="2">
             <!-- <Stack ID="DestinationResourceStack" Size="50,50" Offset="2,1" StackGrowth="Right" StackPadding="2"/>

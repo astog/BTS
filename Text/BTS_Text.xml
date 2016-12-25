@@ -81,7 +81,7 @@
     </Row>
 
     <Row Tag="LOC_TRADE_TURNS_REMAINING_TURN_COMPLETION_TOOLTIP">
-        <Text>Route will complete in [ICON_Turn]{1_TurnWhenCompleted}</Text>
+        <Text>Route will complete in [COLOR_GREEN][ICON_Turn]{1_TurnWhenCompleted}[ENDCOLOR]</Text>
     </Row>
 
     <Row Tag="LOC_TRADE_TURNS_REMAINING_TURN_COMPLETION_ALT_TOOLTIP">

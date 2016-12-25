@@ -7,7 +7,7 @@
 		<Description>LOC_BTS_DESCRIPTION</Description>
 		<Authors>LOC_BTS_AUTHORS</Authors>
 	</Properties>
-	
+
 	<Components>
 		<ImportFiles id="BTS_IMPORT_FILES">
 			<Items>
@@ -27,7 +27,7 @@
 			</Items>
 		</LocalizedText>
 	</Components>
-	
+
 	<Settings>
 		<Custom id="BTS_SETTINGS">
 			<Items>
@@ -36,7 +36,7 @@
 			</Items>
 		</Custom>
 	</Settings>
-	 
+
 	<LocalizedText>
 		<Text id="LOC_BTS_NAME">
 			<en_US>Better Trade Screen</en_US>
