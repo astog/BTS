@@ -465,6 +465,11 @@ function CacheRoute(routeInfo)
     -- dump(m_Cache[key])
 end
 
+function CacheEmpty()
+    print("CACHE Emptying")
+    m_Cache = {}
+end
+
 function GetRouteKey(routeInfo)
     return tostring(routeInfo.OriginCityPlayer) .. "_" .. tostring(routeInfo.OriginCityID) .. "_" ..
                 tostring(routeInfo.DestinationCityPlayer) .. "_" .. tostring(routeInfo.DestinationCityID);
@@ -953,6 +958,40 @@ function GetRouteInfo(routeInfo, checkCache)
     else
         return GetAdvancedRouteInfo(routeInfo)
     end
+end
+
+function IsCityState( player:table )
+    local playerInfluence:table = player:GetInfluence();
+    if  playerInfluence:CanReceiveInfluence() then
+        return true
+    end
+
+    return false
+end
+
+-- Checks if the player is a city state, with "Send a trade route" quest
+function IsCityStateWithTradeQuest( player:table )
+    local questsManager : table = Game.GetQuestsManager();
+    local questTooltip  : string = Locale.Lookup("LOC_CITY_STATES_QUESTS");
+    if (questsManager ~= nil and Game.GetLocalPlayer() ~= nil) then
+        local tradeRouteQuestInfo:table = GameInfo.Quests["QUEST_SEND_TRADE_ROUTE"];
+        if (tradeRouteQuestInfo ~= nil) then
+            if (questsManager:HasActiveQuestFromPlayer(Game.GetLocalPlayer(), player:GetID(), tradeRouteQuestInfo.Index)) then
+                return true
+            end
+        end
+    end
+
+    return false
+end
+
+-- Checks if the player is a civ, other than the local player
+function IsOtherCiv( player:table )
+    if player:GetID() ~= Game.GetLocalPlayer() then
+        return true
+    end
+
+    return false
 end
 
 -- ===========================================================================

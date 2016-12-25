@@ -81,8 +81,8 @@ local m_sortCallRefresh:boolean = false;
 -- Trade Routes Tables
 local m_AvailableTradeRoutes:table = {};        -- Stores all available routes
 local m_AvailableGroupedRoutes:table = {};      -- Similiar to above, but is grouped.
-                                                -- These two are base routes, and should not rebuilt unless turn change.
 
+-- Temp routes table (Built as a derivative from above)
 local m_FinalTradeRoutes:table = {};
 local m_GroupedFinalRoutes:table = {};
 local m_TraderAutomated:table = {};
@@ -1361,7 +1361,6 @@ function RefreshFilters()
     -- Select first filter
     Controls.OverviewFilterButton:SetText(m_filterList[m_filterSelected].FilterText);
 
-
     -- Calculate Internals
     Controls.OverviewDestinationFilterPulldown:CalculateInternals();
 
@@ -1635,39 +1634,6 @@ function SelectUnit( unit:table )
     end
     UI.LookAtPlotScreenPosition( unit:GetX(), unit:GetY(), 0.42, 0.5 );
 end
-function IsCityState( player:table )
-    local playerInfluence:table = player:GetInfluence();
-    if  playerInfluence:CanReceiveInfluence() then
-        return true
-    end
-
-    return false
-end
-
--- Checks if the player is a city state, with "Send a trade route" quest
-function IsCityStateWithTradeQuest( player:table )
-    local questsManager : table = Game.GetQuestsManager();
-    local questTooltip  : string = Locale.Lookup("LOC_CITY_STATES_QUESTS");
-    if (questsManager ~= nil and Game.GetLocalPlayer() ~= nil) then
-        local tradeRouteQuestInfo:table = GameInfo.Quests["QUEST_SEND_TRADE_ROUTE"];
-        if (tradeRouteQuestInfo ~= nil) then
-            if (questsManager:HasActiveQuestFromPlayer(Game.GetLocalPlayer(), player:GetID(), tradeRouteQuestInfo.Index)) then
-                return true
-            end
-        end
-    end
-
-    return false
-end
-
--- Checks if the player is a civ, other than the local player
-function IsOtherCiv( player:table )
-    if player:GetID() ~= Game.GetLocalPlayer() then
-        return true
-    end
-
-    return false
-end
 
 -- ===========================================================================
 --  Button handler functions
@@ -1902,6 +1868,9 @@ function OnLocalPlayerTurnEnd()
     end
 
     m_HasBuiltTradeRouteTable = false;
+
+    -- Clear cache to keep memory used low
+    CacheEmpty()
 end
 
 function OnUnitOperationStarted( ownerID:number, unitID:number, operationID:number )

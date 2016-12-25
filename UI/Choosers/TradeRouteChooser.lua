@@ -2,7 +2,6 @@
 --  Settings
 -- ===========================================================================
 
-local alignTradeRouteYields = true
 local showSortOrdersPermanently = false
 
 -- ===========================================================================
@@ -34,9 +33,11 @@ local m_pTradeOverviewContext   : table = nil;  -- Trade Overview context
 local m_postOpenSelectPlayerID:number = -1;
 local m_postOpenSelectCityID:number = -1;
 
--- Filtered and unfiltered lists of possible destinations
-local m_unfilteredDestinations:table = {};
-local m_filteredDestinations:table = {};
+-- Filtered and unfiltered lists of possible routes
+local m_AvailableTradeRoutes:table = {};
+local m_TurnBuiltRouteTable:number = -1;
+local m_LastTrader:number = -1;
+local m_RebuildAvailableRoutes:boolean = true;
 
 -- Stores filter list and tracks the currently selected list
 local m_filterList:table = {};
@@ -46,7 +47,8 @@ local m_filterSelected:number = 1;
 local m_shiftDown:boolean = false;
 
 -- Stores the sort settings.
-local m_SortBySettings = {};
+local m_SortBySettings:table = {};
+local m_SortSettingsChanged:boolean = false;
 
 -- Default is ascending in turns to complete trade route
 m_SortBySettings[1] = {
@@ -68,6 +70,14 @@ function Refresh()
     if m_originCity == nil then
         Close();
         return;
+    end
+
+    -- Rebuild if turn has advanced or unit has changed
+    if m_LastTrader ~= selectedUnit:GetID() or m_TurnBuiltRouteTable < Game.GetCurrentGameTurn() then
+        m_LastTrader = selectedUnit:GetID()
+        m_RebuildAvailableRoutes = true
+    else
+        m_RebuildAvailableRoutes = false
     end
 
     RefreshHeader();
@@ -116,13 +126,11 @@ function RefreshTopPanel()
                 if (questsManager:HasActiveQuestFromPlayer(Game.GetLocalPlayer(), m_destinationCity:GetOwner(), tradeRouteQuestInfo.Index)) then
                     questTooltip = questTooltip .. "[NEWLINE]" .. tradeRouteQuestInfo.IconString .. questsManager:GetActiveQuestName(Game.GetLocalPlayer(), m_destinationCity:GetOwner(), tradeRouteQuestInfo.Index);
                     Controls.CityStateQuestIcon:SetHide(false);
-                    print("Setting tooltip to " .. questTooltip);
                     Controls.CityStateQuestIcon:SetToolTipString(questTooltip);
                 end
             end
         end
 
-        -- Update turns to complete route
         local tradeRoute = {
             OriginCityPlayer        = m_originCity:GetOwner(),
             OriginCityID            = m_originCity:GetID(),
@@ -130,35 +138,43 @@ function RefreshTopPanel()
             DestinationCityID       = m_destinationCity:GetID()
         };
 
-        local tradePathLength, tripsToDestination, turnsToCompleteRoute = GetRouteInfo(tradeRoute);
+        -- Update turns to complete route
+        local turnsToCompleteRoute = GetTurnsToComplete(tradeRoute);
         Controls.TurnsToComplete:SetColor( frontColor );
         Controls.TurnsToComplete:SetText(turnsToCompleteRoute);
 
-        -- Update Resource Lists
-        local originReceivedResources:boolean = false;
-        local originTooltipText:string = "";
+        -- Update Resources
         Controls.OriginResourceList:DestroyAllChildren();
+
+        local originYieldInstance:table = {};
+        local originReceivedResources:boolean = false;
+        local destinationYieldInstance:table = {};
+        local destinationReceivedResources:boolean = false;
+
+        ContextPtr:BuildInstanceForControl( "RouteYieldInstance", originYieldInstance, Controls.OriginResourceList );
+        ContextPtr:BuildInstanceForControl( "RouteYieldInstance", destinationYieldInstance, Controls.DestinationResourceList );
+
         for yieldInfo in GameInfo.Yields() do
-            local yieldValue, sourceText = GetYieldForCity(yieldInfo.Index, m_destinationCity, true);
-            if (yieldValue > 0 ) or alignTradeRouteYields then
-                if (originTooltipText ~= "" and (yieldValue > 0)) then
-                    originTooltipText = originTooltipText .. "[NEWLINE]";
-                end
-                originTooltipText = originTooltipText .. sourceText;
+            local originCityYieldValue = GetYieldForOriginCity(yieldInfo.Index, tradeRoute, true);
+            local destinationCityYieldValue = GetYieldForDestinationCity(yieldInfo.Index, tradeRoute, true);
 
-                -- Custom offset because of background texture
-                if (yieldInfo.YieldType == "YIELD_FOOD") then
-                    AddResourceEntry(yieldInfo, yieldValue, sourceText, Controls.OriginResourceList, 5);
-                else
-                    AddResourceEntry(yieldInfo, yieldValue, sourceText, Controls.OriginResourceList);
-                end
+            SetRouteInstanceYields(originYieldInstance, yieldInfo, originCityYieldValue);
+            SetRouteInstanceYields(destinationYieldInstance, yieldInfo, destinationCityYieldValue);
 
-                originReceivedResources = true;
+            if not originReceivedResources and originCityYieldValue > 0 then
+                originReceivedResources = true
+            end
+            if not destinationReceivedResources and destinationCityYieldValue > 0 then
+                destinationReceivedResources = true
             end
         end
-        Controls.OriginResources:SetToolTipString(originTooltipText);
+
+        Controls.OriginResources:SetToolTipString("");
+        Controls.DestinationResources:SetToolTipString("");
+
         Controls.OriginResourceHeader:SetText(Locale.Lookup("LOC_ROUTECHOOSER_RECEIVES_RESOURCE", Locale.Lookup(m_originCity:GetName())));
-        Controls.OriginResourceList:ReprocessAnchoring();
+        Controls.DestinationResourceHeader:SetText(Locale.Lookup("LOC_ROUTECHOOSER_RECEIVES_RESOURCE", Locale.Lookup(m_destinationCity:GetName())));
+
 
         if originReceivedResources then
             Controls.OriginReceivesNoBenefitsLabel:SetHide(true);
@@ -166,32 +182,17 @@ function RefreshTopPanel()
             Controls.OriginReceivesNoBenefitsLabel:SetHide(false);
         end
 
-        local destinationReceivedResources:boolean = false;
-        local destinationTooltipText:string = "";
-        Controls.DestinationResourceList:DestroyAllChildren();
-        for yieldInfo in GameInfo.Yields() do
-            local yieldValue, sourceText = GetYieldForCity(yieldInfo.Index, m_destinationCity, false);
-            if (yieldValue > 0 ) or alignTradeRouteYields then
-                if (destinationTooltipText ~= "") then
-                    destinationTooltipText = destinationTooltipText .. "[NEWLINE]";
-                end
-                destinationTooltipText = destinationTooltipText .. sourceText;
-                AddResourceEntry(yieldInfo, yieldValue, sourceText, Controls.DestinationResourceList);
-
-                if yieldValue > 0 then
-                    destinationReceivedResources = true;
-                end
-            end
-        end
-        Controls.DestinationResources:SetToolTipString(destinationTooltipText);
-        Controls.DestinationResourceHeader:SetText(Locale.Lookup("LOC_ROUTECHOOSER_RECEIVES_RESOURCE", Locale.Lookup(m_destinationCity:GetName())));
-        Controls.DestinationResourceList:ReprocessAnchoring();
-
         if destinationReceivedResources then
             Controls.DestinationReceivesNoBenefitsLabel:SetHide(true);
         else
             Controls.DestinationReceivesNoBenefitsLabel:SetHide(false);
         end
+
+        -- Cleanup
+        Controls.OriginResourceList:CalculateSize();
+        Controls.OriginResourceList:ReprocessAnchoring();
+        Controls.DestinationResourceList:CalculateSize();
+        Controls.DestinationResourceList:CalculateSize();
 
         -- Show Panel
         Controls.CurrentSelectionContainer:SetHide(false);
@@ -208,20 +209,40 @@ function RefreshTopPanel()
 end
 
 function RefreshChooserPanel()
-    local tradeManager:table = Game.GetTradeManager();
+    -- Do we rebuild available routes?
+    if m_RebuildAvailableRoutes then
+        local tradeManager:table = Game.GetTradeManager();
+        -- Reset Available routes
+        m_AvailableTradeRoutes = {};
+        local players:table = Game:GetPlayers();
+        for i, player in ipairs(players) do
+            local cities:table = player:GetCities();
+            local originCityPlayerID = m_originCity:GetOwner()
+            local originCityID = m_originCity:GetID()
 
-    -- Reset Destinations
-    m_unfilteredDestinations = {};
+            for j, city in cities:Members() do
+                local destinationCityPlayerID = city:GetOwner()
+                local destinationCityID = city:GetID()
+                -- Can we start a trade route with this city?
+                if tradeManager:CanStartRoute(originCityPlayerID, originCityID, destinationCityPlayerID, destinationCityID) then
+                    local tradeRoute = {
+                        OriginCityPlayer        = originCityPlayerID,
+                        OriginCityID            = originCityID,
+                        DestinationCityPlayer   = destinationCityPlayerID,
+                        DestinationCityID       = destinationCityID
+                    };
 
-    local players:table = Game:GetPlayers();
-    for i, player in ipairs(players) do
-        local cities:table = player:GetCities();
-        for j, city in cities:Members() do
-            -- Can we start a trade route with this city?
-            if tradeManager:CanStartRoute(m_originCity:GetOwner(), m_originCity:GetID(), city:GetOwner(), city:GetID()) then
-                table.insert(m_unfilteredDestinations, city);
+                    table.insert(m_AvailableTradeRoutes, tradeRoute);
+                end
             end
         end
+
+        -- Cache routes info.
+        CacheRoutesInfo(m_AvailableTradeRoutes)
+
+        m_TurnBuiltRouteTable = Game.GetCurrentGameTurn()
+    else
+        print("OPT: Not rebuilding routes")
     end
 
     -- Update Filters
@@ -229,18 +250,6 @@ function RefreshChooserPanel()
 
     -- Update Destination Choice Stack
     RefreshStack();
-
-    -- Send Trade Route Paths to Engine
-    UILens.ClearLayerHexes( LensLayers.TRADE_ROUTE );
-
-    local pathPlots     : table = {};
-    for index, city in ipairs(m_filteredDestinations) do
-        pathPlots = tradeManager:GetTradeRoutePath(m_originCity:GetOwner(), m_originCity:GetID(), city:GetOwner(), city:GetID() );
-        local kVariations:table = {};
-        local lastElement : number = table.count(pathPlots);
-        table.insert(kVariations, {"TradeRoute_Destination", pathPlots[lastElement]} );
-        UILens.SetLayerHexesPath( LensLayers.TRADE_ROUTE, Game.GetLocalPlayer(), pathPlots, kVariations );
-    end
 end
 
 -- ===========================================================================
@@ -248,41 +257,29 @@ end
 -- ===========================================================================
 
 function RefreshStack()
-    local tradeManager:table = Game.GetTradeManager();
-    local tradeRoutes = {}
-
-    -- Filter Destinations by active Filter
-    if m_filterList[m_filterSelected].FilterFunction ~= nil then
-        m_filterList[m_filterSelected].FilterFunction();
-    else
-        m_filteredDestinations = m_unfilteredDestinations;
-    end
-
-    -- Create trade routes to be sorted
-    for index, city in ipairs(m_filteredDestinations) do
-        local tradeRoute = {
-            OriginCityPlayer        = m_originCity:GetOwner(),
-            OriginCityID            = m_originCity:GetID(),
-            DestinationCityPlayer   = city:GetOwner(),
-            DestinationCityID       = city:GetID()
-        };
-
-        table.insert(tradeRoutes, tradeRoute)
-    end
-
-    SortTradeRoutes( tradeRoutes, m_SortBySettings );
-
-    -- Add Destinations to Stack
+    -- Reset destinations
     m_RouteChoiceIM:ResetInstances();
 
+    local tradeManager:table = Game.GetTradeManager();
+
+    -- Filter Destinations by active Filter
+    local tradeRoutes = FilterTradeRoutes(m_AvailableTradeRoutes);
+
+    -- Send Trade Route Paths to Engine (after filter applied)
+    UILens.ClearLayerHexes(LensLayers.TRADE_ROUTE);
+
+    SortTradeRoutes(tradeRoutes, m_SortBySettings, m_SortSettingsChanged);
+    m_SortSettingsChanged = false
+
     local numberOfDestinations:number = 0;
-    for index, tradeRoute in ipairs(tradeRoutes) do
-        -- print("Adding route: " .. getTradeRouteString( tradeRoute ))
+    for i, tradeRoute in ipairs(tradeRoutes) do
+        local pathPlots = tradeManager:GetTradeRoutePath(tradeRoute.OriginCityPlayer, tradeRoute.OriginCityID, tradeRoute.DestinationCityPlayer, tradeRoute.DestinationCityID);
+        local kVariations:table = {};
+        local lastElement:number = table.count(pathPlots);
+        table.insert(kVariations, {"TradeRoute_Destination", pathPlots[lastElement]} );
+        UILens.SetLayerHexesPath( LensLayers.TRADE_ROUTE, tradeRoute.OriginCityPlayer, pathPlots, kVariations );
 
-        local destinationPlayer:table = Players[tradeRoute.DestinationCityPlayer];
-        local destinationCity:table = destinationPlayer:GetCities():FindID(tradeRoute.DestinationCityID);
-
-        AddCityToDestinationStack(destinationCity);
+        AddRouteToDestinationStack(tradeRoute);
         numberOfDestinations = numberOfDestinations + 1;
     end
 
@@ -291,9 +288,11 @@ function RefreshStack()
 
     -- Adjust offset to center destination scrollpanel/stack
     if Controls.RouteChoiceScrollPanel:GetScrollBar():IsHidden() then
-        Controls.RouteChoiceScrollPanel:SetOffsetX(5);
+        Controls.RouteChoiceScrollPanel:SetOffsetX(11);
+        Controls.SortBarStack:SetOffsetX(2);
     else
-        Controls.RouteChoiceScrollPanel:SetOffsetX(13);
+        Controls.RouteChoiceScrollPanel:SetOffsetX(19);
+        Controls.SortBarStack:SetOffsetX(8);
     end
 
     -- Show No Available Trade Routes message if nothing to select
@@ -304,20 +303,23 @@ function RefreshStack()
     end
 end
 
-function AddCityToDestinationStack(city:table)
+function AddRouteToDestinationStack(routeInfo:table)
     local cityEntry:table = m_RouteChoiceIM:GetInstance();
 
+    local destinationPlayer:table = Players[routeInfo.DestinationCityPlayer];
+    local destinationCity:table = destinationPlayer:GetCities():FindID(routeInfo.DestinationCityID);
+
     -- Update Selector Brace
-    if m_destinationCity ~= nil and city:GetName() == m_destinationCity:GetName() then
+    if m_destinationCity ~= nil and destinationCity:GetName() == m_destinationCity:GetName() then
         cityEntry.SelectorBrace:SetHide(false);
     else
         cityEntry.SelectorBrace:SetHide(true);
     end
 
     -- Setup city banner
-    cityEntry.CityName:SetText(Locale.ToUpper(city:GetName()));
+    cityEntry.CityName:SetText(Locale.ToUpper(destinationCity:GetName()));
 
-    local backColor:number, frontColor:number  = UI.GetPlayerColors( city:GetOwner() );
+    local backColor:number, frontColor:number  = UI.GetPlayerColors( routeInfo.DestinationCityPlayer );
     local darkerBackColor:number = DarkenLightenColor(backColor,(-85),238);
     local brighterBackColor:number = DarkenLightenColor(backColor,90,255);
 
@@ -329,7 +331,7 @@ function AddCityToDestinationStack(city:table)
     cityEntry.TradingPostIcon:SetColor( frontColor );
 
     -- Update Trading Post Icon
-    if city:GetTrade():HasActiveTradingPost(m_originCity:GetOwner()) then
+    if destinationCity:GetTrade():HasActiveTradingPost(routeInfo.OriginCityPlayer) then
         cityEntry.TradingPostIcon:SetHide(false);
     else
         cityEntry.TradingPostIcon:SetHide(true);
@@ -342,22 +344,15 @@ function AddCityToDestinationStack(city:table)
     if (questsManager ~= nil and Game.GetLocalPlayer() ~= nil) then
         local tradeRouteQuestInfo:table = GameInfo.Quests["QUEST_SEND_TRADE_ROUTE"];
         if (tradeRouteQuestInfo ~= nil) then
-            if (questsManager:HasActiveQuestFromPlayer(Game.GetLocalPlayer(), city:GetOwner(), tradeRouteQuestInfo.Index)) then
-                questTooltip = questTooltip .. "[NEWLINE]" .. tradeRouteQuestInfo.IconString .. questsManager:GetActiveQuestName(Game.GetLocalPlayer(), city:GetOwner(), tradeRouteQuestInfo.Index);
+            if (questsManager:HasActiveQuestFromPlayer(routeInfo.OriginCityPlayer, routeInfo.DestinationCityPlayer, tradeRouteQuestInfo.Index)) then
+                questTooltip = questTooltip .. "[NEWLINE]" .. tradeRouteQuestInfo.IconString .. questsManager:GetActiveQuestName(Game.GetLocalPlayer(), routeInfo.DestinationCityPlayer, tradeRouteQuestInfo.Index);
                 cityEntry.CityStateQuestIcon:SetHide(false);
                 cityEntry.CityStateQuestIcon:SetToolTipString(questTooltip);
             end
         end
     end
 
-    -- Update turns to complete route
-    local tradeRoute = {
-        OriginCityPlayer        = m_originCity:GetOwner(),
-        OriginCityID            = m_originCity:GetID(),
-        DestinationCityPlayer   = city:GetOwner(),
-        DestinationCityID       = city:GetID()
-    };
-    local tradePathLength, tripsToDestination, turnsToCompleteRoute = GetRouteInfo(tradeRoute);
+    local tradePathLength, tripsToDestination, turnsToCompleteRoute = GetRouteInfo(routeInfo);
     local tooltipString = ( "Total amount of[ICON_Turn]to complete this trade route[NEWLINE]" ..
                             "--------------------------------------------------------[NEWLINE]" ..
                             "Trade Route[ICON_Movement]: " .. tradePathLength .. "[NEWLINE]" ..
@@ -371,112 +366,127 @@ function AddCityToDestinationStack(city:table)
     -- Setup resources
     local tooltipText = "";
     cityEntry.ResourceList:DestroyAllChildren();
+
+    local originYieldInstance:table = {};
+    local destinationYieldInstance:table = {};
+    ContextPtr:BuildInstanceForControl( "RouteYieldInstance", originYieldInstance, cityEntry.ResourceList );
+    ContextPtr:BuildInstanceForControl( "RouteYieldInstance", destinationYieldInstance, cityEntry.ResourceList );
+
     for yieldInfo in GameInfo.Yields() do
-        local yieldValue, sourceText = GetYieldForCity(yieldInfo.Index, city, true);
-        if (yieldValue > 0 ) or alignTradeRouteYields then
-            if (tooltipText ~= "" and yieldValue > 0) then
+        -- Don't used a cache call here, since we need more info for the tooltip
+        local originYieldValue, sourceText = GetYieldForCity(yieldInfo.Index, destinationCity, true);
+        -- Normal cached call here
+        local destinationYieldValue = GetYieldForDestinationCity(yieldInfo.Index, routeInfo, true);
+
+        if originYieldValue > 0 then
+            if (tooltipText ~= "" and originYieldValue > 0) then
                 tooltipText = tooltipText .. "[NEWLINE]";
             end
             tooltipText = tooltipText .. sourceText;
-            AddResourceEntry(yieldInfo, yieldValue, sourceText, cityEntry.ResourceList);
         end
+
+        SetRouteInstanceYields(originYieldInstance, yieldInfo, originYieldValue)
+        SetRouteInstanceYields(destinationYieldInstance, yieldInfo, destinationYieldValue)
     end
+
+    -- Cleanup
+    cityEntry.ResourceList:CalculateSize();
+    cityEntry.ResourceList:ReprocessAnchoring();
+
     cityEntry.Button:SetToolTipString(tooltipText);
 
     -- Setup callback
-    cityEntry.Button:SetVoids(city:GetOwner(), city:GetID());
+    cityEntry.Button:SetVoids(routeInfo.DestinationCityPlayer, routeInfo.DestinationCityID);
     cityEntry.Button:RegisterCallback( Mouse.eLClick, OnTradeRouteSelected );
-
-    -- Process Anchoring
-    cityEntry.ResourceList:ReprocessAnchoring();
 end
 
-function AddResourceEntry(yieldInfo:table, yieldValue:number, sourceText:string, stackControl:table, customOffset)
-    local entryInstance:table = {};
-    ContextPtr:BuildInstanceForControl( "ResourceEntryInstance", entryInstance, stackControl );
+-- ---------------------------------------------------------------------------
+-- Route button helpers
+-- ---------------------------------------------------------------------------
 
-    local icon:string, text:string = FormatYieldText(yieldInfo, yieldValue);
-    if yieldValue > 0 then
-        entryInstance.ResourceEntryIcon:SetText(icon);
-        entryInstance.ResourceEntryText:SetText(text);
+function SetRouteInstanceYields(yieldsInstance, yieldInfo, yieldValue)
+    local iconString, text = FormatYieldText(yieldInfo, yieldValue);
+    if yieldValue == 0 then
+        iconString = "";
+        text = "";
+    end
 
-        if (customOffset) then
-            entryInstance.ResourceEntryIcon:SetOffsetX(customOffset);
-            entryInstance.ResourceEntryText:SetOffsetX(customOffset);
-        end
-
-        -- Update text Color
-        if (yieldInfo.YieldType == "YIELD_FOOD") then
-            entryInstance.ResourceEntryText:SetColorByName("ResFoodLabelCS");
-        elseif (yieldInfo.YieldType == "YIELD_PRODUCTION") then
-            entryInstance.ResourceEntryText:SetColorByName("ResProductionLabelCS");
-        elseif (yieldInfo.YieldType == "YIELD_GOLD") then
-            entryInstance.ResourceEntryText:SetColorByName("ResGoldLabelCS");
-        elseif (yieldInfo.YieldType == "YIELD_SCIENCE") then
-            entryInstance.ResourceEntryText:SetColorByName("ResScienceLabelCS");
-        elseif (yieldInfo.YieldType == "YIELD_CULTURE") then
-            entryInstance.ResourceEntryText:SetColorByName("ResCultureLabelCS");
-        elseif (yieldInfo.YieldType == "YIELD_FAITH") then
-            entryInstance.ResourceEntryText:SetColorByName("ResFaithLabelCS");
-        end
-    else
-        entryInstance.ResourceEntryIcon:SetHide(true);
-        entryInstance.ResourceEntryText:SetHide(true);
+    if (yieldInfo.YieldType == "YIELD_FOOD") then
+        yieldsInstance.YieldFoodLabel:SetText(text .. iconString);
+    elseif (yieldInfo.YieldType == "YIELD_PRODUCTION") then
+        yieldsInstance.YieldProductionLabel:SetText(text .. iconString);
+    elseif (yieldInfo.YieldType == "YIELD_GOLD") then
+        yieldsInstance.YieldGoldLabel:SetText(text .. iconString);
+    elseif (yieldInfo.YieldType == "YIELD_SCIENCE") then
+        yieldsInstance.YieldScienceLabel:SetText(text .. iconString);
+    elseif (yieldInfo.YieldType == "YIELD_CULTURE") then
+        yieldsInstance.YieldCultureLabel:SetText(text .. iconString);
+    elseif (yieldInfo.YieldType == "YIELD_FAITH") then
+        yieldsInstance.YieldFaithLabel:SetText(text .. iconString);
     end
 end
 
 -- ===========================================================================
---  Filter functions
+--  Filter, Filter Pulldown functions
 -- ===========================================================================
 
-function RefreshFilters()
-    local tradeManager:table = Game.GetTradeManager();
+function FilterTradeRoutes ( tradeRoutes:table )
+    -- print("Current filter: " .. m_filterList[m_filterSelected].FilterText);
+    if m_filterSelected == 1 then
+        return tradeRoutes;
+    end
 
-    -- Clear entries
+    local filtertedRoutes:table = {};
+
+    for index, tradeRoute in ipairs(tradeRoutes) do
+        local pPlayer = Players[tradeRoute.DestinationCityPlayer];
+        if m_filterList[m_filterSelected].FilterFunction and m_filterList[m_filterSelected].FilterFunction(pPlayer) then
+            table.insert(filtertedRoutes, tradeRoute);
+        end
+    end
+
+    return filtertedRoutes;
+end
+
+-- ---------------------------------------------------------------------------
+-- Filter pulldown functions
+-- ---------------------------------------------------------------------------
+function RefreshFilters()
+    -- Clear current filters
     Controls.DestinationFilterPulldown:ClearEntries();
     m_filterList = {};
     m_filterCount = 0;
 
-    -- Add All Filter
-    AddFilter(Locale.Lookup("LOC_ROUTECHOOSER_FILTER_ALL"), nil);
+    -- Add "All" Filter
+    AddFilter(Locale.Lookup("LOC_ROUTECHOOSER_FILTER_ALL"), function(a) return true; end);
 
     -- Add "International Routes" Filter
-    AddFilter(Locale.Lookup("LOC_TRADE_FILTER_INTERNATIONAL_ROUTES_TEXT") , FilterByInternational);
+    AddFilter(Locale.Lookup("LOC_TRADE_FILTER_INTERNATIONAL_ROUTES_TEXT") , IsOtherCiv);
 
     -- Add "City States with Trade Quest" Filter
-    AddFilter(Locale.Lookup("LOC_TRADE_FILTER_CS_WITH_QUEST_TOOLTIP"), FilterByCityStatesWithTradeQuest);
+    AddFilter(Locale.Lookup("LOC_TRADE_FILTER_CS_WITH_QUEST_TOOLTIP"), IsCityStateWithTradeQuest);
+
+    -- Add Local Player Filter
+    local localPlayerConfig:table = PlayerConfigurations[Game.GetLocalPlayer()];
+    local localPlayerName = Locale.Lookup(GameInfo.Civilizations[localPlayerConfig:GetCivilizationTypeID()].Name);
+    AddFilter(localPlayerName, function(a) return a:GetID() == Game.GetLocalPlayer(); end);
 
     -- Add Filters by Civ
-    for index, city in ipairs(m_unfilteredDestinations) do
-        if not IsCityState(Players[city:GetOwner()]) then
-            local playerConfig:table = PlayerConfigurations[city:GetOwner()];
-            local name = Locale.Lookup(GameInfo.Civilizations[playerConfig:GetCivilizationTypeID()].Name);
-            AddFilter(name, function() FilterByCiv(playerConfig:GetCivilizationTypeID()) end);
-        end
-    end
+    local players:table = Game.GetPlayers();
+    for index, pPlayer in ipairs(players) do
+        if pPlayer and pPlayer:IsAlive() and pPlayer:IsMajor() then
 
-    -- Add City State Filter
-    for index, city in ipairs(m_unfilteredDestinations) do
-        local pPlayerInfluence:table = Players[city:GetOwner()]:GetInfluence();
-        if pPlayerInfluence:CanReceiveInfluence() then
-            -- If the city's owner can receive influence then it is a city state so add the city state filter
-            AddFilter(Locale.Lookup("LOC_ROUTECHOOSER_FILTER_CITYSTATES"), FilterByCityStates);
-            break;
-        end
-    end
-
-    --[[
-        -- Add Filters by Resource
-        for index, city in ipairs(m_unfilteredDestinations) do
-            for yieldInfo in GameInfo.Yields() do
-                local yieldValue = GetYieldForCity(yieldInfo.Index, city, true);
-
-                if (yieldValue ~= 0 ) then
-                    AddFilter(Locale.Lookup(yieldInfo.Name), function() FilterByResource(yieldInfo.Index) end);
-                end
+            -- Has the local player met the civ?
+            if pPlayer:GetDiplomacy():HasMet(Game.GetLocalPlayer()) then
+                local playerConfig:table = PlayerConfigurations[pPlayer:GetID()];
+                local name = Locale.Lookup(GameInfo.Civilizations[playerConfig:GetCivilizationTypeID()].Name);
+                AddFilter(name, function(a) return a:GetID() == pPlayer:GetID() end);
             end
         end
-    --]]
+    end
+
+    -- Add "City States" Filter
+    AddFilter("City-States", IsCityState);
 
     -- Add filters to pulldown
     for index, filter in ipairs(m_filterList) do
@@ -492,7 +502,7 @@ function RefreshFilters()
     UpdateFilterArrow();
 end
 
-function AddFilter(filterName:string, filterFunction)
+function AddFilter( filterName:string, filterFunction )
     -- Make sure we don't add duplicate filters
     for index, filter in ipairs(m_filterList) do
         if filter.FilterText == filterName then
@@ -504,86 +514,29 @@ function AddFilter(filterName:string, filterFunction)
     m_filterList[m_filterCount] = {FilterText=filterName, FilterFunction=filterFunction};
 end
 
-function AddFilterEntry(filterIndex:number)
+function AddFilterEntry( filterIndex:number )
     local filterEntry:table = {};
     Controls.DestinationFilterPulldown:BuildEntry( "FilterEntry", filterEntry );
     filterEntry.Button:SetText(m_filterList[filterIndex].FilterText);
     filterEntry.Button:SetVoids(i, filterIndex);
 end
 
-function OnFilterSelected(index:number, filterIndex:number)
+function UpdateFilterArrow()
+    if Controls.DestinationFilterPulldown:IsOpen() then
+        Controls.PulldownOpenedArrow:SetHide(true);
+        Controls.PulldownClosedArrow:SetHide(false);
+    else
+        Controls.PulldownOpenedArrow:SetHide(false);
+        Controls.PulldownClosedArrow:SetHide(true);
+    end
+end
+
+function OnFilterSelected( index:number, filterIndex:number )
     m_filterSelected = filterIndex;
     Controls.FilterButton:SetText(m_filterList[m_filterSelected].FilterText);
 
+    m_FilterSettingsChanged = true;
     Refresh();
-end
-
-function FilterByInternational()
-    -- Clear Filter
-    m_filteredDestinations = {};
-
-    -- Filter by Yield Index
-    for index, city in ipairs(m_unfilteredDestinations) do
-        local player:table = Players[city:GetOwner()];
-
-        if player:GetID() ~= Game.GetLocalPlayer() then
-            table.insert(m_filteredDestinations, city);
-        end
-    end
-end
-
-function FilterByCiv(civTypeID:number)
-    -- Clear Filter
-    m_filteredDestinations = {};
-
-    -- Filter by Civ Type ID
-    for index, city in ipairs(m_unfilteredDestinations) do
-        local playerConfig:table = PlayerConfigurations[city:GetOwner()];
-        if playerConfig:GetCivilizationTypeID() == civTypeID then
-            table.insert(m_filteredDestinations, city);
-        end
-    end
-end
-
-function FilterByResource(yieldIndex:number)
-    -- Clear Filter
-    m_filteredDestinations = {};
-
-    -- Filter by Yield Index
-    for index, city in ipairs(m_unfilteredDestinations) do
-        local yieldValue = GetYieldForCity(yieldIndex, city, true);
-
-        if (yieldValue ~= 0 ) then
-            table.insert(m_filteredDestinations, city);
-        end
-    end
-end
-
-function FilterByCityStates()
-    -- Clear Filter
-    m_filteredDestinations = {};
-
-    -- Filter only cities which aren't full civs meaning they're city-states
-    for index, city in ipairs(m_unfilteredDestinations) do
-        local playerConfig:table = PlayerConfigurations[city:GetOwner()];
-        if playerConfig:GetCivilizationLevelTypeID() ~= CivilizationLevelTypes.CIVILIZATION_LEVEL_FULL_CIV then
-            table.insert(m_filteredDestinations, city);
-        end
-    end
-end
-
-function FilterByCityStatesWithTradeQuest()
-    -- Clear Filter
-    m_filteredDestinations = {};
-
-    -- Filter only cities which aren't full civs meaning they're city-states
-    for index, city in ipairs(m_unfilteredDestinations) do
-        local player:table = Players[city:GetOwner()];
-
-        if (IsCityStateWithTradeQuest( player )) then
-            table.insert(m_filteredDestinations, city);
-        end
-    end
 end
 
 -- ===========================================================================
@@ -722,39 +675,6 @@ end
 -- ===========================================================================
 --  General Helper functions
 -- ===========================================================================
-
--- Checks if the player is a civ, other than the local player
-function IsOtherCiv( player:table )
-    if player:GetID() ~= Game.GetLocalPlayer() then
-        return true
-    end
-
-    return false
-end
-
-function IsCityState( player:table )
-    local playerInfluence:table = player:GetInfluence();
-    if  playerInfluence:CanReceiveInfluence() then
-        return true
-    end
-
-    return false
-end
-
-function IsCityStateWithTradeQuest( player:table )
-    local questsManager : table = Game.GetQuestsManager();
-    local questTooltip  : string = Locale.Lookup("LOC_CITY_STATES_QUESTS");
-    if (questsManager ~= nil and Game.GetLocalPlayer() ~= nil) then
-        local tradeRouteQuestInfo:table = GameInfo.Quests["QUEST_SEND_TRADE_ROUTE"];
-        if (tradeRouteQuestInfo ~= nil) then
-            if (questsManager:HasActiveQuestFromPlayer(Game.GetLocalPlayer(), player:GetID(), tradeRouteQuestInfo.Index)) then
-                return true
-            end
-        end
-    end
-
-    return false
-end
 
 -- ---------------------------------------------------------------------------
 -- Trade route helper functions
@@ -900,174 +820,89 @@ function RequestTradeRoute()
     return false;
 end
 
-function UpdateFilterArrow()
-    if Controls.DestinationFilterPulldown:IsOpen() then
-        Controls.PulldownOpenedArrow:SetHide(true);
-        Controls.PulldownClosedArrow:SetHide(false);
-    else
-        Controls.PulldownOpenedArrow:SetHide(false);
-        Controls.PulldownClosedArrow:SetHide(true);
-    end
-end
-
 -- ---------------------------------------------------------------------------
 -- Sort bar insert buttons
 -- ---------------------------------------------------------------------------
-function OnSortByFood()
+
+function OnGeneralSortBy(descArrowControl, sortByID)
     -- If shift is not being pressed, reset sort settings
     if not m_shiftDown then
         m_SortBySettings = {};
     end
 
     -- Sort based on currently showing icon toggled
-    if Controls.FoodDescArrow:IsHidden() then
-        InsertSortEntry(SORT_BY_ID.FOOD, SORT_DESCENDING, m_SortBySettings);
+    if descArrowControl:IsHidden() then
+        InsertSortEntry(sortByID, SORT_DESCENDING, m_SortBySettings);
     else
-        InsertSortEntry(SORT_BY_ID.FOOD, SORT_ASCENDING, m_SortBySettings);
+        InsertSortEntry(sortByID, SORT_ASCENDING, m_SortBySettings);
     end
 
+    m_SortSettingsChanged = true
     Refresh();
+end
+
+function OnSortByFood()
+    OnGeneralSortBy(Controls.FoodDescArrow, SORT_BY_ID.FOOD)
 end
 
 function OnSortByProduction()
-    -- If shift is not being pressed, reset sort settings
-    if not m_shiftDown then
-        m_SortBySettings = {};
-    end
-
-    -- Sort based on currently showing icon toggled
-    if Controls.ProductionDescArrow:IsHidden() then
-        InsertSortEntry(SORT_BY_ID.PRODUCTION, SORT_DESCENDING, m_SortBySettings);
-    else
-        InsertSortEntry(SORT_BY_ID.PRODUCTION, SORT_ASCENDING, m_SortBySettings);
-    end
-
-    Refresh();
+    OnGeneralSortBy(Controls.ProductionDescArrow, SORT_BY_ID.PRODUCTION)
 end
 
 function OnSortByGold()
-    -- If shift is not being pressed, reset sort settings
-    if not m_shiftDown then
-        m_SortBySettings = {};
-    end
-
-    -- Sort based on currently showing icon toggled
-    if Controls.GoldDescArrow:IsHidden() then
-        InsertSortEntry(SORT_BY_ID.GOLD, SORT_DESCENDING, m_SortBySettings);
-    else
-        InsertSortEntry(SORT_BY_ID.GOLD, SORT_ASCENDING, m_SortBySettings);
-    end
-
-    Refresh();
+    OnGeneralSortBy(Controls.GoldDescArrow, SORT_BY_ID.GOLD)
 end
 
 function OnSortByScience()
-    -- If shift is not being pressed, reset sort settings
-    if not m_shiftDown then
-        m_SortBySettings = {};
-    end
-
-    -- Sort based on currently showing icon toggled
-    if Controls.ScienceDescArrow:IsHidden() then
-        InsertSortEntry(SORT_BY_ID.SCIENCE, SORT_DESCENDING, m_SortBySettings);
-    else
-        InsertSortEntry(SORT_BY_ID.SCIENCE, SORT_ASCENDING, m_SortBySettings);
-    end
-
-    Refresh();
+    OnGeneralSortBy(Controls.ScienceDescArrow, SORT_BY_ID.SCIENCE)
 end
 
 function OnSortByCulture()
-    -- If shift is not being pressed, reset sort settings
-    if not m_shiftDown then
-        m_SortBySettings = {};
-    end
-
-    -- Sort based on currently showing icon toggled
-    if Controls.CultureDescArrow:IsHidden() then
-        InsertSortEntry(SORT_BY_ID.CULTURE, SORT_DESCENDING, m_SortBySettings);
-    else
-        InsertSortEntry(SORT_BY_ID.CULTURE, SORT_ASCENDING, m_SortBySettings);
-    end
-
-    Refresh();
+    OnGeneralSortBy(Controls.CultureDescArrow, SORT_BY_ID.CULTURE)
 end
 
 function OnSortByFaith()
-    -- If shift is not being pressed, reset sort settings
-    if not m_shiftDown then
-        m_SortBySettings = {};
-    end
-
-    -- Sort based on currently showing icon toggled
-    if Controls.FaithDescArrow:IsHidden() then
-        InsertSortEntry(SORT_BY_ID.FAITH, SORT_DESCENDING, m_SortBySettings);
-    else
-        InsertSortEntry(SORT_BY_ID.FAITH, SORT_ASCENDING, m_SortBySettings);
-    end
-
-    Refresh();
+    OnGeneralSortBy(Controls.FaithDescArrow, SORT_BY_ID.FAITH)
 end
 
 function OnSortByTurnsToComplete()
-    -- If shift is not being pressed, reset sort settings
-    if not m_shiftDown then
-        m_SortBySettings = {};
-    end
-
-    -- Sort based on currently showing icon toggled
-    if Controls.TurnsToCompleteDescArrow:IsHidden() then
-        InsertSortEntry(SORT_BY_ID.TURNS_TO_COMPLETE, SORT_DESCENDING, m_SortBySettings);
-    else
-        InsertSortEntry(SORT_BY_ID.TURNS_TO_COMPLETE, SORT_ASCENDING, m_SortBySettings);
-    end
-
-    Refresh();
+    OnGeneralSortBy(Controls.TurnsToCompleteDescArrow, SORT_BY_ID.TURNS_TO_COMPLETE)
 end
 
 -- ---------------------------------------------------------------------------
 -- Sort bar delete buttons
 -- ---------------------------------------------------------------------------
-function OnNotSortByFood()
-    RemoveSortEntry( SORT_BY_ID.FOOD, m_SortBySettings);
-
+function OnGeneralNotSortBy(sortByID)
+    RemoveSortEntry(sortByID, m_SortBySettings);
     Refresh();
+end
+
+function OnNotSortByFood()
+   OnGeneralNotSortBy(SORT_BY_ID.FOOD)
 end
 
 function OnNotSortByProduction()
-    RemoveSortEntry( SORT_BY_ID.PRODUCTION, m_SortBySettings);
-
-    Refresh();
+    OnGeneralNotSortBy(SORT_BY_ID.PRODUCTION)
 end
 
 function OnNotSortByGold()
-    RemoveSortEntry( SORT_BY_ID.GOLD, m_SortBySettings);
-
-    Refresh();
+    OnGeneralNotSortBy(SORT_BY_ID.GOLD)
 end
 
 function OnNotSortByScience()
-    RemoveSortEntry( SORT_BY_ID.SCIENCE, m_SortBySettings);
-
-    Refresh();
+    OnGeneralNotSortBy(SORT_BY_ID.SCIENCE)
 end
 
 function OnNotSortByCulture()
-    RemoveSortEntry( SORT_BY_ID.CULTURE, m_SortBySettings);
-
-    Refresh();
+    OnGeneralNotSortBy(SORT_BY_ID.CULTURE)
 end
 
 function OnNotSortByFaith()
-    RemoveSortEntry( SORT_BY_ID.FAITH, m_SortBySettings);
-
-    Refresh();
+    OnGeneralNotSortBy(SORT_BY_ID.FAITH)
 end
 
 function OnNotSortByTurnsToComplete()
-    RemoveSortEntry( SORT_BY_ID.TURNS_TO_COMPLETE, m_SortBySettings);
-
-    Refresh();
+    OnGeneralNotSortBy(SORT_BY_ID.TURNS_TO_COMPLETE)
 end
 
 -- ===========================================================================
@@ -1246,6 +1081,9 @@ function OnLocalPlayerTurnEnd()
     if(GameConfiguration.IsHotseat()) then
         OnClose();
     end
+
+    -- Clear cache to keep memory used low
+    CacheEmpty()
 end
 
 function OnUnitActivityChanged( playerID :number, unitID :number, eActivityType :number)
