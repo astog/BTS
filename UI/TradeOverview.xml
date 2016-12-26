@@ -329,7 +329,7 @@
             <Label ID="OriginNoBenefitsLabel" Size="50,parent" Offset="0,4" Anchor="C,B" Style="FontNormal14" String="LOC_ROUTECHOOSER_NO_BENEFITS_FROM_ROUTE"/> -->
           </Stack>
 
-          <Button ID="CancelAutomation" ToolTip="LOC_TRADE_CANCEL_AUTOMATION_TOOLTIP" Hidden="1" Anchor="L,T" Offset="3,3" Style="ClosePanelButtonSmall" Size="26,25"/>
+          <Button ID="CancelAutomation" ToolTip="LOC_TRADE_CANCEL_AUTOMATION_TOOLTIP" Hidden="1" Anchor="L,T" Offset="3,3" Style="BackButtonSmall"/>
       </GridButton>
     </Container>
   </Instance>

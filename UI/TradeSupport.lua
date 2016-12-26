@@ -1,3 +1,8 @@
+local BACKDROP_DARKER_OFFSET = -85
+local BACKDROP_DARKER_OPACITY = 238
+local BACKDROP_BRIGHTER_OFFSET = 90
+local BACKDROP_BRIGHTER_OPACITY = 250
+
 -- ===========================================================================
 --  Local Constants
 -- ===========================================================================
@@ -256,12 +261,17 @@ end
 -- ===========================================================================
 
 function AutomateTrader(traderID:number, isAutomated:boolean, sortSettings:table)
+    print("Automate trader " .. traderID)
+
+    -- Reset automated settings
     m_TradersAutomatedSettings[traderID] = {};
+
     m_TradersAutomatedSettings[traderID].IsAutomated = isAutomated;
 
     if sortSettings ~= nil and tableLength(sortSettings) > 0 then
         m_TradersAutomatedSettings[traderID].SortSettings = sortSettings;
     else
+        -- Clear entry
         m_TradersAutomatedSettings[traderID].SortSettings = nil;
     end
 
@@ -288,8 +298,8 @@ function RenewTradeRoutes()
     local renewedRoute:boolean = false;
 
     local pPlayerUnits:table = Players[Game.GetLocalPlayer()]:GetUnits();
+    -- Find Each Trade Unit
     for i, pUnit in pPlayerUnits:Members() do
-        -- Find Each Trade Unit
         local unitInfo:table = GameInfo.Units[pUnit:GetUnitType()];
         local unitID:number = pUnit:GetID();
         if unitInfo.MakeTradeRoute == true and (not pUnit:HasPendingOperations()) then
@@ -428,11 +438,6 @@ function CacheRoutesInfo(tRoutes)
 end
 
 function CacheRoute(routeInfo)
-    local originPlayer:table = Players[routeInfo.OriginCityPlayer];
-    local originCity:table = originPlayer:GetCities():FindID(routeInfo.OriginCityID);
-    local destinationPlayer:table = Players[routeInfo.DestinationCityPlayer];
-    local destinationCity:table = destinationPlayer:GetCities():FindID(routeInfo.DestinationCityID);
-
     local key:string = GetRouteKey(routeInfo);
     -- print("Key for " .. GetTradeRouteString(routeInfo) .. " is " .. key)
 
@@ -461,6 +466,11 @@ function CacheRoute(routeInfo)
     m_Cache[key].NetOriginYield = netOriginYield
 
     -------------------------------------------------
+    -- Trading Post
+    -------------------------------------------------
+    m_Cache[key].HasTradingPost = GetRouteHasTradingPost(routeInfo)
+
+    -------------------------------------------------
     -- Advanced Info - Length, trips, turns
     -------------------------------------------------
     local tradePathLength, tripsToDestination, turnsToCompleteRoute = GetAdvancedRouteInfo(routeInfo);
@@ -478,46 +488,34 @@ function CacheRoute(routeInfo)
 end
 
 function CachePlayer(playerID)
-    local pPlayer:table = Players[playerID];
-    local localPlayerID = Game.GetLocalPlayer()
-
     -- Make entry if none exists
     if m_Cache.Players == nil then m_Cache.Players = {} end
+
     if m_Cache.Players[playerID] == nil then
+
+        m_Cache.Players[playerID] = {}
 
         -------------------------------------------------
         -- Active Route
         -------------------------------------------------
-        local hasTradeRoute:boolean = false;
-        -- No need to check for local player cities. tour and vis bonuses don't apply
-        if playerID ~= Game.GetLocalPlayer() then
-            local playerCities:table = pPlayer:GetCities();
-            for _, city in playerCities:Members() do
-                if city:GetTrade():HasActiveTradingPost(localPlayerID) then
-                    hasTradeRoute = true
-                    break
-                end
-            end
-        end
+        m_Cache.Players[playerID].HasActiveRoute = GetHasActiveRoute(playerID);
 
         -------------------------------------------------
         -- Visibility Index
         -------------------------------------------------
-        local visibilityIndex:number = Players[localPlayerID]:GetDiplomacy():GetVisibilityOn(playerID);
+        m_Cache.Players[playerID].VisibilityIndex = GetVisibilityIndex(playerID);
 
         -------------------------------------------------
-        -- Icons
+        -- Icons, colors
         -------------------------------------------------
-        -- TODO - Add this
+        local textureOffsetX, textureOffsetY, textureSheet, tooltip = GetPlayerIconInfo(playerID)
+        local backColor, frontColor, darkerBackColor, brighterBackColor = GetPlayerColorInfo(playerID)
 
+        m_Cache.Players[playerID].Icon = { textureOffsetX, textureOffsetY, textureSheet, tooltip }
+        m_Cache.Players[playerID].Colors = { backColor, frontColor, darkerBackColor, brighterBackColor }
 
         -------------------------------------------------
-        -- Add them to cache
-        m_Cache.Players[playerID] = {
-            HasActiveRoute = hasTradeRoute,
-            VisibilityIndex = visibilityIndex,
-            TurnBuilt = Game.GetCurrentGameTurn()
-        }
+        m_Cache.Players[playerID].TurnBuilt = Game.GetCurrentGameTurn()
     end
 end
 
@@ -555,7 +553,6 @@ function SortTradeRoutes( tradeRoutes:table, sortSettings:table, settingsChanged
     -- print("Total calls: " .. debug_total_calls)
     -- debug_func_calls = 0;
 end
-
 
 function GetTopRouteFromSortSettings( tradeRoutes:table, sortSettings:table )
     -- if tableLength(sortSettings) > 0 then
@@ -915,6 +912,25 @@ function GetRouteInfo(routeInfo, checkCache)
     end
 end
 
+function GetRouteHasTradingPost(routeInfo, checkCache)
+    if checkCache then
+        local key = GetRouteKey(routeInfo)
+        if m_Cache[key] ~= nil and m_Cache[key].TurnBuilt <= Game.GetCurrentGameTurn()then
+            -- print("CACHE HIT for " .. GetTradeRouteString(routeInfo))
+            return m_Cache[key].HasTradingPost
+        else
+            print("CACHE MISS for " .. GetTradeRouteString(routeInfo))
+            CacheRoute(routeInfo)
+            return m_Cache[key].HasTradingPost
+        end
+    else
+        local destinationPlayer:table = Players[routeInfo.DestinationCityPlayer];
+        local destinationCity:table = destinationPlayer:GetCities():FindID(routeInfo.DestinationCityID);
+
+        return destinationCity:GetTrade():HasActiveTradingPost(routeInfo.OriginCityPlayer)
+    end
+end
+
 function GetHasActiveRoute(playerID, checkCache)
     if checkCache then
         if m_Cache.Players ~= nil and m_Cache.Players[playerID] ~= nil and m_Cache.Players[playerID].TurnBuilt <= Game.GetCurrentGameTurn() then
@@ -949,6 +965,72 @@ function GetVisibilityIndex(playerID, checkCache)
         end
     else
         return Players[Game.GetLocalPlayer()]:GetDiplomacy():GetVisibilityOn(playerID);
+    end
+end
+
+function GetPlayerIconInfo(playerID, checkCache)
+    if checkCache then
+        if m_Cache.Players ~= nil and m_Cache.Players[playerID] ~= nil and m_Cache.Players[playerID].TurnBuilt <= Game.GetCurrentGameTurn() then
+            -- print("CACHE HIT for player " .. playerID)
+            return unpack(m_Cache.Players[playerID].Icon)
+        else
+            print("CACHE MISS for player " .. playerID)
+            CachePlayer(playerID)
+            return unpack(m_Cache.Players[playerID].Icon)
+        end
+    else
+        local pPlayer = Players[playerID];
+        local playerConfig:table = PlayerConfigurations[playerID];
+        local playerInfluence:table = pPlayer:GetInfluence();
+        local playerIconString:string;
+        if playerConfig ~= nil then
+            if not playerInfluence:CanReceiveInfluence() then
+                -- Civilizations
+                playerIconString = "ICON_" .. playerConfig:GetCivilizationTypeName();
+            else
+                -- City States
+                local leader:string = playerConfig:GetLeaderTypeName();
+                local leaderInfo:table  = GameInfo.Leaders[leader];
+
+                if (leader == "LEADER_MINOR_CIV_SCIENTIFIC" or leaderInfo.InheritFrom == "LEADER_MINOR_CIV_SCIENTIFIC") then
+                    playerIconString = "ICON_CITYSTATE_SCIENCE";
+                elseif (leader == "LEADER_MINOR_CIV_RELIGIOUS" or leaderInfo.InheritFrom == "LEADER_MINOR_CIV_RELIGIOUS") then
+                    playerIconString = "ICON_CITYSTATE_FAITH";
+                elseif (leader == "LEADER_MINOR_CIV_TRADE" or leaderInfo.InheritFrom == "LEADER_MINOR_CIV_TRADE") then
+                    playerIconString = "ICON_CITYSTATE_TRADE";
+                elseif (leader == "LEADER_MINOR_CIV_CULTURAL" or leaderInfo.InheritFrom == "LEADER_MINOR_CIV_CULTURAL") then
+                    playerIconString = "ICON_CITYSTATE_CULTURE";
+                elseif (leader == "LEADER_MINOR_CIV_MILITARISTIC" or leaderInfo.InheritFrom == "LEADER_MINOR_CIV_MILITARISTIC") then
+                    playerIconString = "ICON_CITYSTATE_MILITARISTIC";
+                elseif (leader == "LEADER_MINOR_CIV_INDUSTRIAL" or leaderInfo.InheritFrom == "LEADER_MINOR_CIV_INDUSTRIAL") then
+                    playerIconString = "ICON_CITYSTATE_INDUSTRIAL";
+                end
+            end
+
+            local playerDescription:string = playerConfig:GetCivilizationDescription();
+            local textureOffsetX, textureOffsetY, textureSheet = IconManager:FindIconAtlas(playerIconString, 30)
+
+            return textureOffsetX, textureOffsetY, textureSheet, playerDescription;
+        end
+    end
+end
+
+function GetPlayerColorInfo(playerID, checkCache)
+    if checkCache then
+        if m_Cache.Players ~= nil and m_Cache.Players[playerID] ~= nil and m_Cache.Players[playerID].TurnBuilt <= Game.GetCurrentGameTurn() then
+            -- print("CACHE HIT for player " .. playerID)
+            return unpack(m_Cache.Players[playerID].Colors)
+        else
+            print("CACHE MISS for player " .. playerID)
+            CachePlayer(playerID)
+            return unpack(m_Cache.Players[playerID].Colors)
+        end
+    else
+        local backColor, frontColor = UI.GetPlayerColors(playerID)
+        local darkerBackColor = DarkenLightenColor(backColor, BACKDROP_DARKER_OFFSET, BACKDROP_DARKER_OPACITY);
+        local brighterBackColor = DarkenLightenColor(backColor, BACKDROP_BRIGHTER_OFFSET, BACKDROP_BRIGHTER_OPACITY);
+
+        return backColor, frontColor, darkerBackColor, brighterBackColor
     end
 end
 

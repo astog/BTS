@@ -49,6 +49,7 @@ local m_shiftDown:boolean = false;
 -- Stores the sort settings.
 local m_SortBySettings:table = {};
 local m_SortSettingsChanged:boolean = false;
+local m_FilterSettingsChanged:boolean = false;
 
 -- Default is ascending in turns to complete trade route
 m_SortBySettings[1] = {
@@ -99,20 +100,25 @@ end
 
 function RefreshTopPanel()
     if m_destinationCity and m_originCity then
+        local tradeRoute = {
+            OriginCityPlayer        = m_originCity:GetOwner(),
+            OriginCityID            = m_originCity:GetID(),
+            DestinationCityPlayer   = m_destinationCity:GetOwner(),
+            DestinationCityID       = m_destinationCity:GetID()
+        };
+
         -- Update City Banner
         Controls.CityName:SetText(Locale.ToUpper(m_destinationCity:GetName()));
 
-        local backColor:number, frontColor:number  = UI.GetPlayerColors( m_destinationCity:GetOwner() );
-        local darkerBackColor:number = DarkenLightenColor(backColor,(-85),238);
-        local brighterBackColor:number = DarkenLightenColor(backColor,90,255);
+        local backColor, frontColor, darkerBackColor, brighterBackColor = GetPlayerColorInfo(m_destinationCity:GetOwner(), true);
 
-        Controls.BannerBase:SetColor( backColor );
-        Controls.BannerDarker:SetColor( darkerBackColor );
-        Controls.BannerLighter:SetColor( brighterBackColor );
-        Controls.CityName:SetColor( frontColor );
+        Controls.BannerBase:SetColor(backColor);
+        Controls.BannerDarker:SetColor(darkerBackColor);
+        Controls.BannerLighter:SetColor(brighterBackColor);
+        Controls.CityName:SetColor(frontColor);
 
         -- Update Trading Post Icon
-        if m_destinationCity:GetTrade():HasActiveTradingPost(m_originCity:GetOwner()) then
+        if GetRouteHasTradingPost(tradeRoute, true) then
             Controls.TradingPostIcon:SetHide(false);
         else
             Controls.TradingPostIcon:SetHide(true);
@@ -133,16 +139,9 @@ function RefreshTopPanel()
             end
         end
 
-        local tradeRoute = {
-            OriginCityPlayer        = m_originCity:GetOwner(),
-            OriginCityID            = m_originCity:GetID(),
-            DestinationCityPlayer   = m_destinationCity:GetOwner(),
-            DestinationCityID       = m_destinationCity:GetID()
-        };
-
         -- Update turns to complete route
-        local turnsToCompleteRoute = GetTurnsToComplete(tradeRoute);
-        Controls.TurnsToComplete:SetColor( frontColor );
+        local tradePathLength, tripsToDestination, turnsToCompleteRoute = GetRouteInfo(tradeRoute, true);
+        Controls.TurnsToComplete:SetColor(frontColor);
         Controls.TurnsToComplete:SetText(turnsToCompleteRoute);
 
         -- Update Resources
@@ -234,7 +233,7 @@ function RefreshChooserPanel()
                         DestinationCityID       = destinationCityID
                     };
 
-                    table.insert(m_AvailableTradeRoutes, tradeRoute);
+                    m_AvailableTradeRoutes[#m_AvailableTradeRoutes + 1] = tradeRoute;
                 end
             end
         end
@@ -244,7 +243,7 @@ function RefreshChooserPanel()
 
         m_TurnBuiltRouteTable = Game.GetCurrentGameTurn()
     else
-        -- print("OPT: Not rebuilding routes")
+        print("OPT: Not rebuilding routes")
     end
 
     -- Update Filters
@@ -263,9 +262,14 @@ function RefreshStack()
     m_RouteChoiceIM:ResetInstances();
 
     local tradeManager:table = Game.GetTradeManager();
+    local tradeRoutes:table;
 
     -- Filter Destinations by active Filter
-    local tradeRoutes = FilterTradeRoutes(m_AvailableTradeRoutes);
+    if m_FilterSettingsChanged then
+        tradeRoutes = FilterTradeRoutes(m_AvailableTradeRoutes);
+    else
+        tradeRoutes = m_AvailableTradeRoutes;
+    end
 
     -- Send Trade Route Paths to Engine (after filter applied)
     UILens.ClearLayerHexes(LensLayers.TRADE_ROUTE);
@@ -332,19 +336,15 @@ function AddRouteToDestinationStack(routeInfo:table)
     -- Setup city banner
     cityEntry.CityName:SetText(Locale.ToUpper(destinationCity:GetName()));
 
-    local backColor:number, frontColor:number  = UI.GetPlayerColors( routeInfo.DestinationCityPlayer );
-    local darkerBackColor:number = DarkenLightenColor(backColor,(-85),238);
-    local brighterBackColor:number = DarkenLightenColor(backColor,90,255);
+    local backColor, frontColor, darkerBackColor, brighterBackColor = GetPlayerColorInfo(routeInfo.DestinationCityPlayer, true);
 
-    cityEntry.BannerBase:SetColor( backColor );
-    cityEntry.BannerDarker:SetColor( darkerBackColor );
-    cityEntry.BannerLighter:SetColor( brighterBackColor );
-    cityEntry.CityName:SetColor( frontColor );
-
-    cityEntry.TradingPostIcon:SetColor( frontColor );
+    cityEntry.BannerBase:SetColor(backColor);
+    cityEntry.BannerDarker:SetColor(darkerBackColor);
+    cityEntry.BannerLighter:SetColor(brighterBackColor);
+    cityEntry.CityName:SetColor(frontColor);
 
     -- Update Trading Post Icon
-    if destinationCity:GetTrade():HasActiveTradingPost(routeInfo.OriginCityPlayer) then
+    if GetRouteHasTradingPost(routeInfo, true) then
         cityEntry.TradingPostIcon:SetHide(false);
     else
         cityEntry.TradingPostIcon:SetHide(true);
@@ -365,12 +365,12 @@ function AddRouteToDestinationStack(routeInfo:table)
         end
     end
 
-    local tradePathLength, tripsToDestination, turnsToCompleteRoute = GetRouteInfo(routeInfo);
+    local tradePathLength, tripsToDestination, turnsToCompleteRoute = GetRouteInfo(routeInfo, true);
     tooltipString = (   Locale.Lookup("LOC_TRADE_TURNS_REMAINING_HELP_TOOLTIP") .. "[NEWLINE]" ..
-                            Locale.Lookup("LOC_TRADE_TURNS_REMAINING_TOOLTIP_BREAKER") .. "[NEWLINE]" ..
-                            Locale.Lookup("LOC_TRADE_TURNS_REMAINING_ROUTE_LENGTH_TOOLTIP", tradePathLength) .. "[NEWLINE]" ..
-                            Locale.Lookup("LOC_TRADE_TURNS_REMAINING_TRIPS_COUNT_TOOLTIP", tripsToDestination) .. "[NEWLINE]" ..
-                            Locale.Lookup("LOC_TRADE_TURNS_REMAINING_TURN_COMPLETION_ALT_TOOLTIP", turnsToCompleteRoute, (Game.GetCurrentGameTurn() + turnsToCompleteRoute)) );
+                        Locale.Lookup("LOC_TRADE_TURNS_REMAINING_TOOLTIP_BREAKER") .. "[NEWLINE]" ..
+                        Locale.Lookup("LOC_TRADE_TURNS_REMAINING_ROUTE_LENGTH_TOOLTIP", tradePathLength) .. "[NEWLINE]" ..
+                        Locale.Lookup("LOC_TRADE_TURNS_REMAINING_TRIPS_COUNT_TOOLTIP", tripsToDestination) .. "[NEWLINE]" ..
+                        Locale.Lookup("LOC_TRADE_TURNS_REMAINING_TURN_COMPLETION_ALT_TOOLTIP", turnsToCompleteRoute, (Game.GetCurrentGameTurn() + turnsToCompleteRoute)) );
 
     cityEntry.TurnsToComplete:SetText(turnsToCompleteRoute);
     cityEntry.TurnsToComplete:SetToolTipString( tooltipString );
@@ -548,6 +548,7 @@ function OnFilterSelected( index:number, filterIndex:number )
     m_filterSelected = filterIndex;
     Controls.FilterButton:SetText(m_filterList[m_filterSelected].FilterText);
 
+    m_FilterSettingsChanged = true
     m_SortSettingsChanged = true;
     Refresh();
 end

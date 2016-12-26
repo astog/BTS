@@ -142,8 +142,6 @@ function RebuildAvailableTradeRoutesTable()
     local players:table = Game:GetPlayers();
     local tradeManager:table = Game.GetTradeManager();
 
-    print("Group setting: " .. m_groupByList[m_groupBySelected].groupByString);
-
     for _, sourceCity in sourceCities:Members() do
         local sourceCityID:number = sourceCity:GetID();
         for _, destinationPlayer in ipairs(players) do
@@ -169,9 +167,7 @@ function RebuildAvailableTradeRoutesTable()
             end
         end
     end
-
-    local postRefreshClock = os.clock();
-    print("Time taken to build routes: " .. (postRefreshClock- preRefreshClock) .. " secs");
+    print("Total routes = " .. #m_AvailableTradeRoutes)
 
     m_HasBuiltTradeRouteTable = true;
     m_LastTurnBuiltTradeRouteTable = Game.GetCurrentGameTurn();
@@ -404,6 +400,7 @@ function ViewAvailableRoutes()
     if (not m_HasBuiltTradeRouteTable) or Game.GetCurrentGameTurn() > m_LastTurnBuiltTradeRouteTable then
         print("Trade Route table last built on: " .. m_LastTurnBuiltTradeRouteTable .. ". Current game turn: " .. Game.GetCurrentGameTurn());
         RebuildAvailableTradeRoutesTable();
+        print("Time taken to build routes: " .. (os.clock()- preRefreshClock) .. " sec(s)");
 
         -- Just rebuilt base routes table. need to do everything again
         m_SortSettingsChanged = true;
@@ -415,67 +412,66 @@ function ViewAvailableRoutes()
 
     -- Cache routes info.
     if CacheRoutesInfo(m_AvailableTradeRoutes) then
-        print("Time taken till cache: " .. (os.clock() - preRefreshClock) .. " secs")
-    end
-
-    -- Group routes.
-    if m_GroupSettingsChanged then
-        m_AvailableGroupedRoutes = GroupRoutes(m_AvailableTradeRoutes, m_groupByList[m_groupBySelected].groupByID)
-        print("Time taken till group: " .. (os.clock() - preRefreshClock) .. " secs")
-    else
-        print("OPT: Not grouping routes")
+        print("Time taken till cache: " .. (os.clock() - preRefreshClock) .. " sec(s)")
     end
 
     -- Filter the routes
     if m_FilterSettingsChanged then
         m_FinalTradeRoutes = FilterTradeRoutes(m_AvailableTradeRoutes);
-        print("Time taken till filter: " .. (os.clock() - preRefreshClock) .. " secs")
+        print("Time taken till filter: " .. (os.clock() - preRefreshClock) .. " sec(s)")
+
+        -- Need to regroup routes
+        m_GroupSettingsChanged = true
     else
         print("OPT: Not refiltering routes")
     end
 
     -- Sort and display the routes
     if m_groupByList[m_groupBySelected].groupByID ~= GROUP_BY_SETTINGS.NONE then
-        -- Filter and sort are tied here. Need to rebuild if the grouping occured
-        if m_GroupSettingsChanged or m_FilterSettingsChanged or m_SortSettingsChanged then
-            m_GroupedFinalRoutes = {};
-            -- Filter and then sort the routes. TODO - possible see to untie them?
-            for i, routes in ipairs(m_AvailableGroupedRoutes) do
-                -- Filter the routes
-                local filteredRoutes = FilterTradeRoutes(routes)
+        -- Group routes. Use the filtered list of routes
+        if m_GroupSettingsChanged then
+            m_AvailableGroupedRoutes = GroupRoutes(m_FinalTradeRoutes, m_groupByList[m_groupBySelected].groupByID)
+            print("Time taken till group: " .. (os.clock() - preRefreshClock) .. " sec(s)")
 
-                -- Sort and insert into table
-                if filteredRoutes ~= nil then
-                    SortTradeRoutes(filteredRoutes, m_SortBySettings, m_SortSettingsChanged)
-                    table.insert(m_GroupedFinalRoutes, filteredRoutes)
-                end
-            end
-            print("Time taken till within group sort and filter: " .. (os.clock() - preRefreshClock) .. " secs")
+            -- Need to resort
+            m_SortSettingsChanged = true
         else
-            print("OPT: Not filtering and sorting within groups")
+            print("OPT: Not regrouping routes")
         end
 
-        -- Sort the order of groups. You need to do this AFTER each group has been sorted
-        SortGroupedRoutes(m_GroupedFinalRoutes, m_GroupSortBySettings, m_SortSettingsChanged);
-        print("Time taken till group sort: " .. (os.clock()- preRefreshClock) .. " secs");
+        -- Sort within each group, and then sort groups
+        if m_SortSettingsChanged then
+            -- Sort within each group
+            for i=1, #m_AvailableGroupedRoutes do
+                SortTradeRoutes(m_AvailableGroupedRoutes[i], m_SortBySettings, m_SortSettingsChanged)
+            end
+            print("Time taken till within group sort: " .. (os.clock() - preRefreshClock) .. " sec(s)")
 
-        for i, routes in ipairs(m_GroupedFinalRoutes) do
+            -- Sort the order of groups. You need to do this AFTER each group has been sorted
+            SortGroupedRoutes(m_AvailableGroupedRoutes, m_GroupSortBySettings, m_SortSettingsChanged);
+            print("Time taken till group sort: " .. (os.clock()- preRefreshClock) .. " sec(s)");
+        else
+            print("OPT: Not refiltering and resorting within groups")
+        end
+
+        -- Show the groups
+        for i=1, #m_AvailableGroupedRoutes do
             if m_groupByList[m_groupBySelected].groupByID == GROUP_BY_SETTINGS.ORIGIN then
-                local originPlayer:table = Players[routes[1].OriginCityPlayer];
-                local originCity:table = originPlayer:GetCities():FindID(routes[1].OriginCityID);
+                local originPlayer:table = Players[m_AvailableGroupedRoutes[i][1].OriginCityPlayer];
+                local originCity:table = originPlayer:GetCities():FindID(m_AvailableGroupedRoutes[i][1].OriginCityID);
 
-                DisplayGroup(routes, originCity);
+                DisplayGroup(m_AvailableGroupedRoutes[i], originCity);
             elseif m_groupByList[m_groupBySelected].groupByID == GROUP_BY_SETTINGS.DESTINATION then
-                local destinationPlayer:table = Players[routes[1].DestinationCityPlayer];
-                local destinationCity:table = destinationPlayer:GetCities():FindID(routes[1].DestinationCityID);
+                local destinationPlayer:table = Players[m_AvailableGroupedRoutes[i][1].DestinationCityPlayer];
+                local destinationCity:table = destinationPlayer:GetCities():FindID(m_AvailableGroupedRoutes[i][1].DestinationCityID);
 
-                DisplayGroup(routes, destinationCity);
+                DisplayGroup(m_AvailableGroupedRoutes[i], destinationCity);
             end
         end
     else
         if m_FinalTradeRoutes ~= nil then
             SortTradeRoutes(m_FinalTradeRoutes, m_GroupSortBySettings, (m_SortSettingsChanged or m_GroupSettingsChanged));
-            print("Time taken till sort: " .. (os.clock() - preRefreshClock) .. " secs")
+            print("Time taken till sort: " .. (os.clock() - preRefreshClock) .. " sec(s)")
 
             AddRouteInstancesFromTable(m_FinalTradeRoutes, SEMI_EXPAND_SETTINGS[GROUP_BY_SETTINGS.NONE]);
         end
@@ -598,21 +594,17 @@ function AddRouteInstanceFromRouteInfo( routeInfo:table )
 
 
     local routeInstance:table = m_RouteInstanceIM:GetInstance();
-    local destinationBackColor, destinationFrontColor = UI.GetPlayerColors(routeInfo.DestinationCityPlayer);
-    local originBackColor, originFrontColor = UI.GetPlayerColors(routeInfo.OriginCityPlayer);
-    local darkerBackColor:number = DarkenLightenColor(destinationBackColor,(-85),238);
-    local brighterBackColor:number = DarkenLightenColor(destinationBackColor,90,250);
+
+    local destinationBackColor, destinationFrontColor, darkerBackColor, brighterBackColor = GetPlayerColorInfo(routeInfo.DestinationCityPlayer, true);
+    local originBackColor, originFrontColor = GetPlayerColorInfo(routeInfo.OriginCityPlayer, true);
+    local tintBackColor = DarkenLightenColor(destinationBackColor, tintColorOffset, tintColorOpacity);
 
     -- Update colors
-    tintBackColor = DarkenLightenColor(destinationBackColor, tintColorOffset, tintColorOpacity);
-
     routeInstance.GridButton:SetColor(tintBackColor);
-    routeInstance.TurnsToComplete:SetColor( destinationFrontColor );
-
-    routeInstance.BannerBase:SetColor(  destinationBackColor );
-    routeInstance.BannerDarker:SetColor( darkerBackColor );
-    routeInstance.BannerLighter:SetColor( brighterBackColor );
-
+    routeInstance.TurnsToComplete:SetColor(destinationFrontColor);
+    routeInstance.BannerBase:SetColor(destinationBackColor);
+    routeInstance.BannerDarker:SetColor(darkerBackColor);
+    routeInstance.BannerLighter:SetColor(brighterBackColor);
     routeInstance.RouteLabel:SetColor(destinationFrontColor);
 
     -- Update Route Label
@@ -671,10 +663,10 @@ function AddRouteInstanceFromRouteInfo( routeInfo:table )
         end
     else
         -- Determine are diplomatic visibility status
-        local visibilityIndex:number = GetVisibilityIndex(playerID, true)
+        local visibilityIndex:number = GetVisibilityIndex(routeInfo.DestinationCityPlayer, true)
 
         -- Determine this player has a trade route with the local player
-        local hasTradeRoute:boolean = GetHasActiveRoute(routeInfo, true)
+        local hasTradeRoute:boolean = GetHasActiveRoute(routeInfo.DestinationCityPlayer, true)
 
         -- Display trade route tourism modifier
         local baseTourismModifier = GlobalParameters.TOURISM_TRADE_ROUTE_BONUS;
@@ -709,7 +701,7 @@ function AddRouteInstanceFromRouteInfo( routeInfo:table )
         routeInstance.TradingPostIndicator:SetHide(true);
     end
 
-    if destinationCity:GetTrade():HasActiveTradingPost(routeInfo.OriginCityPlayer) then
+    if GetRouteHasTradingPost(routeInfo, true) then
         routeInstance.TradingPostIndicator:SetAlpha(1.0);
         routeInstance.TradingPostIndicator:LocalizeAndSetToolTip("LOC_TRADE_OVERVIEW_TOOLTIP_TRADE_POST_ESTABLISHED");
     else
@@ -744,74 +736,86 @@ function AddRouteInstanceFromRouteInfo( routeInfo:table )
 
     routeInstance.TurnsToComplete:SetToolTipString( tooltipString );
 
-    -- Update Origin Civ Icon
-    local originPlayerConfig:table = PlayerConfigurations[routeInfo.OriginCityPlayer];
-    local originPlayerIconString:string = "ICON_" .. originPlayerConfig:GetCivilizationTypeName();
-    local textureOffsetX, textureOffsetY, textureSheet = IconManager:FindIconAtlas(originPlayerIconString, 30);
-    local secondaryColor, primaryColor = UI.GetPlayerColors( routeInfo.OriginCityPlayer );
-    routeInstance.OriginCivIcon:SetTexture(textureOffsetX, textureOffsetY, textureSheet);
-    routeInstance.OriginCivIcon:LocalizeAndSetToolTip( originPlayerConfig:GetCivilizationDescription() );
-    routeInstance.OriginCivIcon:SetColor( primaryColor );
-    routeInstance.OriginCivIconBacking:SetColor( secondaryColor );
+    local originTextureOffsetX, originTextureOffsetY, originTextureSheet, originTooltip = GetPlayerIconInfo(routeInfo.OriginCityPlayer, true)
+    local destinationTextureOffsetX, destinationTextureOffsetY, destinationTextureSheet, destinationTooltip = GetPlayerIconInfo(routeInfo.DestinationCityPlayer, true)
 
-    local destinationPlayerConfig:table = PlayerConfigurations[routeInfo.DestinationCityPlayer];
-    local destinationPlayerInfluence:table = Players[destinationPlayer:GetID()]:GetInfluence();
-    if not destinationPlayerInfluence:CanReceiveInfluence() then
-        -- Destination Icon for Civilizations
-        if destinationPlayerConfig ~= nil then
-            local iconString:string = "ICON_" .. destinationPlayerConfig:GetCivilizationTypeName();
-            local textureOffsetX, textureOffsetY, textureSheet = IconManager:FindIconAtlas(iconString, 30);
-            routeInstance.DestinationCivIcon:SetTexture(textureOffsetX, textureOffsetY, textureSheet);
-            routeInstance.DestinationCivIcon:LocalizeAndSetToolTip( destinationPlayerConfig:GetCivilizationDescription() );
-        end
+    -- Origin Civ Icon
+    routeInstance.OriginCivIcon:SetTexture(originTextureOffsetX, originTextureOffsetY, originTextureSheet);
+    routeInstance.OriginCivIcon:LocalizeAndSetToolTip(originTooltip);
+    routeInstance.OriginCivIcon:SetColor(originFrontColor);
+    routeInstance.OriginCivIconBacking:SetColor(originBackColor);
 
-        local secondaryColor, primaryColor = UI.GetPlayerColors( destinationPlayer:GetID() );
-        routeInstance.DestinationCivIcon:SetColor(primaryColor);
-        routeInstance.DestinationCivIconBacking:SetColor(secondaryColor);
-    else
-        -- Destination Icon for City States
-        if destinationPlayerConfig ~= nil then
-            local secondaryColor, primaryColor = UI.GetPlayerColors( destinationPlayer:GetID() );
-            local leader        :string = destinationPlayerConfig:GetLeaderTypeName();
-            local leaderInfo    :table  = GameInfo.Leaders[leader];
+    -- Destination Civ Icon
+    routeInstance.DestinationCivIcon:SetTexture(destinationTextureOffsetX, destinationTextureOffsetY, destinationTextureSheet);
+    routeInstance.DestinationCivIcon:SetColor(destinationFrontColor);
+    routeInstance.DestinationCivIconBacking:SetColor(destinationBackColor);
+    routeInstance.DestinationCivIcon:LocalizeAndSetToolTip(destinationTooltip);
 
-            local iconString:string;
-            if (leader == "LEADER_MINOR_CIV_SCIENTIFIC" or leaderInfo.InheritFrom == "LEADER_MINOR_CIV_SCIENTIFIC") then
-                iconString = "ICON_CITYSTATE_SCIENCE";
-            elseif (leader == "LEADER_MINOR_CIV_RELIGIOUS" or leaderInfo.InheritFrom == "LEADER_MINOR_CIV_RELIGIOUS") then
-                iconString = "ICON_CITYSTATE_FAITH";
-            elseif (leader == "LEADER_MINOR_CIV_TRADE" or leaderInfo.InheritFrom == "LEADER_MINOR_CIV_TRADE") then
-                iconString = "ICON_CITYSTATE_TRADE";
-            elseif (leader == "LEADER_MINOR_CIV_CULTURAL" or leaderInfo.InheritFrom == "LEADER_MINOR_CIV_CULTURAL") then
-                iconString = "ICON_CITYSTATE_CULTURE";
-            elseif (leader == "LEADER_MINOR_CIV_MILITARISTIC" or leaderInfo.InheritFrom == "LEADER_MINOR_CIV_MILITARISTIC") then
-                iconString = "ICON_CITYSTATE_MILITARISTIC";
-            elseif (leader == "LEADER_MINOR_CIV_INDUSTRIAL" or leaderInfo.InheritFrom == "LEADER_MINOR_CIV_INDUSTRIAL") then
-                iconString = "ICON_CITYSTATE_INDUSTRIAL";
-            end
+    -- Deprecate system -- TODO: Remove once above is tested
+        -- Update Origin Civ Icon
+        -- local originPlayerConfig:table = PlayerConfigurations[routeInfo.OriginCityPlayer];
+        -- local originPlayerIconString:string = "ICON_" .. originPlayerConfig:GetCivilizationTypeName();
+        -- local textureOffsetX, textureOffsetY, textureSheet = IconManager:FindIconAtlas(originPlayerIconString, 30);
+        -- local secondaryColor, primaryColor = UI.GetPlayerColors( routeInfo.OriginCityPlayer );
 
-            if iconString ~= nil then
-                local textureOffsetX, textureOffsetY, textureSheet = IconManager:FindIconAtlas(iconString, 30);
-                routeInstance.DestinationCivIcon:SetTexture(textureOffsetX, textureOffsetY, textureSheet);
-                routeInstance.DestinationCivIcon:SetColor(primaryColor);
-                routeInstance.DestinationCivIconBacking:SetColor(secondaryColor);
-                routeInstance.DestinationCivIcon:LocalizeAndSetToolTip( destinationCity:GetName() );
-            end
-        end
-    end
+        -- local destinationPlayerConfig:table = PlayerConfigurations[routeInfo.DestinationCityPlayer];
+        -- local destinationPlayerInfluence:table = Players[destinationPlayer:GetID()]:GetInfluence();
+        -- if not destinationPlayerInfluence:CanReceiveInfluence() then
+        --     -- Destination Icon for Civilizations
+        --     if destinationPlayerConfig ~= nil then
+        --         local iconString:string = "ICON_" .. destinationPlayerConfig:GetCivilizationTypeName();
+        --         local textureOffsetX, textureOffsetY, textureSheet = IconManager:FindIconAtlas(iconString, 30);
+        --         routeInstance.DestinationCivIcon:SetTexture(textureOffsetX, textureOffsetY, textureSheet);
+        --         routeInstance.DestinationCivIcon:LocalizeAndSetToolTip( destinationPlayerConfig:GetCivilizationDescription() );
+        --     end
+
+        --     local secondaryColor, primaryColor = UI.GetPlayerColors( destinationPlayer:GetID() );
+        --     routeInstance.DestinationCivIcon:SetColor(primaryColor);
+        --     routeInstance.DestinationCivIconBacking:SetColor(secondaryColor);
+        -- else
+        --     -- Destination Icon for City States
+        --     if destinationPlayerConfig ~= nil then
+        --         local secondaryColor, primaryColor = UI.GetPlayerColors( destinationPlayer:GetID() );
+        --         local leader        :string = destinationPlayerConfig:GetLeaderTypeName();
+        --         local leaderInfo    :table  = GameInfo.Leaders[leader];
+
+        --         local iconString:string;
+        --         if (leader == "LEADER_MINOR_CIV_SCIENTIFIC" or leaderInfo.InheritFrom == "LEADER_MINOR_CIV_SCIENTIFIC") then
+        --             iconString = "ICON_CITYSTATE_SCIENCE";
+        --         elseif (leader == "LEADER_MINOR_CIV_RELIGIOUS" or leaderInfo.InheritFrom == "LEADER_MINOR_CIV_RELIGIOUS") then
+        --             iconString = "ICON_CITYSTATE_FAITH";
+        --         elseif (leader == "LEADER_MINOR_CIV_TRADE" or leaderInfo.InheritFrom == "LEADER_MINOR_CIV_TRADE") then
+        --             iconString = "ICON_CITYSTATE_TRADE";
+        --         elseif (leader == "LEADER_MINOR_CIV_CULTURAL" or leaderInfo.InheritFrom == "LEADER_MINOR_CIV_CULTURAL") then
+        --             iconString = "ICON_CITYSTATE_CULTURE";
+        --         elseif (leader == "LEADER_MINOR_CIV_MILITARISTIC" or leaderInfo.InheritFrom == "LEADER_MINOR_CIV_MILITARISTIC") then
+        --             iconString = "ICON_CITYSTATE_MILITARISTIC";
+        --         elseif (leader == "LEADER_MINOR_CIV_INDUSTRIAL" or leaderInfo.InheritFrom == "LEADER_MINOR_CIV_INDUSTRIAL") then
+        --             iconString = "ICON_CITYSTATE_INDUSTRIAL";
+        --         end
+
+        --         if iconString ~= nil then
+        --             local textureOffsetX, textureOffsetY, textureSheet = IconManager:FindIconAtlas(iconString, 30);
+        --             routeInstance.DestinationCivIcon:SetTexture(textureOffsetX, textureOffsetY, textureSheet);
+        --             routeInstance.DestinationCivIcon:SetColor(primaryColor);
+        --             routeInstance.DestinationCivIconBacking:SetColor(secondaryColor);
+        --             routeInstance.DestinationCivIcon:LocalizeAndSetToolTip( destinationCity:GetName() );
+        --         end
+        --     end
+        -- end
 
     -- Hide the cancel automation button
     routeInstance.CancelAutomation:SetHide(true);
 
     -- Should we display the cancel automation?
-    if m_currentTab == TRADE_TABS.MY_ROUTES and traderUnitID ~= nil then
-        if IsTraderAutomated(traderUnitID) then
+    if m_currentTab == TRADE_TABS.MY_ROUTES and routeInfo.TraderUnitID ~= nil then
+        if IsTraderAutomated(routeInfo.TraderUnitID) then
             -- Unhide the cancel automation
             routeInstance.CancelAutomation:SetHide(false);
             -- Add button callback
             routeInstance.CancelAutomation:RegisterCallback( Mouse.eLClick,
                 function()
-                    CancelAutomatedTrader(traderUnitID);
+                    CancelAutomatedTrader(routeInfo.TraderUnitID);
                     Refresh();
                 end
             );
@@ -819,8 +823,8 @@ function AddRouteInstanceFromRouteInfo( routeInfo:table )
     end
 
     -- TODO: Add button hookups
-    if traderUnitID then
-        local tradeUnit:table = originPlayer:GetUnits():FindID(traderUnitID);
+    if routeInfo.TraderUnitID then
+        local tradeUnit:table = originPlayer:GetUnits():FindID(routeInfo.TraderUnitID);
 
         routeInstance.GridButton:RegisterCallback( Mouse.eLClick,
             function()
@@ -875,7 +879,7 @@ function CreatePlayerHeader( player:table )
 
     if colorCityPlayerHeader then
         headerInstance.CityBannerFill:SetHide(false);
-        local backColor, frontColor = UI.GetPlayerColors( playerID );
+        local backColor, frontColor = GetPlayerColorInfo(playerID, true);
         headerBackColor = DarkenLightenColor(backColor, backdropColorOffset, backdropColorOpacity);
         headerFrontColor = DarkenLightenColor(frontColor, labelColorOffset, labelColorOpacity);
         gridBackColor = DarkenLightenColor(backColor, backdropGridColorOffset, backdropGridColorOpacity);
@@ -1070,18 +1074,13 @@ function CreateCityHeader( city:table , currentRouteShowCount:number, totalRoute
 
     if colorCityPlayerHeader then
         headerInstance.CityBannerFill:SetHide(false);
-        local backColor, frontColor = UI.GetPlayerColors(playerID);
-        -- local darkerBackColor = DarkenLightenColor(backColor,(-85),238);
-        -- local brighterBackColor = DarkenLightenColor(backColor,90,255);
+        local backColor, frontColor = GetPlayerColorInfo(playerID, true);
 
         headerBackColor = DarkenLightenColor(backColor, backdropColorOffset, backdropColorOpacity);
         headerFrontColor = DarkenLightenColor(frontColor, labelColorOffset, labelColorOpacity);
         gridBackColor = DarkenLightenColor(backColor, backdropGridColorOffset, backdropGridColorOpacity);
-        headerInstance.CityBannerFill:SetColor( gridBackColor );
-        -- headerInstance.CityBannerFill2:SetColor( darkerBackColor );
-        -- headerInstance.CityBannerFill3:SetColor( brighterBackColor );
+
         headerInstance.HeaderLabel:SetColor(headerFrontColor);
-        --headerInstance.RouteCountLabel:SetColor(frontColor);
         headerInstance.CityBannerFill:SetColor(headerBackColor);
         headerInstance.HeaderGrid:SetColor(gridBackColor);
     else
@@ -1371,35 +1370,40 @@ end
 -- ===========================================================================
 -- Returns the grouped routes version based on the passed group setting
 function GroupRoutes( routesTable, groupSetting )
+    print("Group setting: " .. m_groupByList[m_groupBySelected].groupByString);
+
     if groupSetting == GROUP_BY_SETTINGS.NONE then return routesTable end
 
     local returnRoutesTable:table = {}
     local groupCount:number = 1
     local groupKey:table = {}
 
-    for i, route in ipairs(routesTable) do
+    for i=1, #routesTable do
         -- Cant use contor key here since we DONT want a unique key for every route
         local key:string;
         if groupSetting == GROUP_BY_SETTINGS.ORIGIN then
-            key = tostring(route.OriginCityPlayer) .. "_" .. tostring(route.OriginCityID)
+            key = tostring(routesTable[i].OriginCityPlayer) .. "_" .. tostring(routesTable[i].OriginCityID)
         elseif groupSetting == GROUP_BY_SETTINGS.DESTINATION then
-            key = tostring(route.DestinationCityPlayer) .. "_" .. tostring(route.DestinationCityID)
+            key = tostring(routesTable[i].DestinationCityPlayer) .. "_" .. tostring(routesTable[i].DestinationCityID)
         else
             print("Error: Unknown group setting.")
             return routesTable;
         end
 
+        local index = groupCount;
         if groupKey[key] == nil then
             groupKey[key] = groupCount
             groupCount = groupCount + 1;
+        else
+            index = groupKey[key]
         end
 
-        if returnRoutesTable[groupKey[key]] == nil then
-            returnRoutesTable[groupKey[key]] = {}
+        if returnRoutesTable[index] == nil then
+            returnRoutesTable[index] = {}
         end
 
-        -- print("Inserting " .. GetTradeRouteString(route) .. " in " .. groupKey[key])
-        table.insert(returnRoutesTable[groupKey[key]], route)
+        -- print("Inserting " .. GetTradeRouteString(route) .. " in " .. index)
+        returnRoutesTable[index][#(returnRoutesTable[index]) + 1] = routesTable[i]
     end
     return returnRoutesTable;
 end
