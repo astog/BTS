@@ -17,12 +17,8 @@ local labelColorOffset = -27
 local labelColorOpacity = 255
 
 -- Color Settings for Route Entry
-local hideHeaderOpaqueBackdrop = false
-local tintTradeRouteEntry = true
 local tintColorOffset = 80
 local tintColorOpacity = 205
-local tintLabelColorOffset = 10
-local tintLabelColorOpacity = 210
 
 -- ===========================================================================
 --  INCLUDES
@@ -494,7 +490,6 @@ end
 function DisplayGroup(routesTable:table, city:table)
     -- dump(routesTable[1])
 
-    -- local routeCount:number = tableLength(routesTable);
     local routeCount:number = #routesTable;
     if routeCount > 0 then
         -- Find if the city is in exclusion list
@@ -610,10 +605,8 @@ function AddRouteInstanceFromRouteInfo( routeInfo:table )
 
     -- Update colors
     tintBackColor = DarkenLightenColor(destinationBackColor, tintColorOffset, tintColorOpacity);
-    tintFrontColor = DarkenLightenColor(destinationFrontColor, tintLabelColorOffset, tintLabelColorOpacity);
 
     routeInstance.GridButton:SetColor(tintBackColor);
-    -- routeInstance.RouteLabel:SetColor(tintFrontColor);
     routeInstance.TurnsToComplete:SetColor( destinationFrontColor );
 
     routeInstance.BannerBase:SetColor(  destinationBackColor );
@@ -746,7 +739,7 @@ function AddRouteInstanceFromRouteInfo( routeInfo:table )
                             Locale.Lookup("LOC_TRADE_TURNS_REMAINING_TOOLTIP_BREAKER") .. "[NEWLINE]" ..
                             Locale.Lookup("LOC_TRADE_TURNS_REMAINING_ROUTE_LENGTH_TOOLTIP", tradePathLength) .. "[NEWLINE]" ..
                             Locale.Lookup("LOC_TRADE_TURNS_REMAINING_TRIPS_COUNT_TOOLTIP", tripsToDestination) .. "[NEWLINE]" ..
-                            Locale.Lookup("LOC_TRADE_TURNS_REMAINING_TURN_COMPLETION_ALT_TOOLTIP", (Game.GetCurrentGameTurn() + turnsToCompleteRoute)) );
+                            Locale.Lookup("LOC_TRADE_TURNS_REMAINING_TURN_COMPLETION_ALT_TOOLTIP", turnsToCompleteRoute, (Game.GetCurrentGameTurn() + turnsToCompleteRoute)) );
     end
 
     routeInstance.TurnsToComplete:SetToolTipString( tooltipString );
@@ -1418,7 +1411,6 @@ function SortGroupedRoutes( groupedRoutes:table, sortSettings:table, sortSetting
         return
     end
 
-    -- if tableLength(m_GroupSortBySettings) > 0 then
     if #sortSettings > 0 then
         table.sort(groupedRoutes, CompareGroups)
     end

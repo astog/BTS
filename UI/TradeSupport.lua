@@ -803,6 +803,10 @@ function GetAdvancedRouteInfo(routeInfo)
     end
 end
 
+-- ---------------------------------------------------------------------------
+-- Cache lookups
+-- ---------------------------------------------------------------------------
+
 -- Returns yield for the origin city
 function GetYieldForOriginCity( yieldIndex:number, routeInfo:table, checkCache)
     if checkCache then

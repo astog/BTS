@@ -64,10 +64,6 @@
         <Text>This route will take {1_TurnsRemaining}[Icon_Turn] to complete.</Text>
     </Row>
 
-    <Row Tag="LOC_TRADE_TURNS_REMAINING_ALT2_HELP_TOOLTIP">
-        <Text>This route will take less than {1_TurnsRemaining}[Icon_Turn] to complete.</Text>
-    </Row>
-
     <Row Tag="LOC_TRADE_TURNS_REMAINING_TOOLTIP_BREAKER">
         <Text>----------------------------</Text>
     </Row>
@@ -81,11 +77,11 @@
     </Row>
 
     <Row Tag="LOC_TRADE_TURNS_REMAINING_TURN_COMPLETION_TOOLTIP">
-        <Text>Route will complete in [COLOR_GREEN][ICON_Turn]{1_TurnWhenCompleted}[ENDCOLOR]</Text>
+        <Text>Route will complete in [ICON_Turn]{1_TurnWhenCompleted}</Text>
     </Row>
 
     <Row Tag="LOC_TRADE_TURNS_REMAINING_TURN_COMPLETION_ALT_TOOLTIP">
-        <Text>If started, route will complete in [ICON_Turn]{1_TurnWhenCompleted}</Text>
+        <Text>If started, route will take {1_TurnsToComplete} turns and will complete on turn {2_TurnWhenCompleted}</Text>
     </Row>
 
     <Row Tag="LOC_TRADE_CANCEL_AUTOMATION_TOOLTIP">
