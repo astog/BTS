@@ -239,6 +239,7 @@ function RefreshChooserPanel()
         end
 
         -- Cache routes info.
+        CacheEmpty()
         CacheRoutesInfo(m_AvailableTradeRoutes)
 
         m_TurnBuiltRouteTable = Game.GetCurrentGameTurn()

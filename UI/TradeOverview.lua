@@ -80,7 +80,6 @@ local m_AvailableGroupedRoutes:table = {};      -- Similiar to above, but is gro
 
 -- Temp routes table (Built as a derivative from above)
 local m_FinalTradeRoutes:table = {};
-local m_GroupedFinalRoutes:table = {};
 local m_TraderAutomated:table = {};
 
 -- Stores filter list and tracks the currently selected list
@@ -402,17 +401,18 @@ function ViewAvailableRoutes()
         RebuildAvailableTradeRoutesTable();
         print("Time taken to build routes: " .. (os.clock()- preRefreshClock) .. " sec(s)");
 
+        -- Cache routes info.
+        CacheEmpty();
+        if CacheRoutesInfo(m_AvailableTradeRoutes) then
+            print("Time taken till cache: " .. (os.clock() - preRefreshClock) .. " sec(s)")
+        end
+
         -- Just rebuilt base routes table. need to do everything again
         m_SortSettingsChanged = true;
         m_FilterSettingsChanged = true;
         m_GroupSettingsChanged = true;
     else
-        print("OPT: Not Rebuilding routes table")
-    end
-
-    -- Cache routes info.
-    if CacheRoutesInfo(m_AvailableTradeRoutes) then
-        print("Time taken till cache: " .. (os.clock() - preRefreshClock) .. " sec(s)")
+        print("OPT: Not Rebuilding or recaching routes table")
     end
 
     -- Filter the routes
@@ -1842,31 +1842,36 @@ function OnLocalPlayerTurnEnd()
 
     m_HasBuiltTradeRouteTable = false;
 
-    -- Clear cache to keep memory used low
-    CacheEmpty()
+    -- Clear cache and tables to keep memory used low
+    CacheEmpty();
+    m_AvailableTradeRoutes = nil;
+    m_FinalTradeRoutes = nil;
+    m_AvailableGroupedRoutes = nil;
 end
 
 function OnUnitOperationStarted( ownerID:number, unitID:number, operationID:number )
-    if ownerID == Game.GetLocalPlayer() and operationID == UnitOperationTypes.MAKE_TRADE_ROUTE then
-        -- Unit was just started a trade route. Find the route, and update the tables
-        local localPlayerCities:table = Players[ownerID]:GetCities();
-        for i,city in localPlayerCities:Members() do
-            local outgoingRoutes = city:GetTrade():GetOutgoingRoutes();
-            for j,route in ipairs(outgoingRoutes) do
-                if route.TraderUnitID == unitID then
-                    -- Remove it from the available routes
-                    if m_groupByList[m_groupBySelected].groupByID ~= GROUP_BY_SETTINGS.NONE then
-                        RemoveRouteFromTable(route, m_AvailableGroupedRoutes, true);
-                    else
-                        RemoveRouteFromTable(route, m_AvailableTradeRoutes, false);
+    if m_HasBuiltTradeRouteTable then
+        if ownerID == Game.GetLocalPlayer() and operationID == UnitOperationTypes.MAKE_TRADE_ROUTE then
+            -- Unit was just started a trade route. Find the route, and update the tables
+            local localPlayerCities:table = Players[ownerID]:GetCities();
+            for i,city in localPlayerCities:Members() do
+                local outgoingRoutes = city:GetTrade():GetOutgoingRoutes();
+                for j,route in ipairs(outgoingRoutes) do
+                    if route.TraderUnitID == unitID then
+                        -- Remove it from the available routes
+                        if m_groupByList[m_groupBySelected].groupByID ~= GROUP_BY_SETTINGS.NONE then
+                            RemoveRouteFromTable(route, m_AvailableGroupedRoutes, true);
+                        else
+                            RemoveRouteFromTable(route, m_AvailableTradeRoutes, false);
+                        end
                     end
                 end
             end
-        end
 
-        -- Dont refresh, if the window is hidden
-        if not ContextPtr:IsHidden() then
-            Refresh();
+            -- Dont refresh, if the window is hidden
+            if not ContextPtr:IsHidden() then
+                Refresh();
+            end
         end
     end
 end
