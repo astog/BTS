@@ -159,13 +159,13 @@ end
 -- ===========================================================================
 function OnChangeOriginCityFromOverview( city:table )
     if city ~= nil then
-        print ("Window opened from Trade Overview with city " .. Locale.Lookup(city:GetName()))
+        -- print ("Window opened from Trade Overview with city " .. Locale.Lookup(city:GetName()))
         local selectedUnit:table = UI.GetHeadSelectedUnit();
 
         m_originCity = Cities.GetCityInPlot(selectedUnit:GetX(), selectedUnit:GetY());
         m_newOriginCity = city
 
-        print ("Transfer from " .. Locale.Lookup(m_originCity:GetName()) .. " to " .. Locale.Lookup(m_newOriginCity:GetName()))
+        -- print ("Transfer from " .. Locale.Lookup(m_originCity:GetName()) .. " to " .. Locale.Lookup(m_newOriginCity:GetName()))
 
         -- Is the screen already open?
         if (m_AnimSupport:IsVisible()) then

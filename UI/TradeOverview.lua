@@ -76,11 +76,11 @@ local m_sortCallRefresh:boolean = false;
 
 -- Trade Routes Tables
 local m_AvailableTradeRoutes:table = {};        -- Stores all available routes
-local m_AvailableGroupedRoutes:table = {};      -- Similiar to above, but is grouped.
+local m_FinalTradeRoutes:table = {};            -- Filter version of above
+local m_AvailableGroupedRoutes:table = {};      -- Grouped version of routes. Built from above
 
--- Temp routes table (Built as a derivative from above)
-local m_FinalTradeRoutes:table = {};
-local m_TraderAutomated:table = {};
+local m_AvailableTraders:table = {};            -- Indexed by the city id, value stored is the unit id
+local m_TurnUpdatedTraders:number = -1;
 
 -- Stores filter list and tracks the currently selected list
 local m_filterList:table = {};
@@ -172,15 +172,45 @@ function RebuildAvailableTradeRoutesTable()
     m_LastTurnBuiltTradeRouteTable = Game.GetCurrentGameTurn();
 end
 
+function RebuildAvailableTraders()
+    print("Building available traders")
+    local playerID = Game.GetLocalPlayer()
+    local pPlayer = Players[playerID]
+    local pPlayerUnits = pPlayer:GetUnits()
+    m_AvailableTraders = {}
+
+    for i, pUnit in pPlayerUnits:Members() do
+        local unitInfo:table = GameInfo.Units[pUnit:GetUnitType()];
+        local unitID:number = pUnit:GetID();
+        if unitInfo.MakeTradeRoute == true and (not pUnit:HasPendingOperations()) then
+            local pCity = Cities.GetCityInPlot(pUnit:GetX(), pUnit:GetY());
+            if pCity ~= nil then
+                local cityID = pCity:GetID()
+
+                -- Make entry if none exists
+                if m_AvailableTraders[cityID] == nil then m_AvailableTraders[cityID] = {} end
+
+                -- Append unit into the entry
+                table.insert(m_AvailableTraders[cityID], unitID)
+            end
+        end
+    end
+
+    m_TurnUpdatedTraders = Game.GetCurrentGameTurn()
+end
+
 function Refresh()
     preRefreshClock = os.clock();
     print("Refresh start")
-    -- Build a custom dialog
     PreRefresh();
 
     RefreshGroupByPulldown();
     RefreshFilters();
     RefreshSortBar();
+
+    if m_TurnUpdatedTraders < Game.GetCurrentGameTurn() then
+        RebuildAvailableTraders()
+    end
 
     if m_currentTab == TRADE_TABS.MY_ROUTES then
         ViewMyRoutes();
@@ -592,7 +622,6 @@ function AddRouteInstanceFromRouteInfo( routeInfo:table )
     local destinationPlayer:table = Players[routeInfo.DestinationCityPlayer];
     local destinationCity:table = destinationPlayer:GetCities():FindID(routeInfo.DestinationCityID);
 
-
     local routeInstance:table = m_RouteInstanceIM:GetInstance();
 
     local destinationBackColor, destinationFrontColor, darkerBackColor, brighterBackColor = GetPlayerColorInfo(routeInfo.DestinationCityPlayer, true);
@@ -751,59 +780,6 @@ function AddRouteInstanceFromRouteInfo( routeInfo:table )
     routeInstance.DestinationCivIconBacking:SetColor(destinationBackColor);
     routeInstance.DestinationCivIcon:LocalizeAndSetToolTip(destinationTooltip);
 
-    -- Deprecate system -- TODO: Remove once above is tested
-        -- Update Origin Civ Icon
-        -- local originPlayerConfig:table = PlayerConfigurations[routeInfo.OriginCityPlayer];
-        -- local originPlayerIconString:string = "ICON_" .. originPlayerConfig:GetCivilizationTypeName();
-        -- local textureOffsetX, textureOffsetY, textureSheet = IconManager:FindIconAtlas(originPlayerIconString, 30);
-        -- local secondaryColor, primaryColor = UI.GetPlayerColors( routeInfo.OriginCityPlayer );
-
-        -- local destinationPlayerConfig:table = PlayerConfigurations[routeInfo.DestinationCityPlayer];
-        -- local destinationPlayerInfluence:table = Players[destinationPlayer:GetID()]:GetInfluence();
-        -- if not destinationPlayerInfluence:CanReceiveInfluence() then
-        --     -- Destination Icon for Civilizations
-        --     if destinationPlayerConfig ~= nil then
-        --         local iconString:string = "ICON_" .. destinationPlayerConfig:GetCivilizationTypeName();
-        --         local textureOffsetX, textureOffsetY, textureSheet = IconManager:FindIconAtlas(iconString, 30);
-        --         routeInstance.DestinationCivIcon:SetTexture(textureOffsetX, textureOffsetY, textureSheet);
-        --         routeInstance.DestinationCivIcon:LocalizeAndSetToolTip( destinationPlayerConfig:GetCivilizationDescription() );
-        --     end
-
-        --     local secondaryColor, primaryColor = UI.GetPlayerColors( destinationPlayer:GetID() );
-        --     routeInstance.DestinationCivIcon:SetColor(primaryColor);
-        --     routeInstance.DestinationCivIconBacking:SetColor(secondaryColor);
-        -- else
-        --     -- Destination Icon for City States
-        --     if destinationPlayerConfig ~= nil then
-        --         local secondaryColor, primaryColor = UI.GetPlayerColors( destinationPlayer:GetID() );
-        --         local leader        :string = destinationPlayerConfig:GetLeaderTypeName();
-        --         local leaderInfo    :table  = GameInfo.Leaders[leader];
-
-        --         local iconString:string;
-        --         if (leader == "LEADER_MINOR_CIV_SCIENTIFIC" or leaderInfo.InheritFrom == "LEADER_MINOR_CIV_SCIENTIFIC") then
-        --             iconString = "ICON_CITYSTATE_SCIENCE";
-        --         elseif (leader == "LEADER_MINOR_CIV_RELIGIOUS" or leaderInfo.InheritFrom == "LEADER_MINOR_CIV_RELIGIOUS") then
-        --             iconString = "ICON_CITYSTATE_FAITH";
-        --         elseif (leader == "LEADER_MINOR_CIV_TRADE" or leaderInfo.InheritFrom == "LEADER_MINOR_CIV_TRADE") then
-        --             iconString = "ICON_CITYSTATE_TRADE";
-        --         elseif (leader == "LEADER_MINOR_CIV_CULTURAL" or leaderInfo.InheritFrom == "LEADER_MINOR_CIV_CULTURAL") then
-        --             iconString = "ICON_CITYSTATE_CULTURE";
-        --         elseif (leader == "LEADER_MINOR_CIV_MILITARISTIC" or leaderInfo.InheritFrom == "LEADER_MINOR_CIV_MILITARISTIC") then
-        --             iconString = "ICON_CITYSTATE_MILITARISTIC";
-        --         elseif (leader == "LEADER_MINOR_CIV_INDUSTRIAL" or leaderInfo.InheritFrom == "LEADER_MINOR_CIV_INDUSTRIAL") then
-        --             iconString = "ICON_CITYSTATE_INDUSTRIAL";
-        --         end
-
-        --         if iconString ~= nil then
-        --             local textureOffsetX, textureOffsetY, textureSheet = IconManager:FindIconAtlas(iconString, 30);
-        --             routeInstance.DestinationCivIcon:SetTexture(textureOffsetX, textureOffsetY, textureSheet);
-        --             routeInstance.DestinationCivIcon:SetColor(primaryColor);
-        --             routeInstance.DestinationCivIconBacking:SetColor(secondaryColor);
-        --             routeInstance.DestinationCivIcon:LocalizeAndSetToolTip( destinationCity:GetName() );
-        --         end
-        --     end
-        -- end
-
     -- Hide the cancel automation button
     routeInstance.CancelAutomation:SetHide(true);
 
@@ -822,15 +798,47 @@ function AddRouteInstanceFromRouteInfo( routeInfo:table )
         end
     end
 
-    -- TODO: Add button hookups
     if routeInfo.TraderUnitID then
         local tradeUnit:table = originPlayer:GetUnits():FindID(routeInfo.TraderUnitID);
-
         routeInstance.GridButton:RegisterCallback( Mouse.eLClick,
             function()
-                SelectUnit( tradeUnit );
+                SelectUnit(tradeUnit);
             end
         );
+    -- Add button hookups for only this tab
+    elseif m_currentTab == TRADE_TABS.AVAILABLE_ROUTES then
+        -- Check if we have free traders
+        if m_AvailableTraders[routeInfo.OriginCityID] ~= nil and tableLength(m_AvailableTraders[routeInfo.OriginCityID]) > 0 then
+            -- Get first trader
+            local traderID = m_AvailableTraders[routeInfo.OriginCityID][1]
+            local tradeUnit:table = originPlayer:GetUnits():FindID(traderID);
+            routeInstance.GridButton:RegisterCallback( Mouse.eLClick,
+                function()
+                    SelectFreeTrader(tradeUnit, routeInfo.DestinationCityPlayer, routeInfo.DestinationCityID);
+                end
+            );
+        else -- Cycle through all traders
+            local co = coroutine.create(
+                function()
+                    while true do -- Infinitely cycle
+                        for cityID in pairs(m_AvailableTraders) do
+                            for i in pairs(m_AvailableTraders[cityID]) do
+                                local traderID = m_AvailableTraders[cityID][i]
+                                local tradeUnit:table = originPlayer:GetUnits():FindID(traderID);
+                                TransferTraderTo(tradeUnit, originCity)
+                                coroutine.yield()
+                            end
+                        end
+                    end
+                end
+            );
+
+            routeInstance.GridButton:RegisterCallback( Mouse.eLClick,
+                function()
+                    CycleTraders(co)
+                end
+            );
+        end
     end
 end
 
@@ -1608,6 +1616,50 @@ function SelectUnit( unit:table )
     UI.LookAtPlotScreenPosition( unit:GetX(), unit:GetY(), 0.42, 0.5 );
 end
 
+function SelectFreeTrader( unit:table, destinationCityOwnerID:number, destinationCityID:number )
+    local localPlayer = Game.GetLocalPlayer();
+    if UI.GetHeadSelectedUnit() ~= unit and localPlayer ~= -1 and localPlayer == unit:GetOwner() then
+        UI.DeselectAllUnits();
+        UI.DeselectAllCities();
+        UI.SelectUnit( unit );
+        LuaEvents.TradeOverview_SelectRouteFromOverview(destinationCityOwnerID, destinationCityID)
+    elseif localPlayer ~= -1 and localPlayer == unit:GetOwner() then
+        -- The unit is already selected, call open panel
+        LuaEvents.TradeOverview_SelectRouteFromOverview(destinationCityOwnerID, destinationCityID)
+    end
+    UI.LookAtPlotScreenPosition( unit:GetX(), unit:GetY(), 0.42, 0.5 );
+end
+
+function CycleTraders(co)
+    coroutine.resume(co)
+end
+
+function TransferTraderTo( unit:table, transferCity:table )
+    SelectUnit(unit)
+    LuaEvents.TradeOverview_ChangeOriginCityFromOverview(transferCity)
+end
+
+function RemoveTrader( traderID )
+    for cityID in pairs(m_AvailableTraders) do
+        for i in pairs(m_AvailableTraders[cityID]) do
+            -- Remove trader
+            if m_AvailableTraders[cityID][i] == traderID then
+                print("Removing trader " .. traderID .. " from available traders.")
+                table.remove(m_AvailableTraders[cityID], i)
+
+                -- Check if for that city no traders exist
+                if table.count(m_AvailableTraders[cityID]) <= 0 then
+                    table.remove(m_AvailableTraders, cityID)
+                end
+
+                return -- return here since nothing else is left to do
+            end
+        end
+    end
+
+    print("Could not find trader " .. traderID)
+end
+
 -- ===========================================================================
 --  Button handler functions
 -- ===========================================================================
@@ -1850,7 +1902,13 @@ function OnLocalPlayerTurnEnd()
 end
 
 function OnUnitOperationStarted( ownerID:number, unitID:number, operationID:number )
+    -- Don't do anything for non local players
+    if ownerID ~= Game.GetLocalPlayer() then return end
+
     if m_HasBuiltTradeRouteTable then
+        -- Remove unit from available traders
+        RemoveTrader(unitID)
+
         if ownerID == Game.GetLocalPlayer() and operationID == UnitOperationTypes.MAKE_TRADE_ROUTE then
             -- Unit was just started a trade route. Find the route, and update the tables
             local localPlayerCities:table = Players[ownerID]:GetCities();

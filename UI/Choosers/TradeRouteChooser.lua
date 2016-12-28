@@ -27,7 +27,6 @@ local SORT_DESCENDING = GetSortDescendingIdConstant();
 local m_RouteChoiceIM           : table = InstanceManager:new("RouteChoiceInstance", "Top", Controls.RouteChoiceStack);
 local m_originCity              : table = nil;  -- City where the trade route will begin
 local m_destinationCity         : table = nil;  -- City where the trade route will end, nil if none selected
-local m_pTradeOverviewContext   : table = nil;  -- Trade Overview context
 
 -- These can be set by other contexts to have a route selected automatically after the chooser opens
 local m_postOpenSelectPlayerID:number = -1;
@@ -776,7 +775,10 @@ function RealizeLookAtDestinationCity()
     local screenXOff:number = 0.6;
 
     -- Change offset if the TradeOveriew (exists and) is open as well.
-    if m_pTradeOverviewContext and (not m_pTradeOverviewContext:IsHidden()) then
+    local pContextControl:table = ContextPtr:LookUpControl("/InGame/TradeOverview");
+    if pContextControl == nil then
+        UI.DataError("Cannot determine if partial screen \"/InGame/TradeOverview\" is visible because it wasn't found at that path.");
+    elseif not pContextControl:IsHidden() then
         screenXOff = 0.42;
     end
 
@@ -989,7 +991,10 @@ function Open()
         print("Last route for trader " .. selectedUnitID .. ": " .. GetTradeRouteString(lastRoute));
         originCity = Cities.GetCityInPlot(selectedUnit:GetX(), selectedUnit:GetY());
 
-        if IsRoutePossible(originCity:GetOwner(), originCity:GetID(), lastRoute.DestinationCityPlayer, DestinationCityID) then
+        -- Don't select the route, if trader was transferred
+        if lastRoute.OriginCityID ~= originCity:GetID() then
+            print("Trader was transferred. Not selecting the last route")
+        elseif IsRoutePossible(originCity:GetOwner(), originCity:GetID(), lastRoute.DestinationCityPlayer, DestinationCityID) then
             local destinationPlayer:table = Players[lastRoute.DestinationCityPlayer];
             m_destinationCity = destinationPlayer:GetCities():FindID(lastRoute.DestinationCityID);
         else
@@ -1072,7 +1077,7 @@ end
 --  GAME Event
 --  Unit was selected so close route chooser
 -- ===========================================================================
-function OnUnitSelectionChanged( playerID : number, unitID : number, hexI : number, hexJ : number, hexK : number, bSelected : boolean, bEditable : boolean )
+function OnUnitSelectionChanged( playerID:number, unitID:number, hexI:number, hexJ:number, hexK:number, bSelected:boolean, bEditable:boolean )
 
     -- Make sure we're the local player and not observing
     if playerID ~= Game.GetLocalPlayer() or playerID == -1 then
@@ -1085,12 +1090,16 @@ function OnUnitSelectionChanged( playerID : number, unitID : number, hexI : numb
         return;
     end
 
-    -- Only open if TradeOverview is hidden
-    if m_pTradeOverviewContext == nil or m_pTradeOverviewContext:IsHidden() then
-        CheckNeedsToOpen();
-    else
-        print("Trade Overview was open. Not auto opening trade panel.")
+    -- Check if TradeOverview is open
+    local pContextControl:table = ContextPtr:LookUpControl("/InGame/TradeOverview");
+    if pContextControl == nil then
+        UI.DataError("Cannot determine if partial screen \"/InGame/TradeOverview\" is visible because it wasn't found at that path.");
+    elseif not pContextControl:IsHidden() then
+        -- print("Trade Overview Panel is open. Not opening Make Trade Route screen.")
+        return true;
     end
+
+    CheckNeedsToOpen()
 end
 
 function OnLocalPlayerTurnEnd()
@@ -1245,9 +1254,5 @@ function Initialize()
     Controls.TurnsToCompleteSortButton:RegisterCallback( Mouse.eLClick, OnSortByTurnsToComplete);
     Controls.TurnsToCompleteSortButton:RegisterCallback( Mouse.eRClick, OnNotSortByTurnsToComplete);
     Controls.TurnsToCompleteSortButton:RegisterCallback( Mouse.eMouseEnter, function() UI.PlaySound("Main_Menu_Mouse_Over"); end);
-
-
-    -- Obtain refrence to another context.
-    m_pTradeOverviewContext = ContextPtr:LookUpControl("/InGame/TradeOverview");
 end
 Initialize();

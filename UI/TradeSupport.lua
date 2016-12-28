@@ -37,9 +37,11 @@ local END_INDEX:number = GameInfo.Yields["YIELD_FAITH"].Index;
 --  Variables
 -- ===========================================================================
 
-local m_LocalPlayerRunningRoutes    :table  = {};   -- Tracks local players active routes
+local m_LocalPlayerRunningRoutes    :table  = {};   -- Tracks local players active routes (turns remaining)
 local m_TradersAutomatedSettings    :table  = {};   -- Tracks traders, and if they are automated
 local m_Cache                       :table  = {};   -- Cache
+
+-- Boolean checks for automated traders
 
 local debug_func_calls:number = 0;
 local debug_total_calls:number = 0;
@@ -111,19 +113,10 @@ end
 
 -- Decrements routes present. Removes those that completed
 function UpdateRoutesWithTurnsRemaining( routesTable:table )
-    -- Manually control the indices, so that you can iterate over the table while deleting items within it
-    local i = 1;
-    while i <= tableLength(routesTable) do
+    for i=1, #routesTable do
         if routesTable[i].TurnsRemaining ~= nil then
             routesTable[i].TurnsRemaining = routesTable[i].TurnsRemaining - 1;
             print("Updated route " .. GetTradeRouteString(routesTable[i]) .. " with turns remaining " .. routesTable[i].TurnsRemaining)
-
-            if routesTable[i].TurnsRemaining <= 0 then
-                print("Removing route: " .. GetTradeRouteString(routesTable[i]));
-                table.remove(routesTable, i);
-            else
-                i = i + 1;
-            end
         end
     end
 
@@ -211,12 +204,14 @@ local function TradeSupportTracker_OnUnitOperationStarted(ownerID:number, unitID
                     -- Add it to the local players runnning routes
                     print("Route just started. Adding Route: " .. GetTradeRouteString(route));
                     AddRouteWithTurnsRemaining( route, m_LocalPlayerRunningRoutes );
+                    return
                 end
             end
         end
     end
 end
 
+-- Removes trader from currently running routes, when it completes
 local function TradeSupportTracker_OnUnitOperationsCleared(ownerID:number, unitID:number, operationID:number)
     if ownerID == Game.GetLocalPlayer() then
         local pPlayer:table = Players[ownerID];
@@ -229,12 +224,12 @@ local function TradeSupportTracker_OnUnitOperationsCleared(ownerID:number, unitI
                 for i, route in ipairs(m_LocalPlayerRunningRoutes) do
                     if route.TraderUnitID == unitID then
                         -- Add it to the last route info for trader
-                        if m_TradersAutomatedSettings[unitID] ~= nil and tableLength(m_TradersAutomatedSettings[unitID]) > 0 then
+                        if m_TradersAutomatedSettings[unitID] ~= nil then
                             m_TradersAutomatedSettings[unitID].LastRouteInfo = route;
                         else
                             -- Create a new entry for this trader
                             print("Couldn't find trader automated info. Creating one.")
-                            m_TradersAutomatedSettings[unitID] = { IsAutomated=false; };
+                            m_TradersAutomatedSettings[unitID] = { IsAutomated=false };
                             m_TradersAutomatedSettings[unitID].LastRouteInfo = route;
                         end
 
@@ -242,7 +237,7 @@ local function TradeSupportTracker_OnUnitOperationsCleared(ownerID:number, unitI
 
                         print("Removing route " .. GetTradeRouteString(route) .. " from currently running, since it completed.");
                         RemoveRouteFromTable(route, m_LocalPlayerRunningRoutes, false);
-                        break;
+                        return
                     end
                 end
             end
@@ -261,18 +256,28 @@ end
 -- ===========================================================================
 
 function AutomateTrader(traderID:number, isAutomated:boolean, sortSettings:table)
-    print("Automate trader " .. traderID)
-
-    -- Reset automated settings
-    m_TradersAutomatedSettings[traderID] = {};
-
-    m_TradersAutomatedSettings[traderID].IsAutomated = isAutomated;
-
-    if sortSettings ~= nil and tableLength(sortSettings) > 0 then
-        m_TradersAutomatedSettings[traderID].SortSettings = sortSettings;
+    if isAutomated then
+        if sortSettings ~= nil and table.count(sortSettings) > 0 then
+            print("Automate trader " .. traderID .. " with top route.")
+            m_TradersAutomatedSettings[traderID] = {
+                IsAutomated = true,
+                SortSettings = sortSettings
+            }
+        else
+            print("Automate trader " .. traderID)
+            m_TradersAutomatedSettings[traderID] = {
+                IsAutomated = true
+            }
+        end
     else
-        -- Clear entry
-        m_TradersAutomatedSettings[traderID].SortSettings = nil;
+        if m_TradersAutomatedSettings[traderID] ~= nil then
+            print("Removing old automated settings for trader " .. traderID)
+            m_TradersAutomatedSettings[traderID] = nil;
+
+            if tableLength(m_TradersAutomatedSettings) <= 0 then
+                print("No automated traders")
+            end
+        end
     end
 
     --dump(m_TradersAutomatedSettings);
@@ -297,18 +302,23 @@ end
 function RenewTradeRoutes()
     local renewedRoute:boolean = false;
 
+    -- Load the automated settings, (so that changes from TradeOverview.lua reach here)
+    LoadTraderAutomatedInfo();
+
     local pPlayerUnits:table = Players[Game.GetLocalPlayer()]:GetUnits();
     -- Find Each Trade Unit
     for i, pUnit in pPlayerUnits:Members() do
         local unitInfo:table = GameInfo.Units[pUnit:GetUnitType()];
         local unitID:number = pUnit:GetID();
         if unitInfo.MakeTradeRoute == true and (not pUnit:HasPendingOperations()) then
-            LoadTraderAutomatedInfo();
-
             if m_TradersAutomatedSettings[unitID] ~= nil and m_TradersAutomatedSettings[unitID].IsAutomated then
-                local destinationCity:table = nil;
                 local tradeManager:table = Game.GetTradeManager();
                 local originCity:table = Cities.GetCityInPlot(pUnit:GetX(), pUnit:GetY());
+
+                local originPlayerID = originCity:GetOwner()
+                local originCityID = originCity:GetID()
+                local destinationPlayerID:number;
+                local destinationCityID:number;
 
                 if m_TradersAutomatedSettings[unitID].SortSettings ~= nil and tableLength(m_TradersAutomatedSettings[unitID].SortSettings) > 0 then
                     print("Picking from top sort entry");
@@ -317,36 +327,42 @@ function RenewTradeRoutes()
 
                     -- Build list of trade routes
                     for i, player in ipairs(players) do
-                        local cities:table = player:GetCities();
-                        for j, city in cities:Members() do
-                            -- Can we start a trade route with this city?
-                            if tradeManager:CanStartRoute(originCity:GetOwner(), originCity:GetID(), city:GetOwner(), city:GetID()) then
-                                local tradeRoute = {
-                                    OriginCityPlayer        = originCity:GetOwner(),
-                                    OriginCityID            = originCity:GetID(),
-                                    DestinationCityPlayer   = city:GetOwner(),
-                                    DestinationCityID       = city:GetID()
-                                };
+                        local playerID = player:GetID()
+                        if CanPossiblyTradeWithPlayer(originPlayerID,  playerID) then
+                            local cities:table = player:GetCities();
+                            for j, city in cities:Members() do
+                                local cityID = city:GetID()
+                                -- Can we start a trade route with this city?
+                                if tradeManager:CanStartRoute(originPlayerID, originCityID, playerID, cityID) then
+                                    local routeInfo = {
+                                        OriginCityPlayer        = originPlayerID,
+                                        OriginCityID            = originCityID,
+                                        DestinationCityPlayer   = playerID,
+                                        DestinationCityID       = cityID
+                                    };
 
-                                table.insert(tradeRoutes, tradeRoute);
+                                    tradeRoutes[#tradeRoutes + 1] = routeInfo;
+                                end
                             end
                         end
                     end
 
-                    -- Get the top route based on the settings saved when the route was begun
+                    -- Get the top route based on the settings saved when the route was begun. NOTE - Will have cache misses here.
                     local topRoute:table = GetTopRouteFromSortSettings( tradeRoutes, m_TradersAutomatedSettings[unitID].SortSettings );
 
                     -- Get destination based on the top entry
-                    local destinationPlayer:table = Players[topRoute.DestinationCityPlayer];
-                    destinationCity = destinationPlayer:GetCities():FindID(topRoute.DestinationCityID);
-
+                    destinationPlayerID = topRoute.DestinationCityPlayer
+                    destinationCityID = topRoute.DestinationCityID
                 else
                     print("Picking last route");
-                    local destinationPlayer:table = Players[m_TradersAutomatedSettings[unitID].LastRouteInfo.DestinationCityPlayer];
-                    destinationCity = destinationPlayer:GetCities():FindID(m_TradersAutomatedSettings[unitID].LastRouteInfo.DestinationCityID);
+                    destinationPlayerID = m_TradersAutomatedSettings[unitID].LastRouteInfo.DestinationCityPlayer
+                    destinationCityID = m_TradersAutomatedSettings[unitID].LastRouteInfo.DestinationCityID
                 end
 
-                if destinationCity ~= nil and tradeManager:CanStartRoute(originCity:GetOwner(), originCity:GetID(), destinationCity:GetOwner(), destinationCity:GetID()) then
+                if tradeManager:CanStartRoute(originPlayerID, originCityID, destinationPlayerID, destinationCityID) then
+                    local destinationPlayer = Players[destinationPlayerID]
+                    local destinationCity = destinationPlayer:GetCities():FindID(destinationCityID)
+
                     local operationParams = {};
                     operationParams[UnitOperationTypes.PARAM_X0] = destinationCity:GetX();
                     operationParams[UnitOperationTypes.PARAM_Y0] = destinationCity:GetY();
@@ -358,9 +374,7 @@ function RenewTradeRoutes()
                         -- TODO: Send notification for renewing routes
                         UnitManager.RequestOperation(pUnit, UnitOperationTypes.MAKE_TRADE_ROUTE, operationParams);
 
-                        if not renewedRoute then
-                            renewedRoute = true;
-                        end
+                        if not renewedRoute then renewedRoute = true end
                     else
                         print("Could not start a route");
                     end
