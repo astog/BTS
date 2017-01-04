@@ -41,8 +41,6 @@ local m_LocalPlayerRunningRoutes    :table  = {};   -- Tracks local players acti
 local m_TradersAutomatedSettings    :table  = {};   -- Tracks traders, and if they are automated
 local m_Cache                       :table  = {};   -- Cache
 
--- Boolean checks for automated traders
-
 local debug_func_calls:number = 0;
 local debug_total_calls:number = 0;
 
@@ -150,7 +148,7 @@ function CheckConsistencyWithMyRunningRoutes( routesTable:table )
     -- Remove all routes in routesTable, that are not in routesCurrentlyRunning.
     -- Manually control the indices, so that you can iterate over the table while deleting items within it
     local i = 1;
-    while i <= tableLength(routesTable) do
+    while i <= table.count(routesTable) do
         local routeIndex = findIndex( routesCurrentlyRunning, routesTable[i], CheckRouteEquality );
 
         -- Is the route not present?
@@ -168,7 +166,7 @@ end
 function SaveRunningRoutesInfo()
     -- Dump active routes info
     print("Saving running routes info in PlayerConfig database")
-    local dataDump = DataDumper(m_LocalPlayerRunningRoutes, "localPlayerRunningRoutes", true);
+    local dataDump = DataDumper(m_LocalPlayerRunningRoutes, "localPlayerRunningRoutes");
     -- print(dataDump);
     PlayerConfigurations[Game.GetLocalPlayer()]:SetValue("BTS_LocalPlayerRunningRotues", dataDump);
 end
@@ -274,13 +272,12 @@ function AutomateTrader(traderID:number, isAutomated:boolean, sortSettings:table
             print("Removing old automated settings for trader " .. traderID)
             m_TradersAutomatedSettings[traderID] = nil;
 
-            if tableLength(m_TradersAutomatedSettings) <= 0 then
+            if table.count(m_TradersAutomatedSettings) <= 0 then
                 print("No automated traders")
             end
         end
     end
 
-    --dump(m_TradersAutomatedSettings);
     SaveTraderAutomatedInfo();
 end
 
@@ -320,7 +317,7 @@ function RenewTradeRoutes()
                 local destinationPlayerID:number;
                 local destinationCityID:number;
 
-                if m_TradersAutomatedSettings[unitID].SortSettings ~= nil and tableLength(m_TradersAutomatedSettings[unitID].SortSettings) > 0 then
+                if m_TradersAutomatedSettings[unitID].SortSettings ~= nil and table.count(m_TradersAutomatedSettings[unitID].SortSettings) > 0 then
                     print("Picking from top sort entry");
                     local tradeRoutes:table = {};
                     local players:table = Game:GetPlayers();
@@ -388,6 +385,7 @@ function RenewTradeRoutes()
     -- Play sound, if a route was renewed.
     if renewedRoute then
         UI.PlaySound("START_TRADE_ROUTE");
+        SaveTraderAutomatedInfo()
     end
 end
 
@@ -403,16 +401,17 @@ end
 
 function SaveTraderAutomatedInfo()
     -- Dump active routes info
-    -- print("Saving Trader Automated info in PlayerConfig database")
-    local dataDump = DataDumper(m_TradersAutomatedSettings, "traderAutomatedSettings", true);
+    local localPlayerID = Game.GetLocalPlayer();
+    print("Saving Trader Automated info in PlayerConfig database")
+    local dataDump = DataDumper(m_TradersAutomatedSettings, "traderAutomatedSettings");
     -- print(dataDump);
-    PlayerConfigurations[Game.GetLocalPlayer()]:SetValue("BTS_TraderAutomatedSettings", dataDump);
+    PlayerConfigurations[localPlayerID]:SetValue("BTS_TraderAutomatedSettings", dataDump);
 end
 
 function LoadTraderAutomatedInfo()
     local localPlayerID = Game.GetLocalPlayer();
     if(PlayerConfigurations[localPlayerID]:GetValue("BTS_TraderAutomatedSettings") ~= nil) then
-        -- print("Retrieving trader automated settings from PlayerConfig database")
+        print("Retrieving trader automated settings from PlayerConfig database")
         local dataDump = PlayerConfigurations[localPlayerID]:GetValue("BTS_TraderAutomatedSettings");
         -- print(dataDump);
         loadstring(dataDump)();
@@ -551,13 +550,7 @@ end
 -- ===========================================================================
 
 -- This requires sort settings table passed.
-function SortTradeRoutes( tradeRoutes:table, sortSettings:table, settingsChanged)
-    if (settingsChanged ~= nil and (not settingsChanged)) then
-        -- print("OPT: Not sorting")
-        return
-    end
-
-    -- if tableLength(sortSettings) > 0 then
+function SortTradeRoutes( tradeRoutes:table, sortSettings:table)
     if #sortSettings > 0 then
         table.sort(tradeRoutes, function(a, b) return CompleteCompareBy(a, b, sortSettings); end );
     end
@@ -569,7 +562,6 @@ function SortTradeRoutes( tradeRoutes:table, sortSettings:table, settingsChanged
 end
 
 function GetTopRouteFromSortSettings( tradeRoutes:table, sortSettings:table )
-    -- if tableLength(sortSettings) > 0 then
     if #sortSettings > 0 then
         return GetMinEntry(tradeRoutes, function(a, b) return CompleteCompareBy(a, b, sortSettings); end );
     end
@@ -660,13 +652,13 @@ end
 -- Used to sort trade routes
 function CompleteCompareBy( tradeRoute1:table, tradeRoute2:table, sortSettings:table )
     -- for index, sortEntry in ipairs(sortSettings) do
-    for i=1, #sortSettings do
-        local compareFunction = CompareFunctionByID[sortSettings[i].SortByID];
+    for i, sortSetting in ipairs(sortSettings) do
+        local compareFunction = CompareFunctionByID[sortSetting.SortByID];
 
         if compareFunction(tradeRoute1, tradeRoute2) then
-            return (not (sortSettings[i].SortOrder == SORT_DESCENDING))
+            return (not (sortSetting.SortOrder == SORT_DESCENDING))
         elseif compareFunction(tradeRoute2, tradeRoute1) then
-            return (sortSettings[i].SortOrder == SORT_DESCENDING)
+            return (sortSetting.SortOrder == SORT_DESCENDING)
         end
     end
 
@@ -679,7 +671,7 @@ function CompleteCompareBy( tradeRoute1:table, tradeRoute2:table, sortSettings:t
 
     -- Compare by net yield
     -- SLOWER, but more useful
-    return CompareByNetYield(tradeRoute2, tradeRoute1)
+    return CompareByNetYield(tradeRoute2, tradeRoute1) -- Descending order
 end
 
 -- ===========================================================================
@@ -779,19 +771,13 @@ end
 
 -- Returns length of trade path, number of trips to destination, turns to complete route
 function GetAdvancedRouteInfo(routeInfo)
-    local originPlayer:table = Players[routeInfo.OriginCityPlayer];
-    local originCity:table = originPlayer:GetCities():FindID(routeInfo.OriginCityID);
-
-    local destinationPlayer:table = Players[routeInfo.DestinationCityPlayer];
-    local destinationCity:table = destinationPlayer:GetCities():FindID(routeInfo.DestinationCityID);
-
     local eSpeed = GameConfiguration.GetGameSpeedType();
 
     if GameInfo.GameSpeeds[eSpeed] ~= nil then
         local iSpeedCostMultiplier = GameInfo.GameSpeeds[eSpeed].CostMultiplier;
         local tradeManager = Game.GetTradeManager();
-        local pathPlots = tradeManager:GetTradeRoutePath(originCity:GetOwner(), originCity:GetID(), destinationCity:GetOwner(), destinationCity:GetID() );
-        local tradePathLength:number = tableLength(pathPlots) - 1;
+        local pathPlots = tradeManager:GetTradeRoutePath(routeInfo.OriginCityPlayer, routeInfo.OriginCityID, routeInfo.DestinationCityPlayer, routeInfo.DestinationCityID);
+        local tradePathLength:number = table.count(pathPlots) - 1;
         local multiplierConstant:number = 0.1;
 
         local tripsToDestination = 1 + math.floor(iSpeedCostMultiplier/tradePathLength * multiplierConstant);
@@ -804,8 +790,8 @@ function GetAdvancedRouteInfo(routeInfo)
         print("Error: Could not find game speed type. Defaulting to first entry in table");
         local iSpeedCostMultiplier =  GameInfo.GameSpeeds[1].CostMultiplier;
         local tradeManager = Game.GetTradeManager();
-        local pathPlots = tradeManager:GetTradeRoutePath(originCity:GetOwner(), originCity:GetID(), destinationCity:GetOwner(), destinationCity:GetID() );
-        local tradePathLength:number = tableLength(pathPlots) - 1;
+        local pathPlots = tradeManager:GetTradeRoutePath(routeInfo.OriginCityPlayer, routeInfo.OriginCityID, routeInfo.DestinationCityPlayer, routeInfo.DestinationCityID);
+        local tradePathLength:number = table.count(pathPlots) - 1;
         local multiplierConstant:number = 0.1;
 
         local tripsToDestination = 1 + math.floor(iSpeedCostMultiplier/tradePathLength * multiplierConstant);
@@ -1122,7 +1108,7 @@ function RemoveRouteFromTable( routeToDelete:table , routeTable:table, groupedRo
             table.remove(routeTable[targetGroupIndex], targetIndex);
         end
         -- If that group is empty, remove that group
-        if tableLength(routeTable[targetGroupIndex]) <= 0 then
+        if table.count(routeTable[targetGroupIndex]) <= 0 then
             if targetGroupIndex then
                 table.remove(routeTable, targetGroupIndex);
             end
@@ -1193,12 +1179,6 @@ end
 --  Helper Utility functions
 -- ===========================================================================
 
-function tableLength(T)
-    local count = 0
-    for _ in pairs(T) do count = count + 1 end
-    return count
-end
-
 function findIndex(T, searchItem, compareFunc)
     for index, item in ipairs(T) do
         if compareFunc(item, searchItem) then
@@ -1220,29 +1200,29 @@ function GetMinEntry(searchTable, compareFunc)
 end
 
 -- ========== START OF DataDumper.lua =================
---[[ License DataDumper.lua
-    Copyright (c) 2007 Olivetti-Engineering SA
+--[[ DataDumper.lua
+Copyright (c) 2007 Olivetti-Engineering SA
 
-    Permission is hereby granted, free of charge, to any person
-    obtaining a copy of this software and associated documentation
-    files (the "Software"), to deal in the Software without
-    restriction, including without limitation the rights to use,
-    copy, modify, merge, publish, distribute, sublicense, and/or sell
-    copies of the Software, and to permit persons to whom the
-    Software is furnished to do so, subject to the following
-    conditions:
+Permission is hereby granted, free of charge, to any person
+obtaining a copy of this software and associated documentation
+files (the "Software"), to deal in the Software without
+restriction, including without limitation the rights to use,
+copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the
+Software is furnished to do so, subject to the following
+conditions:
 
-    The above copyright notice and this permission notice shall be
-    included in all copies or substantial portions of the Software.
+The above copyright notice and this permission notice shall be
+included in all copies or substantial portions of the Software.
 
-    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
-    EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
-    OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
-    NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
-    HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
-    WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
-    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
-    OTHER DEALINGS IN THE SOFTWARE.
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
+OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+OTHER DEALINGS IN THE SOFTWARE.
 ]]
 
 function dump(...)
@@ -1250,25 +1230,24 @@ function dump(...)
 end
 
 local dumplua_closure = [[
-    local closures = {}
-    local function closure(t)
-      closures[#closures+1] = t
-      t[1] = assert(loadstring(t[1]))
-      return t[1]
-    end
+local closures = {}
+local function closure(t)
+  closures[#closures+1] = t
+  t[1] = assert(loadstring(t[1]))
+  return t[1]
+end
 
-    for _,t in pairs(closures) do
-      for i = 2,#t do
-        debug.setupvalue(t[1], i-1, t[i])
-      end
-    end
+for _,t in pairs(closures) do
+  for i = 2,#t do
+    debug.setupvalue(t[1], i-1, t[i])
+  end
+end
 ]]
 
 local lua_reserved_keywords = {
   'and', 'break', 'do', 'else', 'elseif', 'end', 'false', 'for',
   'function', 'if', 'in', 'local', 'nil', 'not', 'or', 'repeat',
-  'return', 'then', 'true', 'until', 'while'
-}
+  'return', 'then', 'true', 'until', 'while' }
 
 local function keys(t)
   local res = {}
@@ -1454,7 +1433,6 @@ function DataDumper(value, varname, fastmode, ident)
     return table.concat(items)
   end
 end
-
 -- ========== END OF DataDumper.lua =================
 
 -- ===========================================================================
@@ -1474,6 +1452,9 @@ end
 
 function TradeSupportAutomater_Initialize()
     print("Initializing BTS Trade Support Automater");
+
+    -- Load previous automated settings
+    LoadTraderAutomatedInfo();
 
     Events.PlayerTurnActivated.Add( TradeSupportAutomater_OnPlayerTurnActivated );
 end

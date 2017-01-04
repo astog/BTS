@@ -47,8 +47,9 @@ local m_shiftDown:boolean = false;
 
 -- Stores the sort settings.
 local m_SortBySettings:table = {};
-local m_SortSettingsChanged:boolean = false;
-local m_FilterSettingsChanged:boolean = false;
+local m_SortSettingsChanged:boolean = true;
+
+local m_FilterSettingsChanged:boolean = true;
 
 -- Default is ascending in turns to complete trade route
 m_SortBySettings[1] = {
@@ -77,7 +78,6 @@ function Refresh()
         m_LastTrader = selectedUnit:GetID()
         -- Rebuild and re-sort
         m_RebuildAvailableRoutes = true
-        m_SortSettingsChanged = true
     else
         m_RebuildAvailableRoutes = false
     end
@@ -237,11 +237,16 @@ function RefreshChooserPanel()
             end
         end
 
+        -- Need to re-filter and re-sort
+        m_SortSettingsChanged = true
+        m_FilterSettingsChanged = true
+
         -- Cache routes info.
         CacheEmpty()
         CacheRoutesInfo(m_AvailableTradeRoutes)
 
         m_TurnBuiltRouteTable = Game.GetCurrentGameTurn()
+        m_RebuildAvailableRoutes = false -- done building routes
     else
         print("OPT: Not rebuilding routes")
     end
@@ -267,6 +272,10 @@ function RefreshStack()
     -- Filter Destinations by active Filter
     if m_FilterSettingsChanged then
         tradeRoutes = FilterTradeRoutes(m_AvailableTradeRoutes);
+        m_FilterSettingsChanged = false -- done filtering
+
+        -- Filter changed, need to re-sort
+        m_SortSettingsChanged = true
     else
         tradeRoutes = m_AvailableTradeRoutes;
     end
@@ -274,9 +283,12 @@ function RefreshStack()
     -- Send Trade Route Paths to Engine (after filter applied)
     UILens.ClearLayerHexes(LensLayers.TRADE_ROUTE);
 
-    -- If not sort settings, sort by destination city name
-    SortTradeRoutes(tradeRoutes, m_SortBySettings, m_SortSettingsChanged);
-    m_SortSettingsChanged = false
+    if m_SortSettingsChanged then
+        SortTradeRoutes(tradeRoutes, m_SortBySettings);
+        m_SortSettingsChanged = false -- done sorting
+    else
+        print("OPT: Not resorting.")
+    end
 
     -- If a destination City is chosen, send path only for that
     if m_destinationCity ~= nil and m_originCity ~= nil then
@@ -289,6 +301,7 @@ function RefreshStack()
 
     -- for i, tradeRoute in ipairs(tradeRoutes) do
     for i=1, #tradeRoutes do
+        -- If no destination city is selected, show all routes path on the map
         if m_destinationCity == nil then
             local pathPlots = tradeManager:GetTradeRoutePath(tradeRoutes[i].OriginCityPlayer, tradeRoutes[i].OriginCityID, tradeRoutes[i].DestinationCityPlayer, tradeRoutes[i].DestinationCityID);
             local kVariations:table = {};
@@ -549,7 +562,6 @@ function OnFilterSelected( index:number, filterIndex:number )
     Controls.FilterButton:SetText(m_filterList[m_filterSelected].FilterText);
 
     m_FilterSettingsChanged = true
-    m_SortSettingsChanged = true;
     Refresh();
 end
 
@@ -891,6 +903,7 @@ end
 -- ---------------------------------------------------------------------------
 function OnGeneralNotSortBy(sortByID)
     RemoveSortEntry(sortByID, m_SortBySettings);
+
     m_SortSettingsChanged = true
     Refresh();
 end
@@ -1057,8 +1070,12 @@ function OnGameDebugReturn( context:string, contextTable:table )
         return;
     end
 
-    m_filterSelected = contextTable["filterIndex"];
-    m_destinationCity = contextTable["destinationCity"];
+    if contextTable["filterIndex"] ~= nil then
+        m_filterSelected = contextTable["filterIndex"];
+    end
+    if contextTable["destinationCity"] ~= nil then
+        m_destinationCity = contextTable["destinationCity"];
+    end
 
     Refresh();
 end

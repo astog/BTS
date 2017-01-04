@@ -55,7 +55,6 @@ local SORT_ASCENDING = GetSortAscendingIdConstant();
 local SORT_DESCENDING = GetSortDescendingIdConstant();
 
 local SEMI_EXPAND_SETTINGS:table = {};
-SEMI_EXPAND_SETTINGS[GROUP_BY_SETTINGS.NONE] = 10000;    -- 100 * 100 possible cities. It can never be higher than this, right?
 SEMI_EXPAND_SETTINGS[GROUP_BY_SETTINGS.ORIGIN] = 4;
 SEMI_EXPAND_SETTINGS[GROUP_BY_SETTINGS.DESTINATION] = 2;
 
@@ -96,31 +95,15 @@ local m_GroupCollapseAll:boolean = false;
 local m_GroupsFullyExpanded:table = {};
 local m_GroupsFullyCollapsed:table = {};
 
--- Variables used for cycle trade units function
-local m_TradeUnitIndex:number = 0;
-local m_CurrentCyclingUnitsTradeRoute:number = -1;
-local m_DisplayedTradeRoutes:number = 0;
-
 local m_HasBuiltTradeRouteTable:boolean = false;
 local m_LastTurnBuiltTradeRouteTable:number = -1;
 local m_SortSettingsChanged:boolean = true;
+local m_GroupSettingsChanged:boolean = true;
 local m_FilterSettingsChanged:boolean = true;
 
 -- Stores the sort settings.
 local m_SortBySettings = {};
 local m_GroupSortBySettings = {};
-
--- Default is ascending in turns to complete trade route
-m_SortBySettings[1] = {
-    SortByID = SORT_BY_ID.TURNS_TO_COMPLETE;
-    SortOrder = SORT_ASCENDING;
-};
-
--- Default is ascending in turns to complete trade route
-m_GroupSortBySettings[1] = {
-    SortByID = SORT_BY_ID.GOLD;
-    SortOrder = SORT_DESCENDING;
-};
 
 local preRefreshClock = 0;
 
@@ -249,7 +232,6 @@ end
 
 -- Show My Routes Tab
 function ViewMyRoutes()
-    m_DisplayedTradeRoutes = 0;
 
     -- Update Tabs
     SetMyRoutesTabSelected(true);
@@ -354,7 +336,6 @@ end
 
 -- Show Routes To My Cities Tab
 function ViewRoutesToCities()
-    m_DisplayedTradeRoutes = 0;
 
     -- Update Tabs
     SetMyRoutesTabSelected(false);
@@ -409,7 +390,6 @@ end
 
 -- Show Available Routes Tab
 function ViewAvailableRoutes()
-    m_DisplayedTradeRoutes = 0;
 
     -- Update Tabs
     SetMyRoutesTabSelected(false);
@@ -427,7 +407,6 @@ function ViewAvailableRoutes()
 
     -- Dont rebuild if the turn has not advanced
     if (not m_HasBuiltTradeRouteTable) or Game.GetCurrentGameTurn() > m_LastTurnBuiltTradeRouteTable then
-        print("Trade Route table last built on: " .. m_LastTurnBuiltTradeRouteTable .. ". Current game turn: " .. Game.GetCurrentGameTurn());
         RebuildAvailableTradeRoutesTable();
         print("Time taken to build routes: " .. (os.clock()- preRefreshClock) .. " sec(s)");
 
@@ -442,6 +421,7 @@ function ViewAvailableRoutes()
         m_FilterSettingsChanged = true;
         m_GroupSettingsChanged = true;
     else
+        print("Trade Route table last built on: " .. m_LastTurnBuiltTradeRouteTable .. ". Current game turn: " .. Game.GetCurrentGameTurn());
         print("OPT: Not Rebuilding or recaching routes table")
     end
 
@@ -460,6 +440,7 @@ function ViewAvailableRoutes()
     if m_groupByList[m_groupBySelected].groupByID ~= GROUP_BY_SETTINGS.NONE then
         -- Group routes. Use the filtered list of routes
         if m_GroupSettingsChanged then
+            -- Group from the filtered routes
             m_AvailableGroupedRoutes = GroupRoutes(m_FinalTradeRoutes, m_groupByList[m_groupBySelected].groupByID)
             print("Time taken till group: " .. (os.clock() - preRefreshClock) .. " sec(s)")
 
@@ -473,15 +454,15 @@ function ViewAvailableRoutes()
         if m_SortSettingsChanged then
             -- Sort within each group
             for i=1, #m_AvailableGroupedRoutes do
-                SortTradeRoutes(m_AvailableGroupedRoutes[i], m_SortBySettings, m_SortSettingsChanged)
+                SortTradeRoutes(m_AvailableGroupedRoutes[i], m_SortBySettings)
             end
             print("Time taken till within group sort: " .. (os.clock() - preRefreshClock) .. " sec(s)")
 
             -- Sort the order of groups. You need to do this AFTER each group has been sorted
-            SortGroupedRoutes(m_AvailableGroupedRoutes, m_GroupSortBySettings, m_SortSettingsChanged);
+            SortGroupedRoutes(m_AvailableGroupedRoutes, m_GroupSortBySettings);
             print("Time taken till group sort: " .. (os.clock()- preRefreshClock) .. " sec(s)");
         else
-            print("OPT: Not refiltering and resorting within groups")
+            print("OPT: Not resorting within and of groups")
         end
 
         -- Show the groups
@@ -500,14 +481,17 @@ function ViewAvailableRoutes()
         end
     else
         if m_FinalTradeRoutes ~= nil then
-            SortTradeRoutes(m_FinalTradeRoutes, m_GroupSortBySettings, (m_SortSettingsChanged or m_GroupSettingsChanged));
-            print("Time taken till sort: " .. (os.clock() - preRefreshClock) .. " sec(s)")
-
-            AddRouteInstancesFromTable(m_FinalTradeRoutes, SEMI_EXPAND_SETTINGS[GROUP_BY_SETTINGS.NONE]);
+            if m_SortSettingsChanged or m_GroupSettingsChanged then
+                SortTradeRoutes(m_FinalTradeRoutes, m_GroupSortBySettings);
+                print("Time taken till sort: " .. (os.clock() - preRefreshClock) .. " sec(s)")
+            else
+                print("OPT: Not resorting routes")
+            end
+            AddRouteInstancesFromTable(m_FinalTradeRoutes);
         end
     end
 
-    -- Routes are sorted if it reaches here
+    -- Everything is done if it reaches here
     m_SortSettingsChanged = false;
     m_FilterSettingsChanged = false;
     m_GroupSettingsChanged = false;
@@ -808,7 +792,7 @@ function AddRouteInstanceFromRouteInfo( routeInfo:table )
     -- Add button hookups for only this tab
     elseif m_currentTab == TRADE_TABS.AVAILABLE_ROUTES then
         -- Check if we have free traders
-        if m_AvailableTraders[routeInfo.OriginCityID] ~= nil and tableLength(m_AvailableTraders[routeInfo.OriginCityID]) > 0 then
+        if m_AvailableTraders[routeInfo.OriginCityID] ~= nil and table.count(m_AvailableTraders[routeInfo.OriginCityID]) > 0 then
             -- Get first trader
             local traderID = m_AvailableTraders[routeInfo.OriginCityID][1]
             local tradeUnit:table = originPlayer:GetUnits():FindID(traderID);
@@ -1599,7 +1583,18 @@ function Close()
     if not ContextPtr:IsHidden() then
         UI.PlaySound("CityStates_Panel_Close");
     end
+
     m_AnimSupport.Hide();
+
+    -- Reset sort settings
+    m_SortBySettings = {};
+    m_GroupSortBySettings = {};
+
+    -- Reset tab
+    m_currentTab = TRADE_TABS.MY_ROUTES;
+
+    -- Reset filter
+    m_filterSelected = 1;
 end
 
 -- ===========================================================================
