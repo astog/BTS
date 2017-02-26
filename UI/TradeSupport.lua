@@ -227,6 +227,8 @@ local function TradeSupportTracker_OnUnitOperationsCleared(ownerID:number, unitI
         if pUnit ~= nil then
             local unitInfo:table = GameInfo.Units[pUnit:GetUnitType()];
             if unitInfo ~= nil and unitInfo.MakeTradeRoute then
+                LoadTraderAutomatedInfo();
+
                 -- Remove entry from local players running routes
                 for i, route in ipairs(m_LocalPlayerRunningRoutes) do
                     if route.TraderUnitID == unitID then
@@ -264,6 +266,8 @@ end
 -- ===========================================================================
 
 function AutomateTrader(traderID:number, isAutomated:boolean, sortSettings:table)
+    LoadTraderAutomatedInfo();
+
     if m_TradersAutomatedSettings[traderID] == nil then
         m_TradersAutomatedSettings[traderID] = {}
     end
