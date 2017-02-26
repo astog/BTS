@@ -145,6 +145,7 @@ function RefreshTopPanel()
 
         -- Update Resources
         Controls.OriginResourceList:DestroyAllChildren();
+        Controls.DestinationResourceList:DestroyAllChildren();
 
         local originYieldInstance:table = {};
         local originReceivedResources:boolean = false;
@@ -192,7 +193,7 @@ function RefreshTopPanel()
         Controls.OriginResourceList:CalculateSize();
         Controls.OriginResourceList:ReprocessAnchoring();
         Controls.DestinationResourceList:CalculateSize();
-        Controls.DestinationResourceList:CalculateSize();
+        Controls.DestinationResourceList:ReprocessAnchoring();
 
         -- Show Panel
         Controls.CurrentSelectionContainer:SetHide(false);
