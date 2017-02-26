@@ -122,33 +122,43 @@ function RebuildAvailableTradeRoutesTable()
     local sourcePlayerID = Game.GetLocalPlayer();
     local sourceCities:table = Players[sourcePlayerID]:GetCities();
     local players:table = Game:GetPlayers();
+    local destinationCitiesID:table = {};
     local tradeManager:table = Game.GetTradeManager();
+
+    for _, destinationPlayer in ipairs(players) do
+        local destinationPlayerID:number = destinationPlayer:GetID()
+        -- Check for war, met, etc
+        if CanPossiblyTradeWithPlayer(sourcePlayerID, destinationPlayerID) then
+            destinationCitiesID[destinationPlayerID] = {};
+            local destinationCities:table = destinationPlayer:GetCities();
+
+            for _, destinationCity in destinationCities:Members() do
+                local destinationCityID:number = destinationCity:GetID();
+                table.insert(destinationCitiesID[destinationPlayerID], destinationCityID);
+            end
+        end
+    end
 
     for _, sourceCity in sourceCities:Members() do
         local sourceCityID:number = sourceCity:GetID();
-        for _, destinationPlayer in ipairs(players) do
-            local destinationPlayerID:number = destinationPlayer:GetID()
-            -- Check for war, met, etc
-            if CanPossiblyTradeWithPlayer(sourcePlayerID, destinationPlayerID) then
-                local destinationCities:table = destinationPlayer:GetCities();
-                for _, destinationCity in destinationCities:Members() do
-                    local destinationCityID:number = destinationCity:GetID();
-                    -- Can we trade with this city / civ
-                    if tradeManager:CanStartRoute(sourcePlayerID, sourceCityID, destinationPlayerID, destinationCityID) then
-                        -- Create the trade route entry
-                        local tradeRoute = {
-                            OriginCityPlayer        = sourcePlayerID,
-                            OriginCityID            = sourceCityID,
-                            DestinationCityPlayer   = destinationPlayerID,
-                            DestinationCityID       = destinationCityID
-                        };
+        for destinationPlayerID, destinationCities in pairs(destinationCitiesID) do
+            for _, destinationCityID in ipairs(destinationCities) do
+                -- Can we trade with this city / civ
+                if tradeManager:CanStartRoute(sourcePlayerID, sourceCityID, destinationPlayerID, destinationCityID) then
+                    -- Create the trade route entry
+                    local tradeRoute = {
+                        OriginCityPlayer        = sourcePlayerID,
+                        OriginCityID            = sourceCityID,
+                        DestinationCityPlayer   = destinationPlayerID,
+                        DestinationCityID       = destinationCityID
+                    };
 
-                        m_AvailableTradeRoutes[#m_AvailableTradeRoutes + 1] = tradeRoute;
-                    end
+                    m_AvailableTradeRoutes[#m_AvailableTradeRoutes + 1] = tradeRoute;
                 end
             end
         end
     end
+
     print("Total routes = " .. #m_AvailableTradeRoutes)
 
     m_HasBuiltTradeRouteTable = true;

@@ -22,13 +22,22 @@ local SORT_DESCENDING = 2;
 
 local CompareFunctionByID   = {};
 
-CompareFunctionByID[SORT_BY_ID.FOOD]                = function(a, b) return CompareByYield (GameInfo.Yields["YIELD_FOOD"].Index, a, b); end;
-CompareFunctionByID[SORT_BY_ID.PRODUCTION]          = function(a, b) return CompareByYield (GameInfo.Yields["YIELD_PRODUCTION"].Index, a, b); end;
-CompareFunctionByID[SORT_BY_ID.GOLD]                = function(a, b) return CompareByYield (GameInfo.Yields["YIELD_GOLD"].Index, a, b); end;
-CompareFunctionByID[SORT_BY_ID.SCIENCE]             = function(a, b) return CompareByYield (GameInfo.Yields["YIELD_SCIENCE"].Index, a, b); end;
-CompareFunctionByID[SORT_BY_ID.CULTURE]             = function(a, b) return CompareByYield (GameInfo.Yields["YIELD_CULTURE"].Index, a, b); end;
-CompareFunctionByID[SORT_BY_ID.FAITH]               = function(a, b) return CompareByYield (GameInfo.Yields["YIELD_FAITH"].Index, a, b); end;
-CompareFunctionByID[SORT_BY_ID.TURNS_TO_COMPLETE]   = function(a, b) return CompareByTurnsToComplete(a, b); end;
+local YIELD_CONSTANTS = {
+    FOOD = GameInfo.Yields["YIELD_FOOD"].Index,
+    PRODUCTION = GameInfo.Yields["YIELD_PRODUCTION"].Index,
+    GOLD = GameInfo.Yields["YIELD_GOLD"].Index,
+    SCIENCE = GameInfo.Yields["YIELD_SCIENCE"].Index,
+    CULTURE = GameInfo.Yields["YIELD_CULTURE"].Index,
+    FAITH = GameInfo.Yields["YIELD_FAITH"].Index
+}
+
+CompareFunctionByID[SORT_BY_ID.FOOD]                = function(a, b) return CompareByYield(YIELD_CONSTANTS.FOOD, a, b) end
+CompareFunctionByID[SORT_BY_ID.PRODUCTION]          = function(a, b) return CompareByYield(YIELD_CONSTANTS.PRODUCTION, a, b) end
+CompareFunctionByID[SORT_BY_ID.GOLD]                = function(a, b) return CompareByYield(YIELD_CONSTANTS.GOLD, a, b) end
+CompareFunctionByID[SORT_BY_ID.SCIENCE]             = function(a, b) return CompareByYield(YIELD_CONSTANTS.SCIENCE, a, b) end
+CompareFunctionByID[SORT_BY_ID.CULTURE]             = function(a, b) return CompareByYield(YIELD_CONSTANTS.CULTURE, a, b) end
+CompareFunctionByID[SORT_BY_ID.FAITH]               = function(a, b) return CompareByYield(YIELD_CONSTANTS.FAITH, a, b) end
+CompareFunctionByID[SORT_BY_ID.TURNS_TO_COMPLETE]   = function(a, b) return CompareByTurnsToComplete(a, b) end
 
 local START_INDEX:number = GameInfo.Yields["YIELD_FOOD"].Index;
 local END_INDEX:number = GameInfo.Yields["YIELD_FAITH"].Index;
@@ -41,8 +50,8 @@ local m_LocalPlayerRunningRoutes    :table  = {};   -- Tracks local players acti
 local m_TradersAutomatedSettings    :table  = {};   -- Tracks traders, and if they are automated
 local m_Cache                       :table  = {};   -- Cache
 
-local debug_func_calls:number = 0;
-local debug_total_calls:number = 0;
+-- local debug_func_calls:number = 0;
+-- local debug_total_calls:number = 0;
 
 -- ===========================================================================
 --  Constants Getter Functions
@@ -217,24 +226,25 @@ local function TradeSupportTracker_OnUnitOperationsCleared(ownerID:number, unitI
 
         if pUnit ~= nil then
             local unitInfo:table = GameInfo.Units[pUnit:GetUnitType()];
-            if unitInfo.MakeTradeRoute == true then
+            if unitInfo ~= nil and unitInfo.MakeTradeRoute then
                 -- Remove entry from local players running routes
                 for i, route in ipairs(m_LocalPlayerRunningRoutes) do
                     if route.TraderUnitID == unitID then
-                        -- Add it to the last route info for trader
-                        if m_TradersAutomatedSettings[unitID] ~= nil then
-                            m_TradersAutomatedSettings[unitID].LastRouteInfo = route;
-                        else
-                            -- Create a new entry for this trader
+                        if m_TradersAutomatedSettings[unitID] == nil then
                             print("Couldn't find trader automated info. Creating one.")
                             m_TradersAutomatedSettings[unitID] = { IsAutomated=false };
-                            m_TradersAutomatedSettings[unitID].LastRouteInfo = route;
                         end
 
+                        -- Add it to the last route info for trader
+                        m_TradersAutomatedSettings[unitID].LastRouteInfo = route;
+
+                        -- Save the previous route
                         SaveTraderAutomatedInfo();
 
                         print("Removing route " .. GetTradeRouteString(route) .. " from currently running, since it completed.");
                         RemoveRouteFromTable(route, m_LocalPlayerRunningRoutes, false);
+
+                        SaveRunningRoutesInfo()
                         return
                     end
                 end
@@ -254,28 +264,17 @@ end
 -- ===========================================================================
 
 function AutomateTrader(traderID:number, isAutomated:boolean, sortSettings:table)
-    if isAutomated then
-        if sortSettings ~= nil and table.count(sortSettings) > 0 then
-            print("Automate trader " .. traderID .. " with top route.")
-            m_TradersAutomatedSettings[traderID] = {
-                IsAutomated = true,
-                SortSettings = sortSettings
-            }
-        else
-            print("Automate trader " .. traderID)
-            m_TradersAutomatedSettings[traderID] = {
-                IsAutomated = true
-            }
-        end
-    else
-        if m_TradersAutomatedSettings[traderID] ~= nil then
-            print("Removing old automated settings for trader " .. traderID)
-            m_TradersAutomatedSettings[traderID] = nil;
+    if m_TradersAutomatedSettings[traderID] == nil then
+        m_TradersAutomatedSettings[traderID] = {}
+    end
 
-            if table.count(m_TradersAutomatedSettings) <= 0 then
-                print("No automated traders")
-            end
-        end
+    m_TradersAutomatedSettings[traderID].IsAutomated = isAutomated
+
+    if sortSettings ~= nil and table.count(sortSettings) > 0 then
+        print("Automate trader " .. traderID .. " with top route.")
+        m_TradersAutomatedSettings[traderID].SortSettings = sortSettings
+    else
+        print("Automate trader " .. traderID)
     end
 
     SaveTraderAutomatedInfo();
@@ -461,11 +460,11 @@ function CacheRoute(routeInfo)
     -------------------------------------------------
     m_Cache[key].Yields = {}
     local netOriginYield:number = 0
-    for iI = START_INDEX, END_INDEX do
-        local originYield = GetYieldForOriginCity(iI, routeInfo)
-        local destinationYield = GetYieldForDestinationCity(iI, routeInfo)
+    for yieldIndex = START_INDEX, END_INDEX do
+        local originYield = GetYieldForOriginCity(yieldIndex, routeInfo)
+        local destinationYield = GetYieldForDestinationCity(yieldIndex, routeInfo)
 
-        m_Cache[key].Yields[iI] = {
+        m_Cache[key].Yields[yieldIndex] = {
             Origin = originYield,
             Destination = destinationYield
         }
@@ -808,9 +807,10 @@ end
 function GetYieldForOriginCity( yieldIndex:number, routeInfo:table, checkCache)
     if checkCache then
         local key:string = GetRouteKey(routeInfo)
-        if m_Cache[key] ~= nil and m_Cache[key].TurnBuilt >= Game.GetCurrentGameTurn()then
+        local cacheEntry = m_Cache[key]
+        if cacheEntry ~= nil then
             -- print("CACHE HIT for " .. GetTradeRouteString(routeInfo))
-            return m_Cache[key].Yields[yieldIndex].Origin
+            return cacheEntry.Yields[yieldIndex].Origin
         else
             print("CACHE MISS for " .. GetTradeRouteString(routeInfo))
             CacheRoute(routeInfo);
@@ -821,8 +821,12 @@ function GetYieldForOriginCity( yieldIndex:number, routeInfo:table, checkCache)
 
         -- From route
         local yieldValue = tradeManager:CalculateOriginYieldFromPotentialRoute(routeInfo.OriginCityPlayer, routeInfo.OriginCityID, routeInfo.DestinationCityPlayer, routeInfo.DestinationCityID, yieldIndex);
-        -- From path
-        yieldValue = yieldValue + tradeManager:CalculateOriginYieldFromPath(routeInfo.OriginCityPlayer, routeInfo.OriginCityID, routeInfo.DestinationCityPlayer, routeInfo.DestinationCityID, yieldIndex);
+
+        -- From path only if yield is gold
+        if yieldIndex == GameInfo.Yields["YIELD_GOLD"].Index then
+            yieldValue = yieldValue + tradeManager:CalculateOriginYieldFromPath(routeInfo.OriginCityPlayer, routeInfo.OriginCityID, routeInfo.DestinationCityPlayer, routeInfo.DestinationCityID, yieldIndex);
+        end
+
         -- From modifiers
         local resourceID = -1;
         yieldValue = yieldValue + tradeManager:CalculateOriginYieldFromModifiers(routeInfo.OriginCityPlayer, routeInfo.OriginCityID, routeInfo.DestinationCityPlayer, routeInfo.DestinationCityID, yieldIndex, resourceID);
@@ -835,9 +839,10 @@ end
 function GetYieldForDestinationCity( yieldIndex:number, routeInfo:table, checkCache )
     if checkCache then
         local key:string = GetRouteKey(routeInfo)
-        if m_Cache[key] ~= nil and m_Cache[key].TurnBuilt >= Game.GetCurrentGameTurn()then
+        local cacheEntry = m_Cache[key]
+        if cacheEntry ~= nil then
             -- print("CACHE HIT for " .. GetTradeRouteString(routeInfo))
-            return m_Cache[key].Yields[yieldIndex].Destination
+            return cacheEntry.Yields[yieldIndex].Destination
         else
             print("CACHE MISS for " .. GetTradeRouteString(routeInfo))
             CacheRoute(routeInfo);
@@ -861,7 +866,7 @@ end
 function GetNetYieldForOriginCity( routeInfo, checkCache )
     if checkCache then
         local key:string = GetRouteKey(routeInfo)
-        if m_Cache[key] ~= nil and m_Cache[key].TurnBuilt >= Game.GetCurrentGameTurn()then
+        if m_Cache[key] ~= nil then
             -- print("CACHE HIT for " .. GetTradeRouteString(routeInfo))
             return m_Cache[key].NetOriginYield
         else
@@ -882,7 +887,7 @@ end
 function GetTurnsToComplete(routeInfo, checkCache)
     if checkCache then
         local key = GetRouteKey(routeInfo)
-        if m_Cache[key] ~= nil and m_Cache[key].TurnBuilt <= Game.GetCurrentGameTurn()then
+        if m_Cache[key] ~= nil then
             -- print("CACHE HIT for " .. GetTradeRouteString(routeInfo))
             return m_Cache[key].TurnsToComplete
         else
@@ -899,7 +904,7 @@ end
 function GetRouteInfo(routeInfo, checkCache)
     if checkCache then
         local key = GetRouteKey(routeInfo)
-        if m_Cache[key] ~= nil and m_Cache[key].TurnBuilt <= Game.GetCurrentGameTurn()then
+        if m_Cache[key] ~= nil then
             -- print("CACHE HIT for " .. GetTradeRouteString(routeInfo))
             return m_Cache[key].TradePathLength, m_Cache[key].TripsToDestination, m_Cache[key].TurnsToCompleteRoute
         else
@@ -915,7 +920,7 @@ end
 function GetRouteHasTradingPost(routeInfo, checkCache)
     if checkCache then
         local key = GetRouteKey(routeInfo)
-        if m_Cache[key] ~= nil and m_Cache[key].TurnBuilt <= Game.GetCurrentGameTurn()then
+        if m_Cache[key] ~= nil then
             -- print("CACHE HIT for " .. GetTradeRouteString(routeInfo))
             return m_Cache[key].HasTradingPost
         else
@@ -933,7 +938,7 @@ end
 
 function GetHasActiveRoute(playerID, checkCache)
     if checkCache then
-        if m_Cache.Players ~= nil and m_Cache.Players[playerID] ~= nil and m_Cache.Players[playerID].TurnBuilt <= Game.GetCurrentGameTurn() then
+        if m_Cache.Players ~= nil and m_Cache.Players[playerID] ~= nil then
             -- print("CACHE HIT for player " .. playerID)
             return m_Cache.Players[playerID].HasActiveRoute
         else
@@ -955,7 +960,7 @@ end
 
 function GetVisibilityIndex(playerID, checkCache)
     if checkCache then
-        if m_Cache.Players ~= nil and m_Cache.Players[playerID] ~= nil and m_Cache.Players[playerID].TurnBuilt <= Game.GetCurrentGameTurn() then
+        if m_Cache.Players ~= nil and m_Cache.Players[playerID] ~= nil then
             -- print("CACHE HIT for player " .. playerID)
             return m_Cache.Players[playerID].VisibilityIndex
         else
@@ -970,7 +975,7 @@ end
 
 function GetPlayerIconInfo(playerID, checkCache)
     if checkCache then
-        if m_Cache.Players ~= nil and m_Cache.Players[playerID] ~= nil and m_Cache.Players[playerID].TurnBuilt <= Game.GetCurrentGameTurn() then
+        if m_Cache.Players ~= nil and m_Cache.Players[playerID] ~= nil then
             -- print("CACHE HIT for player " .. playerID)
             return unpack(m_Cache.Players[playerID].Icon)
         else
@@ -1017,7 +1022,7 @@ end
 
 function GetPlayerColorInfo(playerID, checkCache)
     if checkCache then
-        if m_Cache.Players ~= nil and m_Cache.Players[playerID] ~= nil and m_Cache.Players[playerID].TurnBuilt <= Game.GetCurrentGameTurn() then
+        if m_Cache.Players ~= nil and m_Cache.Players[playerID] ~= nil then
             -- print("CACHE HIT for player " .. playerID)
             return unpack(m_Cache.Players[playerID].Colors)
         else

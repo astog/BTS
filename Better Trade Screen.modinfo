@@ -28,15 +28,6 @@
 		</LocalizedText>
 	</Components>
 
-	<Settings>
-		<Custom id="BTS_SETTINGS">
-			<Items>
-				<Component>BTS_IMPORT_FILES</Component>
-				<Component>BTS_TEXT</Component>
-			</Items>
-		</Custom>
-	</Settings>
-
 	<LocalizedText>
 		<Text id="LOC_BTS_NAME">
 			<en_US>Better Trade Screen</en_US>
