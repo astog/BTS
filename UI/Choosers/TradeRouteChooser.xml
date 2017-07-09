@@ -47,10 +47,10 @@
             </Grid>
 
             <Stack StackGrowth="Right" Anchor="C,B" Offset="0,55" StackPadding="5">
-              <Label Offset="20,2" FontStyle="Shadow" WrapWidth="140" Style="FontNormal14" String="LOC_TRADE_FROM_TOP_SORT_ENTRY_CHECKBOX_LABEL" ToolTip="LOC_TRADE_FROM_TOP_SORT_ENTRY_CHECKBOX_TOOLTIP" Color="White"/>
+              <Label Offset="0,2" FontStyle="Shadow" WrapWidth="140" Style="FontNormal14" String="LOC_TRADE_REPEAT_ROUTE_CHECKBOX_LABEL" ToolTip="LOC_TRADE_REPEAT_ROUTE_CHECKBOX_TOOLTIP" Color="White"/>
               <CheckBox ID="RepeatRouteCheckbox" Style="MainCheckBox" IsChecked="0"/>
 
-              <Label Offset="20,2" FontStyle="Shadow" Style="FontNormal14" String="LOC_TRADE_FROM_TOP_SORT_ENTRY_CHECKBOX_LABEL" ToolTip="LOC_TRADE_FROM_TOP_SORT_ENTRY_CHECKBOX_TOOLTIP" Color="White"/>
+              <Label Offset="20,2" FontStyle="Shadow" WrapWidth="140" Style="FontNormal14" String="LOC_TRADE_FROM_TOP_SORT_ENTRY_CHECKBOX_LABEL" ToolTip="LOC_TRADE_FROM_TOP_SORT_ENTRY_CHECKBOX_TOOLTIP" Color="White"/>
               <CheckBox ID="FromTopSortEntryCheckbox" Style="MainCheckBox" IsChecked="0"/>
             </Stack>
 
