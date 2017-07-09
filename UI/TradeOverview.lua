@@ -215,9 +215,10 @@ function Refresh()
         ViewMyRoutes();
     end
 
-    PostRefresh();
+    local postRefreshClock:number = os.clock()
+    print("Time taken to refresh: " .. (postRefreshClock - preRefreshClock) .. " secs");
 
-    print("Time taken to refresh: " .. (os.clock() - preRefreshClock) .. " secs");
+    PostRefresh();
 end
 
 function PreRefresh()
@@ -603,7 +604,12 @@ function AddRouteInstancesFromTable( tradeRoutes:table, showCount:number )
             AddRouteInstanceFromRouteInfo(tradeRoutes[i]);
         end
     else
+        local tClock = os.clock();
         for i=1, #tradeRoutes do
+            if (tClock < os.clock()) then
+                print("+1 sec ... " .. i)
+                tClock = os.clock()
+            end
             AddRouteInstanceFromRouteInfo(tradeRoutes[i]);
         end
     end
@@ -800,7 +806,7 @@ function AddRouteInstanceFromRouteInfo( routeInfo:table )
             end
         );
     -- Add button hookups for only this tab
-    elseif m_currentTab == TRADE_TABS.AVAILABLE_ROUTES then
+    elseif m_currentTab == TRADE_TABS.AVAILABLE_ROUTES and m_AvailableTraders ~= nil and table.count(m_AvailableTraders) > 0 then
         -- Check if we have free traders
         if m_AvailableTraders[routeInfo.OriginCityID] ~= nil and table.count(m_AvailableTraders[routeInfo.OriginCityID]) > 0 then
             -- Get first trader
@@ -823,6 +829,7 @@ function AddRouteInstanceFromRouteInfo( routeInfo:table )
                                 coroutine.yield()
                             end
                         end
+                        coroutine.yield() -- gauranteed yield to prevent infinite cycle bug
                     end
                 end
             );
@@ -1217,6 +1224,8 @@ function RefreshGroupByPulldown()
     AddGroupByEntry(Locale.Lookup("LOC_CITY_STATES_NONE"), GROUP_BY_SETTINGS.NONE);
     AddGroupByEntry(Locale.Lookup("LOC_TRADE_OVERVIEW_ORIGIN"), GROUP_BY_SETTINGS.ORIGIN);
     AddGroupByEntry(Locale.Lookup("LOC_TRADE_OVERVIEW_DESTINATION"), GROUP_BY_SETTINGS.DESTINATION);
+    AddGroupByEntry(Locale.Lookup("LOC_TRADE_OVERVIEW_AZ"), GROUP_BY_SETTINGS.DESTINATION);
+    AddGroupByEntry(Locale.Lookup("LOC_TRADE_OVERVIEW_ZA"), GROUP_BY_SETTINGS.DESTINATION);
 
     -- Calculate Internals
     Controls.OverviewGroupByPulldown:CalculateInternals();

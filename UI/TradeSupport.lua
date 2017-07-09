@@ -548,6 +548,59 @@ function GetRouteKey(routeInfo)
                 routeInfo.DestinationCityPlayer .. "_" .. routeInfo.DestinationCityID;
 end
 
+function CacheKeyToRouteInfo(cacheKey)
+    -- print("key: " .. cacheKey)
+    local ids = split(cacheKey, "_")
+    local routeInfo = {
+        OriginCityPlayer = tonumber(ids[1]),
+        OriginCityID = tonumber(ids[2]),
+        DestinationCityPlayer = tonumber(ids[3]),
+        DestinationCityID = tonumber(ids[4])
+    }
+
+    -- dump(routeInfo)
+    return routeInfo
+end
+
+-- ---------------------------------------------------------------------------
+-- Cache lookups
+-- ---------------------------------------------------------------------------
+
+function Cached_GetYieldForOriginCity(yieldIndex:number, routeCacheKey:string)
+    local cacheEntry = m_Cache[routeCacheKey]
+    if cacheEntry ~= nil then
+        -- print("CACHE HIT for " .. routeCacheKey)
+        return cacheEntry.Yields[yieldIndex].Origin
+    else
+        print("CACHE MISS for " .. routeCacheKey)
+        CacheRoute(CacheKeyToRouteInfo(routeCacheKey));
+        return m_Cache[routeCacheKey].Yields[yieldIndex].Origin
+    end
+end
+
+function Cached_GetYieldForDestinationCity(yieldIndex:number, routeCacheKey:string)
+    local cacheEntry = m_Cache[routeCacheKey]
+    if cacheEntry ~= nil then
+        -- print("CACHE HIT for " .. routeCacheKey)
+        return cacheEntry.Yields[yieldIndex].Destination
+    else
+        print("CACHE MISS for " .. routeCacheKey)
+        CacheRoute(CacheKeyToRouteInfo(routeCacheKey));
+        return m_Cache[routeCacheKey].Yields[yieldIndex].Destination
+    end
+end
+
+function Cached_GetTurnsToComplete(routeCacheKey:string)
+    if m_Cache[routeCacheKey] ~= nil then
+        -- print("CACHE HIT for " .. routeCacheKey)
+        return m_Cache[routeCacheKey].TurnsToCompleteRoute
+    else
+        print("CACHE MISS for " .. routeCacheKey)
+        CacheRoute(CacheKeyToRouteInfo(routeCacheKey));
+        return m_Cache[routeCacheKey].TurnsToCompleteRoute
+    end
+end
+
 -- ===========================================================================
 --  Trade Route Sorter
 -- ===========================================================================
@@ -622,22 +675,24 @@ end
 -- Yield/Turn Compare functions
 -- ---------------------------------------------------------------------------
 
-function CompareByYield( yieldIndex:number, tradeRoute1:table, tradeRoute2:table)
-    local yieldForRoute1 = GetYieldForOriginCity(yieldIndex, tradeRoute1, true);
-    local yieldForRoute2 = GetYieldForOriginCity(yieldIndex, tradeRoute2, true);
+function CompareByYield( yieldIndex:number, tradeRoute1, tradeRoute2)
+    local yieldForRoute1, yieldForRoute2;
+    yieldForRoute1 = GetYieldForOriginCity(yieldIndex, tradeRoute1, true);
+    yieldForRoute2 = GetYieldForOriginCity(yieldIndex, tradeRoute2, true);
 
     -- debug_func_calls = debug_func_calls + 1
     return yieldForRoute1 < yieldForRoute2;
 end
 
-function CompareByTurnsToComplete( tradeRoute1:table, tradeRoute2:table )
+function CompareByTurnsToComplete( tradeRoute1, tradeRoute2 )
     -- If the route has turns remaining entry, compare them
     if tradeRoute1.TurnsRemaining ~= nil and tradeRoute2.TurnsRemaining ~= nil then
         return tradeRoute1.TurnsRemaining < tradeRoute2.TurnsRemaining;
     end
 
-    local turnsToCompleteRoute1 = GetTurnsToComplete(tradeRoute1);
-    local turnsToCompleteRoute2 = GetTurnsToComplete(tradeRoute2);
+    local turnsToCompleteRoute1, turnsToCompleteRoute2;
+    turnsToCompleteRoute1 = GetTurnsToComplete(tradeRoute1);
+    turnsToCompleteRoute2 = GetTurnsToComplete(tradeRoute2);
 
     -- debug_func_calls = debug_func_calls + 1
     return turnsToCompleteRoute1 < turnsToCompleteRoute2;
@@ -653,7 +708,7 @@ end
 
 -- Uses the list of compare functions in sort settings, to make one total compare function
 -- Used to sort trade routes
-function CompleteCompareBy( tradeRoute1:table, tradeRoute2:table, sortSettings:table )
+function CompleteCompareBy( tradeRoute1, tradeRoute2, sortSettings:table )
     -- for index, sortEntry in ipairs(sortSettings) do
     for i, sortSetting in ipairs(sortSettings) do
         local compareFunction = CompareFunctionByID[sortSetting.SortByID];
@@ -670,11 +725,11 @@ function CompleteCompareBy( tradeRoute1:table, tradeRoute2:table, sortSettings:t
     -----------------------
 
     -- Just return false (sort won't do anything, hence FASTER)
-    -- return false
+    return false
 
     -- Compare by net yield
     -- SLOWER, but more useful
-    return CompareByNetYield(tradeRoute2, tradeRoute1) -- Descending order
+    -- return CompareByNetYield(tradeRoute2, tradeRoute1) -- Descending order
 end
 
 -- ===========================================================================
@@ -804,29 +859,21 @@ function GetAdvancedRouteInfo(routeInfo)
 end
 
 -- ---------------------------------------------------------------------------
--- Cache lookups
+-- Trade Route Getters
 -- ---------------------------------------------------------------------------
 
 -- Returns yield for the origin city
 function GetYieldForOriginCity( yieldIndex:number, routeInfo:table, checkCache)
     if checkCache then
         local key:string = GetRouteKey(routeInfo)
-        local cacheEntry = m_Cache[key]
-        if cacheEntry ~= nil then
-            -- print("CACHE HIT for " .. GetTradeRouteString(routeInfo))
-            return cacheEntry.Yields[yieldIndex].Origin
-        else
-            print("CACHE MISS for " .. GetTradeRouteString(routeInfo))
-            CacheRoute(routeInfo);
-            return m_Cache[key].Yields[yieldIndex].Origin
-        end
+        return Cached_GetYieldForOriginCity(yieldIndex, key)
     else
         local tradeManager = Game.GetTradeManager();
 
         -- From route
         local yieldValue = tradeManager:CalculateOriginYieldFromPotentialRoute(routeInfo.OriginCityPlayer, routeInfo.OriginCityID, routeInfo.DestinationCityPlayer, routeInfo.DestinationCityID, yieldIndex);
 
-        -- From path only if yield is gold
+        -- From path only if yield is gold. Trading posts add only gold.
         if yieldIndex == GameInfo.Yields["YIELD_GOLD"].Index then
             yieldValue = yieldValue + tradeManager:CalculateOriginYieldFromPath(routeInfo.OriginCityPlayer, routeInfo.OriginCityID, routeInfo.DestinationCityPlayer, routeInfo.DestinationCityID, yieldIndex);
         end
@@ -843,15 +890,7 @@ end
 function GetYieldForDestinationCity( yieldIndex:number, routeInfo:table, checkCache )
     if checkCache then
         local key:string = GetRouteKey(routeInfo)
-        local cacheEntry = m_Cache[key]
-        if cacheEntry ~= nil then
-            -- print("CACHE HIT for " .. GetTradeRouteString(routeInfo))
-            return cacheEntry.Yields[yieldIndex].Destination
-        else
-            print("CACHE MISS for " .. GetTradeRouteString(routeInfo))
-            CacheRoute(routeInfo);
-            return m_Cache[key].Yields[yieldIndex].Destination
-        end
+        return Cached_GetYieldForDestinationCity(yieldIndex, key)
     else
         local tradeManager = Game.GetTradeManager();
 
@@ -893,11 +932,11 @@ function GetTurnsToComplete(routeInfo, checkCache)
         local key = GetRouteKey(routeInfo)
         if m_Cache[key] ~= nil then
             -- print("CACHE HIT for " .. GetTradeRouteString(routeInfo))
-            return m_Cache[key].TurnsToComplete
+            return m_Cache[key].TurnsToCompleteRoute
         else
             print("CACHE MISS for " .. GetTradeRouteString(routeInfo))
             CacheRoute(routeInfo);
-            return m_Cache[key].TurnsToComplete
+            return m_Cache[key].TurnsToCompleteRoute
         end
     else
         local tradePathLength, tripsToDestination, turnsToCompleteRoute = GetAdvancedRouteInfo(routeInfo);
@@ -1206,6 +1245,26 @@ function GetMinEntry(searchTable, compareFunc)
         end
     end
     return minEntry;
+end
+
+-- Source: http://lua-users.org/wiki/SplitJoin
+function split(str, pat)
+    local t = {}  -- NOTE: use {n = 0} in Lua-5.0
+    local fpat = "(.-)" .. pat
+    local last_end = 1
+    local s, e, cap = str:find(fpat, 1)
+    while s do
+        if s ~= 1 or cap ~= "" then
+            table.insert(t,cap)
+        end
+        last_end = e+1
+        s, e, cap = str:find(fpat, last_end)
+        end
+    if last_end <= #str then
+        cap = str:sub(last_end)
+        table.insert(t, cap)
+    end
+    return t
 end
 
 -- ========== START OF DataDumper.lua =================
