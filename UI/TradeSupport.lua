@@ -3,6 +3,15 @@ local BACKDROP_DARKER_OPACITY = 238
 local BACKDROP_BRIGHTER_OFFSET = 90
 local BACKDROP_BRIGHTER_OPACITY = 250
 
+local Game = Game
+local Players = Players
+local Events = Events
+
+local ipairs = ipairs
+local pairs = pairs
+
+local L_Lookup = Locale.Lookup
+
 -- ===========================================================================
 --  Local Constants
 -- ===========================================================================
@@ -135,22 +144,22 @@ function CheckConsistencyWithMyRunningRoutes( routesTable:table )
     -- Build currently running routes
     local routesCurrentlyRunning:table = {};
     local localPlayerCities:table = Players[Game.GetLocalPlayer()]:GetCities();
-    for i,city in localPlayerCities:Members() do
+    for _, city in localPlayerCities:Members() do
         local outgoingRoutes = city:GetTrade():GetOutgoingRoutes();
-        for j, routeInfo in ipairs(outgoingRoutes) do
+        for _, routeInfo in ipairs(outgoingRoutes) do
             table.insert(routesCurrentlyRunning, routeInfo);
         end
     end
 
     -- Add all routes in routesCurrentlyRunning table that are not in routesTable
-    for i, route in ipairs(routesCurrentlyRunning) do
-        local routeIndex = findIndex( routesTable, route, CheckRouteEquality );
+    for _, route in ipairs(routesCurrentlyRunning) do
+        local routeIndex = findIndex(routesTable, route, CheckRouteEquality);
 
         -- Is the route not present?
         if routeIndex == -1 then
             -- Add it to the list
             print(GetTradeRouteString(route) .. " was not present. Adding it to the table.");
-            AddRouteWithTurnsRemaining( route, routesTable, true);
+            AddRouteWithTurnsRemaining(route, routesTable, true);
         end
     end
 
@@ -204,9 +213,9 @@ local function TradeSupportTracker_OnUnitOperationStarted(ownerID:number, unitID
     if ownerID == Game.GetLocalPlayer() and operationID == UnitOperationTypes.MAKE_TRADE_ROUTE then
         -- Unit was just started a trade route. Find the route, and update the tables
         local localPlayerCities:table = Players[ownerID]:GetCities();
-        for i,city in localPlayerCities:Members() do
+        for _, city in localPlayerCities:Members() do
             local outgoingRoutes = city:GetTrade():GetOutgoingRoutes();
-            for j,route in ipairs(outgoingRoutes) do
+            for _, route in ipairs(outgoingRoutes) do
                 if route.TraderUnitID == unitID then
                     -- Add it to the local players runnning routes
                     print("Route just started. Adding Route: " .. GetTradeRouteString(route));
@@ -306,10 +315,11 @@ function RenewTradeRoutes()
     LoadTraderAutomatedInfo();
 
     local pPlayerUnits:table = Players[Game.GetLocalPlayer()]:GetUnits();
-    -- Find Each Trade Unit
-    for i, pUnit in pPlayerUnits:Members() do
+    for _, pUnit in pPlayerUnits:Members() do
         local unitInfo:table = GameInfo.Units[pUnit:GetUnitType()];
         local unitID:number = pUnit:GetID();
+
+        -- Check if it is a free trader
         if unitInfo.MakeTradeRoute == true and (not pUnit:HasPendingOperations()) then
             if m_TradersAutomatedSettings[unitID] ~= nil and m_TradersAutomatedSettings[unitID].IsAutomated then
                 local tradeManager:table = Game.GetTradeManager();
@@ -323,14 +333,13 @@ function RenewTradeRoutes()
                 if m_TradersAutomatedSettings[unitID].SortSettings ~= nil and table.count(m_TradersAutomatedSettings[unitID].SortSettings) > 0 then
                     print("Picking from top sort entry");
                     local tradeRoutes:table = {};
-                    local players:table = Game:GetPlayers();
+                    local players:table = Game.GetPlayers{ Alive=true };
 
                     -- Build list of trade routes
-                    for i, player in ipairs(players) do
+                    for _, player in ipairs(players) do
                         local playerID = player:GetID()
                         if CanPossiblyTradeWithPlayer(originPlayerID,  playerID) then
-                            local cities:table = player:GetCities();
-                            for j, city in cities:Members() do
+                            for _, city in player:GetCities():Members() do
                                 local cityID = city:GetID()
                                 -- Can we start a trade route with this city?
                                 if tradeManager:CanStartRoute(originPlayerID, originCityID, playerID, cityID) then
@@ -370,7 +379,7 @@ function RenewTradeRoutes()
                     operationParams[UnitOperationTypes.PARAM_Y1] = originCity:GetY();
 
                     if (UnitManager.CanStartOperation(pUnit, UnitOperationTypes.MAKE_TRADE_ROUTE, nil, operationParams)) then
-                        print("Trader " .. unitID .. " renewed its trade route to " .. Locale.Lookup(destinationCity:GetName()));
+                        print("Trader " .. unitID .. " renewed its trade route to " .. L_Lookup(destinationCity:GetName()));
                         -- TODO: Send notification for renewing routes
                         UnitManager.RequestOperation(pUnit, UnitOperationTypes.MAKE_TRADE_ROUTE, operationParams);
 
@@ -725,11 +734,11 @@ function CompleteCompareBy( tradeRoute1, tradeRoute2, sortSettings:table )
     -----------------------
 
     -- Just return false (sort won't do anything, hence FASTER)
-    return false
+    -- return false
 
     -- Compare by net yield
     -- SLOWER, but more useful
-    -- return CompareByNetYield(tradeRoute2, tradeRoute1) -- Descending order
+    return CompareByNetYield(tradeRoute2, tradeRoute1) -- Descending order
 end
 
 -- ===========================================================================
@@ -779,12 +788,12 @@ function GetTradeRouteString( routeInfo:table )
 
     local originCityName:string = "[NOT_FOUND]";
     if originCity ~= nil then
-        originCityName = Locale.Lookup(originCity:GetName());
+        originCityName = L_Lookup(originCity:GetName());
     end
 
     local destinationCityName:string = "[NOT_FOUND]";
     if destinationCity ~= nil then
-        destinationCityName = Locale.Lookup(destinationCity:GetName());
+        destinationCityName = L_Lookup(destinationCity:GetName());
     end
 
     return originCityName .. "-" .. destinationCityName;
