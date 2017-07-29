@@ -138,7 +138,7 @@ local m_GroupSettingsChanged:boolean = true;
 local m_FilterSettingsChanged:boolean = true;
 
 -- Stores the sort settings.
-local m_SortBySettings = {}; -- Stores the setting each group will have within it. Applicable when routes are grouped
+local m_InGroupSortBySettings = {}; -- Stores the setting each group will have within it. Applicable when routes are grouped
 local m_GroupSortBySettings = {}; -- Stores the overall group sort setting. This is used, when routes are NOT grouped
 
 local preRefreshClock = 0;
@@ -489,7 +489,7 @@ function ViewAvailableRoutes()
         if m_SortSettingsChanged then
             -- Sort within each group
             for i=1, #m_AvailableGroupedRoutes do
-                SortTradeRoutes(m_AvailableGroupedRoutes[i], m_SortBySettings)
+                SortTradeRoutes(m_AvailableGroupedRoutes[i], m_InGroupSortBySettings)
             end
             print("Time taken till within group sort: " .. (os.clock() - preRefreshClock) .. " sec(s)")
 
@@ -578,6 +578,7 @@ end
 function SetMyRoutesTabSelected( isSelected:boolean )
     Controls.MyRoutesButton:SetSelected(isSelected);
     Controls.MyRoutesTabLabel:SetHide(isSelected);
+    Controls.MyRoutesSelected:SetHide(not isSelected);
     Controls.MyRoutesSelectedArrow:SetHide(not isSelected);
     Controls.MyRoutesTabSelectedLabel:SetHide(not isSelected);
 end
@@ -585,6 +586,7 @@ end
 function SetRoutesToCitiesTabSelected( isSelected:boolean )
     Controls.RoutesToCitiesButton:SetSelected(isSelected);
     Controls.RoutesToCitiesTabLabel:SetHide(isSelected);
+    Controls.RoutesToCitiesSelected:SetHide(not isSelected);
     Controls.RoutesToCitiesSelectedArrow:SetHide(not isSelected);
     Controls.RoutesToCitiesTabSelectedLabel:SetHide(not isSelected);
 end
@@ -592,6 +594,7 @@ end
 function SetAvailableRoutesTabSelected( isSelected:boolean )
     Controls.AvailableRoutesButton:SetSelected(isSelected);
     Controls.AvailableRoutesTabLabel:SetHide(isSelected);
+    Controls.AvailableRoutesSelected:SetHide(not isSelected);
     Controls.AvailableRoutesSelectedArrow:SetHide(not isSelected);
     Controls.AvailableRoutesTabSelectedLabel:SetHide(not isSelected);
 end
@@ -1498,7 +1501,7 @@ end
 
 function RefreshSortBar()
     if m_ctrlDown then
-        RefreshSortButtons( m_SortBySettings );
+        RefreshSortButtons( m_InGroupSortBySettings );
     else
         RefreshSortButtons( m_GroupSortBySettings );
     end
@@ -1514,7 +1517,7 @@ end
 function ShowSortOrderLabels()
     -- Refresh and show sort orders
     if m_ctrlDown then
-        RefreshSortOrderLabels( m_SortBySettings );
+        RefreshSortOrderLabels( m_InGroupSortBySettings );
     else
         RefreshSortOrderLabels( m_GroupSortBySettings );
     end
@@ -1638,7 +1641,7 @@ function Close()
     m_AnimSupport.Hide();
 
     -- Reset sort settings
-    m_SortBySettings = {};
+    m_InGroupSortBySettings = {};
     m_GroupSortBySettings = {};
 
     -- Reset tab
@@ -1816,6 +1819,11 @@ end
 -- Sort bar insert buttons
 -- ---------------------------------------------------------------------------
 
+-- General method to handle a sort button. Kind of a mess, especially with handling of different features with key presses. In short:
+-- SHIFT    = Clear previous valuse
+-- CTRL     = Add to m_InGroupSortBySettings
+-- No CTRL  = Add to m_GroupSortBySettings and m_InGroupSortBySettings
+-- By default the ascending sort by turns is always added (since these routes could be hidden in groups)
 function OnGeneralSortBy(sortDescArrow, sortByID)
     m_SortSettingsChanged = true;
     -- If shift is not being pressed, reset sort settings
@@ -1823,28 +1831,29 @@ function OnGeneralSortBy(sortDescArrow, sortByID)
         if not m_ctrlDown then
             m_GroupSortBySettings = {};
         end
-        m_SortBySettings = {};
+        m_InGroupSortBySettings = {};
     end
 
-    RemoveSortEntry(SORT_BY_ID.TURNS_TO_COMPLETE, m_SortBySettings);
+    -- Remove sort by turns ascending to be added later
+    RemoveSortEntry(SORT_BY_ID.TURNS_TO_COMPLETE, m_InGroupSortBySettings);
 
     -- Sort based on currently showing icon toggled
     if sortDescArrow:IsHidden() then
         if not m_ctrlDown then
             InsertSortEntry(sortByID, SORT_DESCENDING, m_GroupSortBySettings);
         end
-        InsertSortEntry(sortByID, SORT_DESCENDING, m_SortBySettings);
+        InsertSortEntry(sortByID, SORT_DESCENDING, m_InGroupSortBySettings);
     else
         if not m_ctrlDown then
             InsertSortEntry(sortByID, SORT_ASCENDING, m_GroupSortBySettings);
         end
-        InsertSortEntry(sortByID, SORT_ASCENDING, m_SortBySettings);
+        InsertSortEntry(sortByID, SORT_ASCENDING, m_InGroupSortBySettings);
     end
 
-    InsertSortEntry(SORT_BY_ID.TURNS_TO_COMPLETE, SORT_ASCENDING, m_SortBySettings);
+    InsertSortEntry(SORT_BY_ID.TURNS_TO_COMPLETE, SORT_ASCENDING, m_InGroupSortBySettings);
 
     RefreshSortBar();
-    -- Dont call refresh while shift is held
+    -- OPT: Dont call refresh while shift is held
     if not m_shiftDown then
         Refresh();
     else
@@ -1884,15 +1893,18 @@ end
 -- Sort bar delete buttons
 -- ---------------------------------------------------------------------------
 
+-- General method to remove sort button.
+-- CTRL     = Remove from m_InGroupSortBySettings
+-- No CTRL  = Remove from m_GroupSortBySettings and m_InGroupSortBySettings
 function OnGeneralNotSortBy(sortByID)
     m_SortSettingsChanged = true;
     if not m_ctrlDown then
         RemoveSortEntry( sortByID, m_GroupSortBySettings);
     end
-    RemoveSortEntry( sortByID, m_SortBySettings);
+    RemoveSortEntry( sortByID, m_InGroupSortBySettings);
 
     RefreshSortBar();
-    -- Dont call refresh while shift is held
+    -- OPT: Dont call refresh while shift is held
     if not m_shiftDown then
         Refresh();
     else
