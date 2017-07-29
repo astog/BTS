@@ -331,6 +331,36 @@ function CancelAutomatedTrader(traderID:number)
     end
 end
 
+function FindTopRoute(originPlayerID:number, originCityID:number, sortSettings:table)
+    local tradeManager:table = Game.GetTradeManager();
+    local tradeRoutes:table = {};
+    local players:table = Game.GetPlayers{ Alive=true };
+
+    -- Build list of trade routes
+    for _, player in ipairs(players) do
+        local playerID = player:GetID()
+        if CanPossiblyTradeWithPlayer(originPlayerID,  playerID) then
+            for _, city in player:GetCities():Members() do
+                local cityID = city:GetID()
+                -- Can we start a trade route with this city?
+                if tradeManager:CanStartRoute(originPlayerID, originCityID, playerID, cityID) then
+                    local routeInfo = {
+                        OriginCityPlayer        = originPlayerID,
+                        OriginCityID            = originCityID,
+                        DestinationCityPlayer   = playerID,
+                        DestinationCityID       = cityID
+                    };
+
+                    tradeRoutes[#tradeRoutes + 1] = routeInfo;
+                end
+            end
+        end
+    end
+
+    -- Get the top route based on the settings saved when the route was begun. NOTE - Will have cache misses here.
+    return GetTopRouteFromSortSettings( tradeRoutes, sortSettings);
+end
+
 function RenewTradeRoutes()
     local renewedRoute:boolean = false;
 
@@ -355,38 +385,14 @@ function RenewTradeRoutes()
 
                 if m_TradersAutomatedSettings[unitID].SortSettings ~= nil and table.count(m_TradersAutomatedSettings[unitID].SortSettings) > 0 then
                     print("Picking from top sort entry");
-                    local tradeRoutes:table = {};
-                    local players:table = Game.GetPlayers{ Alive=true };
-
-                    -- Build list of trade routes
-                    for _, player in ipairs(players) do
-                        local playerID = player:GetID()
-                        if CanPossiblyTradeWithPlayer(originPlayerID,  playerID) then
-                            for _, city in player:GetCities():Members() do
-                                local cityID = city:GetID()
-                                -- Can we start a trade route with this city?
-                                if tradeManager:CanStartRoute(originPlayerID, originCityID, playerID, cityID) then
-                                    local routeInfo = {
-                                        OriginCityPlayer        = originPlayerID,
-                                        OriginCityID            = originCityID,
-                                        DestinationCityPlayer   = playerID,
-                                        DestinationCityID       = cityID
-                                    };
-
-                                    tradeRoutes[#tradeRoutes + 1] = routeInfo;
-                                end
-                            end
-                        end
-                    end
-
-                    -- Get the top route based on the settings saved when the route was begun. NOTE - Will have cache misses here.
-                    local topRoute:table = GetTopRouteFromSortSettings( tradeRoutes, m_TradersAutomatedSettings[unitID].SortSettings );
 
                     -- Get destination based on the top entry
+                    local topRoute = FindTopRoute(originPlayerID, originCityID, m_TradersAutomatedSettings[unitID].SortSettings)
                     destinationPlayerID = topRoute.DestinationCityPlayer
                     destinationCityID = topRoute.DestinationCityID
                 else
                     print("Picking last route");
+
                     local lastRouteInfo = GetLastRouteForTrader(unitID)
                     if lastRouteInfo ~= nil then
                         destinationPlayerID = lastRouteInfo.DestinationCityPlayer
@@ -408,8 +414,7 @@ function RenewTradeRoutes()
                         print("Trader " .. unitID .. " renewed its trade route to " .. L_Lookup(destinationCity:GetName()));
                         -- TODO: Send notification for renewing routes
                         UnitManager.RequestOperation(pUnit, UnitOperationTypes.MAKE_TRADE_ROUTE, operationParams);
-
-                        if not renewedRoute then renewedRoute = true end
+                        renewedRoute = true
                     else
                         print("Could not start a route");
                     end
@@ -421,6 +426,7 @@ function RenewTradeRoutes()
     end
 
     -- Play sound, if a route was renewed.
+    -- Done here to ensure the sound was only played once, if multiple traders were automated
     if renewedRoute then
         UI.PlaySound("START_TRADE_ROUTE");
         SaveTraderAutomatedInfo()
@@ -585,7 +591,7 @@ end
 
 function CacheKeyToRouteInfo(cacheKey)
     -- print("key: " .. cacheKey)
-    local ids = split(cacheKey, "_")
+    local ids = Split(cacheKey, "_", 4) -- At max 4 entries should only exist
     local routeInfo = {
         OriginCityPlayer = tonumber(ids[1]),
         OriginCityID = tonumber(ids[2]),
@@ -653,7 +659,7 @@ function SortTradeRoutes( tradeRoutes:table, sortSettings:table)
 end
 
 function GetTopRouteFromSortSettings( tradeRoutes:table, sortSettings:table )
-    if #sortSettings > 0 then
+    if sortSettings ~= nil and table.count(sortSettings) > 0 then
         return GetMinEntry(tradeRoutes, function(a, b) return CompleteCompareBy(a, b, sortSettings); end );
     end
 
@@ -1290,33 +1296,13 @@ function findIndex(T, searchItem, compareFunc)
 end
 
 function GetMinEntry(searchTable, compareFunc)
-    local minEntry = searchTable[1];
-    for index, entry in ipairs(searchTable) do
-        if not compareFunc(minEntry, entry) then
-            minEntry = entry;
+    local minIndex = 1
+    for index=1, #searchTable do
+        if not compareFunc(searchTable[minIndex], searchTable[index]) then
+            minIndex = index;
         end
     end
-    return minEntry;
-end
-
--- Source: http://lua-users.org/wiki/SplitJoin
-function split(str, pat)
-    local t = {}  -- NOTE: use {n = 0} in Lua-5.0
-    local fpat = "(.-)" .. pat
-    local last_end = 1
-    local s, e, cap = str:find(fpat, 1)
-    while s do
-        if s ~= 1 or cap ~= "" then
-            table.insert(t,cap)
-        end
-        last_end = e+1
-        s, e, cap = str:find(fpat, last_end)
-        end
-    if last_end <= #str then
-        cap = str:sub(last_end)
-        table.insert(t, cap)
-    end
-    return t
+    return searchTable[minIndex], minIndex
 end
 
 -- ========== START OF DataDumper.lua =================
