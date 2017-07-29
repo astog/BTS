@@ -182,12 +182,12 @@ function RefreshTopPanel()
         ContextPtr:BuildInstanceForControl( "RouteYieldInstance", originYieldInstance, Controls.OriginResourceList );
         ContextPtr:BuildInstanceForControl( "RouteYieldInstance", destinationYieldInstance, Controls.DestinationResourceList );
 
-        for yieldInfo in GameInfo.Yields() do
-            local originCityYieldValue = GetYieldForOriginCity(yieldInfo.Index, tradeRoute, true);
-            local destinationCityYieldValue = GetYieldForDestinationCity(yieldInfo.Index, tradeRoute, true);
+        for yieldIndex = START_INDEX, END_INDEX do
+            local originCityYieldValue = GetYieldForOriginCity(yieldIndex, tradeRoute, true);
+            local destinationCityYieldValue = GetYieldForDestinationCity(yieldIndex, tradeRoute, true);
 
-            SetRouteInstanceYields(originYieldInstance, yieldInfo, originCityYieldValue);
-            SetRouteInstanceYields(destinationYieldInstance, yieldInfo, destinationCityYieldValue);
+            SetRouteInstanceYields(originYieldInstance, yieldIndex, originCityYieldValue);
+            SetRouteInstanceYields(destinationYieldInstance, yieldIndex, destinationCityYieldValue);
 
             if not originReceivedResources and originCityYieldValue > 0 then
                 originReceivedResources = true
