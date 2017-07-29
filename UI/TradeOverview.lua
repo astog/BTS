@@ -76,6 +76,12 @@ local GROUP_BY_SETTINGS:table = {
     NONE                = 1;
     ORIGIN              = 2;
     DESTINATION         = 3;
+
+    -- Special group by's (these get converted to sort settings in OnGroupBySelected)
+    ORIGIN_AZ           = 4;
+    ORIGIN_ZA           = 5;
+    DESTINATION_AZ      = 6;
+    DESTINATION_ZA      = 7;
 };
 
 local SORT_BY_ID:table = GetSortByIdConstants();
@@ -132,8 +138,8 @@ local m_GroupSettingsChanged:boolean = true;
 local m_FilterSettingsChanged:boolean = true;
 
 -- Stores the sort settings.
-local m_SortBySettings = {};
-local m_GroupSortBySettings = {};
+local m_SortBySettings = {}; -- Stores the setting each group will have within it. Applicable when routes are grouped
+local m_GroupSortBySettings = {}; -- Stores the overall group sort setting. This is used, when routes are NOT grouped
 
 local preRefreshClock = 0;
 
@@ -466,7 +472,7 @@ function ViewAvailableRoutes()
     end
 
     -- Sort and display the routes
-    if m_groupByList[m_groupBySelected].groupByID ~= GROUP_BY_SETTINGS.NONE then
+    if not GroupSettingIsNone(m_groupBySelected) then
         -- Group routes. Use the filtered list of routes
         if m_GroupSettingsChanged then
             -- Group from the filtered routes
@@ -741,7 +747,7 @@ function AddRouteInstanceFromRouteInfo( routeInfo:table )
     end
 
     -- Update Trading Post Icon
-    if m_groupBySelected == GROUP_BY_SETTINGS.NONE or m_groupBySelected == GROUP_BY_SETTINGS.ORIGIN then
+    if GroupSettingIsNone(m_groupBySelected) or m_groupBySelected == GROUP_BY_SETTINGS.ORIGIN then
         routeInstance.TradingPostIndicator:SetHide(false);
     else
         routeInstance.TradingPostIndicator:SetHide(true);
@@ -1234,8 +1240,10 @@ function RefreshGroupByPulldown()
     AddGroupByEntry(L_Lookup("LOC_CITY_STATES_NONE"), GROUP_BY_SETTINGS.NONE);
     AddGroupByEntry(L_Lookup("LOC_TRADE_OVERVIEW_ORIGIN"), GROUP_BY_SETTINGS.ORIGIN);
     AddGroupByEntry(L_Lookup("LOC_TRADE_OVERVIEW_DESTINATION"), GROUP_BY_SETTINGS.DESTINATION);
-    AddGroupByEntry(L_Lookup("LOC_TRADE_OVERVIEW_AZ"), GROUP_BY_SETTINGS.DESTINATION);
-    AddGroupByEntry(L_Lookup("LOC_TRADE_OVERVIEW_ZA"), GROUP_BY_SETTINGS.DESTINATION);
+    AddGroupByEntry(L_Lookup("LOC_TRADE_OVERVIEW_ORIGIN_AZ"), GROUP_BY_SETTINGS.ORIGIN_AZ);
+    AddGroupByEntry(L_Lookup("LOC_TRADE_OVERVIEW_ORIGIN_ZA"), GROUP_BY_SETTINGS.ORIGIN_ZA);
+    AddGroupByEntry(L_Lookup("LOC_TRADE_OVERVIEW_DESTINATION_AZ"), GROUP_BY_SETTINGS.DESTINATION_AZ);
+    AddGroupByEntry(L_Lookup("LOC_TRADE_OVERVIEW_DESTINATION_ZA"), GROUP_BY_SETTINGS.DESTINATION_ZA);
 
     -- Calculate Internals
     Controls.OverviewGroupByPulldown:CalculateInternals();
@@ -1251,7 +1259,7 @@ function AddGroupByEntry( text:string, id:number )
         groupByID = id
     };
 
-    tinsert(m_groupByList, entry);
+    m_groupByList[id] = entry;
 
     AddPulldownEntry(text, id);
 end
@@ -1272,6 +1280,18 @@ function UpdateGroupByArrow()
         Controls.OverviewGroupByPulldownOpenedArrow:SetHide(false);
         Controls.OverviewGroupByPulldownClosedArrow:SetHide(true);
     end
+end
+
+-- Helper method to check if the group setting selected is none
+function GroupSettingIsNone(groupSetting)
+    if groupSetting == GROUP_BY_SETTINGS.NONE
+            or groupSetting == GROUP_BY_SETTINGS.ORIGIN_AZ
+            or groupSetting == GROUP_BY_SETTINGS.ORIGIN_ZA
+            or groupSetting == GROUP_BY_SETTINGS.DESTINATION_AZ
+            or groupSetting == GROUP_BY_SETTINGS.DESTINATION_ZA then
+        return true
+    end
+    return false
 end
 
 -- ===========================================================================
@@ -1393,7 +1413,9 @@ end
 function GroupRoutes( routesTable, groupSetting )
     print("Group setting: " .. m_groupByList[m_groupBySelected].groupByString);
 
-    if groupSetting == GROUP_BY_SETTINGS.NONE then return routesTable end
+    if GroupSettingIsNone(groupSetting) then
+        return routesTable
+    end
 
     local returnRoutesTable:table = {}
     local groupCount:number = 1
@@ -1726,6 +1748,21 @@ function OnFilterSelected( index:number, filterIndex:number )
 end
 
 function OnGroupBySelected( index:number, groupByIndex:number )
+    -- Insert sort entry specific to the group setting
+    if GROUP_BY_SETTINGS.ORIGIN_AZ == groupByIndex then
+        m_GroupSortBySettings = {}
+        InsertSortEntry(SORT_BY_ID.ORIGIN_NAME, SORT_ASCENDING, m_GroupSortBySettings)
+    elseif GROUP_BY_SETTINGS.ORIGIN_ZA == groupByIndex then
+        m_GroupSortBySettings = {}
+        InsertSortEntry(SORT_BY_ID.ORIGIN_NAME, SORT_DESCENDING, m_GroupSortBySettings)
+    elseif GROUP_BY_SETTINGS.DESTINATION_AZ == groupByIndex then
+        m_GroupSortBySettings = {}
+        InsertSortEntry(SORT_BY_ID.DESTINATION_NAME, SORT_ASCENDING, m_GroupSortBySettings)
+    elseif GROUP_BY_SETTINGS.DESTINATION_ZA == groupByIndex then
+        m_GroupSortBySettings = {}
+        InsertSortEntry(SORT_BY_ID.DESTINATION_NAME, SORT_DESCENDING, m_GroupSortBySettings)
+    end
+
     m_groupBySelected = groupByIndex;
     Controls.OverviewGroupByButton:SetText(m_groupByList[m_groupBySelected].groupByString);
 
@@ -1744,7 +1781,7 @@ function OnGroupExpandAll()
     Controls.GroupCollapseAllCheckBox:SetCheck(false);
 
     -- Dont do anything, if grouping is none
-    if m_groupBySelected == GROUP_BY_SETTINGS.NONE then
+    if GroupSettingIsNone(m_groupBySelected) then
         return;
     end
 
@@ -1763,7 +1800,7 @@ function OnGroupCollapseAll()
     Controls.GroupExpandAllCheckBox:SetCheck(false);
 
     -- Dont do anything, if grouping is none
-    if m_groupBySelected == GROUP_BY_SETTINGS.NONE then
+    if GroupSettingIsNone(m_groupBySelected) then
         return;
     end
 

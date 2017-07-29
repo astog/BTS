@@ -24,6 +24,8 @@ local SORT_BY_ID:table = {
     CULTURE = 5;
     FAITH = 6;
     TURNS_TO_COMPLETE = 7;
+    ORIGIN_NAME = 8;
+    DESTINATION_NAME = 9;
 }
 
 local SORT_ASCENDING = 1;
@@ -41,6 +43,7 @@ local SCIENCE_INDEX:number = GameInfo.Yields["YIELD_SCIENCE"].Index;
 local CULTURE_INDEX:number = GameInfo.Yields["YIELD_CULTURE"].Index;
 local FAITH_INDEX:number = GameInfo.Yields["YIELD_FAITH"].Index;
 
+-- Build lookup table
 CompareFunctionByID[SORT_BY_ID.FOOD]                = function(a, b) return CompareByYield(FOOD_INDEX, a, b) end
 CompareFunctionByID[SORT_BY_ID.PRODUCTION]          = function(a, b) return CompareByYield(PRODUCTION_INDEX, a, b) end
 CompareFunctionByID[SORT_BY_ID.GOLD]                = function(a, b) return CompareByYield(GOLD_INDEX, a, b) end
@@ -48,9 +51,8 @@ CompareFunctionByID[SORT_BY_ID.SCIENCE]             = function(a, b) return Comp
 CompareFunctionByID[SORT_BY_ID.CULTURE]             = function(a, b) return CompareByYield(CULTURE_INDEX, a, b) end
 CompareFunctionByID[SORT_BY_ID.FAITH]               = function(a, b) return CompareByYield(FAITH_INDEX, a, b) end
 CompareFunctionByID[SORT_BY_ID.TURNS_TO_COMPLETE]   = function(a, b) return CompareByTurnsToComplete(a, b) end
-
-local START_INDEX:number = GameInfo.Yields["YIELD_FOOD"].Index;
-local END_INDEX:number = GameInfo.Yields["YIELD_FAITH"].Index;
+CompareFunctionByID[SORT_BY_ID.ORIGIN_NAME]         = function(a, b) return CompareByOriginCityName(a, b) end
+CompareFunctionByID[SORT_BY_ID.DESTINATION_NAME]    = function(a, b) return CompareByDestinationCityName(a, b) end
 
 -- ===========================================================================
 --  Variables
@@ -747,6 +749,22 @@ function CompareByNetYield( tradeRoute1:table, tradeRoute2:table )
     return yieldForRoute1 < yieldForRoute2;
 end
 
+function CompareByOriginCityName( tradeRoute1:table, tradeRoute2:table )
+    local city1 = GetOriginCityName(tradeRoute1)
+    local city2 = GetOriginCityName(tradeRoute2)
+
+    -- print("Comparing", city1, city2, ": ", city1 < city2)
+    return city1 < city2
+end
+
+function CompareByDestinationCityName( tradeRoute1:table, tradeRoute2:table )
+    local city1 = GetDestinationCityName(tradeRoute1)
+    local city2 = GetDestinationCityName(tradeRoute2)
+
+    -- print("Comparing", city1, city2, ": ", city1 < city2)
+    return city1 < city2
+end
+
 -- Uses the list of compare functions in sort settings, to make one total compare function
 -- Used to sort trade routes
 function CompleteCompareBy( tradeRoute1, tradeRoute2, sortSettings:table )
@@ -913,6 +931,20 @@ end
 -- ---------------------------------------------------------------------------
 -- Trade Route Getters
 -- ---------------------------------------------------------------------------
+
+function GetOriginCityName( routeInfo:table )
+    -- TODO - Maybe implement cache for this?
+    local pPlayer = Players[routeInfo.OriginCityPlayer]
+    local pCity = pPlayer:GetCities():FindID(routeInfo.OriginCityID)
+    return L_Lookup(pCity:GetName()) -- How does lua compare localized text?
+end
+
+function GetDestinationCityName( routeInfo:table )
+    -- TODO - Maybe implement cache for this?
+    local pPlayer = Players[routeInfo.DestinationCityPlayer]
+    local pCity = pPlayer:GetCities():FindID(routeInfo.DestinationCityID)
+    return L_Lookup(pCity:GetName()) -- How does lua compare localized text?
+end
 
 -- Returns yield for the origin city
 function GetYieldForOriginCity( yieldIndex:number, routeInfo:table, checkCache)
