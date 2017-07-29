@@ -94,22 +94,44 @@ function GetLocalPlayerRunningRoutes()
 end
 
 function GetLastRouteForTrader( traderID:number )
-    LoadTraderAutomatedInfo();
+    -- @Astog NOTE: As of Summer 2017 patch, base game added code to get this info
+    -- Commenting my modded code
+    -- LoadTraderAutomatedInfo();
 
-    if m_TradersAutomatedSettings[traderID] ~= nil then
-        return m_TradersAutomatedSettings[traderID].LastRouteInfo;
+    -- if m_TradersAutomatedSettings[traderID] ~= nil then
+    --     return m_TradersAutomatedSettings[traderID].LastRouteInfo;
+    -- end
+
+    local pTrader = Players[Game.GetLocalPlayer()]:GetUnits():FindID(traderID)
+    local trade:table = pTrader:GetTrade();
+    local prevOriginComponentID:table = trade:GetLastOriginTradeCityComponentID();
+    local prevDestComponentID:table = trade:GetLastDestinationTradeCityComponentID();
+
+    -- Make sure the entries are valid. Return nil if not
+    if pTrader ~= nil and prevOriginComponentID.player ~= nil and prevOriginComponentID.player ~= -1 and
+            prevOriginComponentID.id ~= nil and prevOriginComponentID.id ~= -1 and
+            prevDestComponentID.player ~= nil and prevDestComponentID.player ~= -1 and
+            prevDestComponentID.id ~= nil and prevDestComponentID.id ~= -1 then
+
+        local routeInfo = {
+            OriginCityPlayer = prevOriginComponentID.player,
+            OriginCityID = prevOriginComponentID.id,
+            DestinationCityPlayer = prevDestComponentID.player,
+            DestinationCityID = prevDestComponentID.id
+        };
+        return routeInfo
     end
+    return nil
 end
 
 -- Adds the route turns remaining to the table, if it does not exist already
 function AddRouteWithTurnsRemaining( routeInfo:table, routesTable:table)
     -- print("Adding route: " .. GetTradeRouteString(routeInfo));
 
-    local tradePathLength, tripsToDestination, turnsToCompleteRoute = GetRouteInfo( routeInfo );
-
-    local routeIndex = findIndex ( routesTable, routeInfo, CheckRouteEquality );
-
+    local routeIndex = findIndex(routesTable, routeInfo, CheckRouteEquality);
     if routeIndex == -1 then
+        local tradePathLength, tripsToDestination, turnsToCompleteRoute = GetRouteInfo(routeInfo);
+
         -- Build entry
         local routeEntry:table = {
             OriginCityPlayer        = routeInfo.OriginCityPlayer;
@@ -184,7 +206,7 @@ end
 
 function SaveRunningRoutesInfo()
     -- Dump active routes info
-    print("Saving running routes info in PlayerConfig database")
+    -- print("Saving running routes info in PlayerConfig database")
     local dataDump = DataDumper(m_LocalPlayerRunningRoutes, "localPlayerRunningRoutes");
     -- print(dataDump);
     PlayerConfigurations[Game.GetLocalPlayer()]:SetValue("BTS_LocalPlayerRunningRotues", dataDump);
@@ -193,7 +215,7 @@ end
 function LoadRunningRoutesInfo()
     local localPlayerID = Game.GetLocalPlayer();
     if(PlayerConfigurations[localPlayerID]:GetValue("BTS_LocalPlayerRunningRotues") ~= nil) then
-        print("Retrieving previous routes PlayerConfig database")
+        -- print("Retrieving previous routes PlayerConfig database")
         local dataDump = PlayerConfigurations[localPlayerID]:GetValue("BTS_LocalPlayerRunningRotues");
         -- print(dataDump);
         loadstring(dataDump)();
@@ -248,14 +270,14 @@ local function TradeSupportTracker_OnUnitOperationsCleared(ownerID:number, unitI
                         end
 
                         -- Add it to the last route info for trader
-                        m_TradersAutomatedSettings[unitID].LastRouteInfo = route;
-
-                        -- Save the previous route
-                        SaveTraderAutomatedInfo();
+                        -- @Astog NOTE: As of Summer 2017 patch, this got added in vanilla code, hence commenting this modded code
+                        -- m_TradersAutomatedSettings[unitID].LastRouteInfo = route;
+                        -- SaveTraderAutomatedInfo();
 
                         print("Removing route " .. GetTradeRouteString(route) .. " from currently running, since it completed.");
-                        RemoveRouteFromTable(route, m_LocalPlayerRunningRoutes, false);
 
+                        -- Remove route from currrently running routes
+                        RemoveRouteFromTable(route, m_LocalPlayerRunningRoutes, false);
                         SaveRunningRoutesInfo()
                         return
                     end
@@ -365,8 +387,11 @@ function RenewTradeRoutes()
                     destinationCityID = topRoute.DestinationCityID
                 else
                     print("Picking last route");
-                    destinationPlayerID = m_TradersAutomatedSettings[unitID].LastRouteInfo.DestinationCityPlayer
-                    destinationCityID = m_TradersAutomatedSettings[unitID].LastRouteInfo.DestinationCityID
+                    local lastRouteInfo = GetLastRouteForTrader(unitID)
+                    if lastRouteInfo ~= nil then
+                        destinationPlayerID = lastRouteInfo.DestinationCityPlayer
+                        destinationCityID = lastRouteInfo.DestinationCityID
+                    end
                 end
 
                 if tradeManager:CanStartRoute(originPlayerID, originCityID, destinationPlayerID, destinationCityID) then
@@ -415,7 +440,7 @@ end
 function SaveTraderAutomatedInfo()
     -- Dump active routes info
     local localPlayerID = Game.GetLocalPlayer();
-    print("Saving Trader Automated info in PlayerConfig database")
+    -- print("Saving Trader Automated info in PlayerConfig database")
     local dataDump = DataDumper(m_TradersAutomatedSettings, "traderAutomatedSettings");
     -- print(dataDump);
     PlayerConfigurations[localPlayerID]:SetValue("BTS_TraderAutomatedSettings", dataDump);
@@ -424,7 +449,7 @@ end
 function LoadTraderAutomatedInfo()
     local localPlayerID = Game.GetLocalPlayer();
     if(PlayerConfigurations[localPlayerID]:GetValue("BTS_TraderAutomatedSettings") ~= nil) then
-        print("Retrieving trader automated settings from PlayerConfig database")
+        -- print("Retrieving trader automated settings from PlayerConfig database")
         local dataDump = PlayerConfigurations[localPlayerID]:GetValue("BTS_TraderAutomatedSettings");
         -- print(dataDump);
         loadstring(dataDump)();
@@ -781,20 +806,31 @@ end
 
 -- Returns a string of the route in format "[ORIGIN_CITY_NAME]-[DESTINATION_CITY_NAME]"
 function GetTradeRouteString( routeInfo:table )
-    local originPlayer:table = Players[routeInfo.OriginCityPlayer];
-    local originCity:table = originPlayer:GetCities():FindID(routeInfo.OriginCityID);
-
-    local destinationPlayer:table = Players[routeInfo.DestinationCityPlayer];
-    local destinationCity:table = destinationPlayer:GetCities():FindID(routeInfo.DestinationCityID);
-
     local originCityName:string = "[NOT_FOUND]";
-    if originCity ~= nil then
-        originCityName = L_Lookup(originCity:GetName());
+    local destinationCityName:string = "[NOT_FOUND]";
+
+    local originPlayer:table = Players[routeInfo.OriginCityPlayer];
+    if originPlayer ~= nil then
+        local originCity:table = originPlayer:GetCities():FindID(routeInfo.OriginCityID);
+        if originCity ~= nil then
+            originCityName = L_Lookup(originCity:GetName());
+        else
+            print("CITY", routeInfo.OriginCityID, "NOT FOUND")
+        end
+    else
+        print("PLAYER", routeInfo.OriginCityPlayer, "NOT FOUND")
     end
 
-    local destinationCityName:string = "[NOT_FOUND]";
-    if destinationCity ~= nil then
-        destinationCityName = L_Lookup(destinationCity:GetName());
+    local destinationPlayer:table = Players[routeInfo.DestinationCityPlayer];
+    if destinationPlayer ~= nil then
+        local destinationCity:table = destinationPlayer:GetCities():FindID(routeInfo.DestinationCityID);
+        if destinationCity ~= nil then
+            destinationCityName = L_Lookup(destinationCity:GetName());
+        else
+            print("CITY", routeInfo.DestinationCityID, "NOT FOUND")
+        end
+    else
+        print("PLAYER", routeInfo.DestinationCityPlayer, "NOT FOUND")
     end
 
     return originCityName .. "-" .. destinationCityName;

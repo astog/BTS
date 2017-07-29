@@ -1229,6 +1229,7 @@ end
 -- ===========================================================================
 --  Setup
 -- ===========================================================================
+function l(object) print("Attributes:") for k, v in pairs(getmetatable(object).__index) do print(k); end; print("End attributes."); end
 function Initialize()
     print("Initializing BTS Trade Route Chooser");
 
@@ -1295,5 +1296,6 @@ function Initialize()
     Controls.TurnsToCompleteSortButton:RegisterCallback( M_LCick, OnSortByTurnsToComplete);
     Controls.TurnsToCompleteSortButton:RegisterCallback( M_RClick, OnNotSortByTurnsToComplete);
     Controls.TurnsToCompleteSortButton:RegisterCallback( M_Enter, function() UI.PlaySound("Main_Menu_Mouse_Over"); end);
+
 end
 Initialize();

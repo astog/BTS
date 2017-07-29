@@ -72,7 +72,7 @@
           </Grid>
 
           <!-- Bottom Panel -->
-          <Grid Size="395,parent-296" Anchor="L,T" Offset="-7,-1" Texture="Controls_ContainerBlue" SliceStart="0,0" SliceCorner="3,3" SliceSize="9,9" SliceTextureSize="16,16">
+          <Grid Size="parent,parent-296" Anchor="L,T" Offset="-7,-1" Texture="Controls_ContainerBlue" SliceStart="0,0" SliceCorner="3,3" SliceSize="9,9" SliceTextureSize="16,16">
 
             <!-- Filter Pulldown -->
             <PullDown ID="DestinationFilterPulldown" ConsumeMouse="0" Offset="5,28" Anchor="C,T" Size="360,30" AutoSizePopUp="1" AutoFlip="1" ScrollThreshold="400">
@@ -102,7 +102,7 @@
 
             <!-- Sort Yield Stack -->
             <Stack Anchor="L,T" ID="SortBarStack" StackGrowth="Right" Offset="0,34" StackPadding="2">
-              <GridButton ID="FoodSortButton" ToolTip="LOC_TRADE_SORT_BY_FOOD_TOOLTIP" Offset="28,0" Size="48,18" Color="255,255,255,255" Style="PanelButtonLightweight">
+              <GridButton ID="FoodSortButton" ToolTip="LOC_TRADE_SORT_BY_FOOD_TOOLTIP" Offset="25,0" Size="48,18" Color="255,255,255,255" Style="PanelButtonLightweight">
                 <Label ID="FoodSortLabel" Anchor="R,C" Offset="-2,1" Style="FontNormal12" String="[Icon_Food]"/>
                 <Label ID="FoodSortOrder" Hidden="1" Anchor="C,C" Offset="0,0" String="9" Style="FontNormal12"/>
                 <Image ID="FoodDescArrow" Texture="Controls_ButtonExtendSmall2" TextureOffset="0,0" Size="20,16" Anchor="L,C" Offset="2,0"/>
