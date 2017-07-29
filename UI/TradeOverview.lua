@@ -311,7 +311,7 @@ function ViewMyRoutes()
     if routesSortedByPlayer[localPlayerID] ~= nil then
         CreatePlayerHeader(Players[localPlayerID]);
 
-        SortTradeRoutes(routesSortedByPlayer[localPlayerID], m_GroupSortBySettings);
+        routesSortedByPlayer[localPlayerID] = SortTradeRoutes(routesSortedByPlayer[localPlayerID], m_GroupSortBySettings);
 
         for _, route in ipairs(routesSortedByPlayer[localPlayerID]) do
             AddRouteInstanceFromRouteInfo(route);
@@ -322,7 +322,7 @@ function ViewMyRoutes()
     local haveAddedCityStateHeader:boolean = false;
     for playerID, routes in pairs(routesSortedByPlayer) do
         if playerID ~= localPlayerID then
-            SortTradeRoutes(routes, m_GroupSortBySettings);
+            routes = SortTradeRoutes(routes, m_GroupSortBySettings);
 
             -- Skip City States as these are added below
             local playerInfluence:table = Players[playerID]:GetInfluence();
@@ -411,7 +411,7 @@ function ViewRoutesToCities()
         CreatePlayerHeader(Players[playerID]);
 
         -- Sort the routes
-        SortTradeRoutes(routes, m_GroupSortBySettings);
+        routes = SortTradeRoutes(routes, m_GroupSortBySettings);
 
         for _, route in ipairs(routes) do
             AddRouteInstanceFromRouteInfo(route);
@@ -420,6 +420,8 @@ function ViewRoutesToCities()
 end
 
 -- Show Available Routes Tab
+-- Note: There is a lot OPT prints and time information calculated
+-- This is just for logging purposes and don't affect the logic in any way
 function ViewAvailableRoutes()
 
     -- Update Tabs
@@ -496,14 +498,14 @@ function ViewAvailableRoutes()
             -- Sort within each group
             time1 = Automation.GetTime()
             for i=1, #m_AvailableGroupedRoutes do
-                SortTradeRoutes(m_AvailableGroupedRoutes[i], m_InGroupSortBySettings)
+                m_AvailableGroupedRoutes[i] = SortTradeRoutes(m_AvailableGroupedRoutes[i], m_InGroupSortBySettings)
             end
             time2 = Automation.GetTime()
             print("Time taken to within group sort: " .. (time2-time1) .. " sec(s)")
 
             -- Sort the order of groups. You need to do this AFTER each group has been sorted
             time1 = Automation.GetTime()
-            SortGroupedRoutes(m_AvailableGroupedRoutes, m_GroupSortBySettings);
+            m_AvailableGroupedRoutes = SortGroupedRoutes(m_AvailableGroupedRoutes, m_GroupSortBySettings);
             time2 = Automation.GetTime()
             print("Time taken to group sort: " .. (time2-time1) .. " sec(s)");
         else
@@ -528,7 +530,7 @@ function ViewAvailableRoutes()
         if m_FinalTradeRoutes ~= nil then
             if m_SortSettingsChanged or m_GroupSettingsChanged then
                 time1 = Automation.GetTime()
-                SortTradeRoutes(m_FinalTradeRoutes, m_GroupSortBySettings);
+                m_FinalTradeRoutes = SortTradeRoutes(m_FinalTradeRoutes, m_GroupSortBySettings);
                 time2 = Automation.GetTime()
                 print("Time taken to sort: " .. (time2-time1) .. " sec(s)")
             else
@@ -1470,22 +1472,26 @@ end
 function SortGroupedRoutes( groupedRoutes:table, sortSettings:table, sortSettingsChanged:boolean )
     if (sortSettingsChanged ~= nil and (not sortSettingsChanged)) then
         print("OPT: Not sorting groups")
-        return
+        return groupedRoutes
     end
 
-    if #sortSettings > 0 then
-        table.sort(groupedRoutes, CompareGroups)
+    -- Get scores for the top routes, sort them
+    local routeScores = {}
+    for index=1, #groupedRoutes do
+        routeScores[index] = { id = index, score = ScoreRoute(groupedRoutes[index][1], sortSettings)}
     end
-end
+    table.sort(routeScores, function(a, b) return ScoreComp(a, b, sortSettings) end )
 
--- Compares the first route of passed groups
-function CompareGroups( groupedRoutes1:table, groupedRoutes2:table )
-    if groupedRoutes1 == nil or groupedRoutes2 == nil then
-        -- print("Error: Passed group was nil");
-        return false;
+    -- Build new table based on these sorted scores
+    local routes = {}
+    for i, scoreInfo in ipairs(routeScores) do
+        routes[i] = groupedRoutes[scoreInfo.id]
     end
+    return routes
 
-    return CompleteCompareBy(groupedRoutes1[1], groupedRoutes2[1], m_GroupSortBySettings);
+    -- if #sortSettings > 0 then
+    --     table.sort(groupedRoutes, CompareGroups)
+    -- end
 end
 
 -- ===========================================================================

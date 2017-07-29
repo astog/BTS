@@ -59,8 +59,8 @@ local m_destinationCity         : table = nil;  -- City where the trade route wi
 local m_postOpenSelectPlayerID:number = -1;
 local m_postOpenSelectCityID:number = -1;
 
--- Filtered and unfiltered lists of possible routes
-local m_AvailableTradeRoutes:table = {};
+local m_AvailableTradeRoutes:table = {}; -- Filtered and unfiltered lists of possible routes
+local m_TradeRoutes:table = {} -- Routes showm, this is the filtered and sorted
 local m_TurnBuiltRouteTable:number = -1;
 local m_LastTrader:number = -1;
 local m_RebuildAvailableRoutes:boolean = true;
@@ -295,24 +295,23 @@ function RefreshStack()
     m_RouteChoiceIM:ResetInstances();
 
     local tradeManager:table = Game.GetTradeManager();
-    local tradeRoutes:table;
 
     -- Filter Destinations by active Filter
     if m_FilterSettingsChanged then
-        tradeRoutes = FilterTradeRoutes(m_AvailableTradeRoutes);
+        m_TradeRoutes = FilterTradeRoutes(m_AvailableTradeRoutes);
         m_FilterSettingsChanged = false -- done filtering
 
         -- Filter changed, need to re-sort
         m_SortSettingsChanged = true
     else
-        tradeRoutes = m_AvailableTradeRoutes;
+        print("OPT: Not refiltering.")
     end
 
     -- Send Trade Route Paths to Engine (after filter applied)
     UILens.ClearLayerHexes(LensLayers.TRADE_ROUTE);
 
     if m_SortSettingsChanged then
-        SortTradeRoutes(tradeRoutes, m_SortBySettings);
+        m_TradeRoutes = SortTradeRoutes(m_TradeRoutes, m_SortBySettings);
         m_SortSettingsChanged = false -- done sorting
     else
         print("OPT: Not resorting.")
@@ -328,17 +327,17 @@ function RefreshStack()
     end
 
     -- for i, tradeRoute in ipairs(tradeRoutes) do
-    for i=1, #tradeRoutes do
+    for i=1, #m_TradeRoutes do
         -- If no destination city is selected, show all routes path on the map
         if m_destinationCity == nil then
-            local pathPlots = tradeManager:GetTradeRoutePath(tradeRoutes[i].OriginCityPlayer, tradeRoutes[i].OriginCityID, tradeRoutes[i].DestinationCityPlayer, tradeRoutes[i].DestinationCityID);
+            local pathPlots = tradeManager:GetTradeRoutePath(m_TradeRoutes[i].OriginCityPlayer, m_TradeRoutes[i].OriginCityID, m_TradeRoutes[i].DestinationCityPlayer, m_TradeRoutes[i].DestinationCityID);
             local kVariations:table = {};
             local lastElement:number = tcount(pathPlots);
             tinsert(kVariations, {"TradeRoute_Destination", pathPlots[lastElement]} );
-            UILens.SetLayerHexesPath( LensLayers.TRADE_ROUTE, tradeRoutes[i].OriginCityPlayer, pathPlots, kVariations );
+            UILens.SetLayerHexesPath( LensLayers.TRADE_ROUTE, m_TradeRoutes[i].OriginCityPlayer, pathPlots, kVariations );
         end
 
-        AddRouteToDestinationStack(tradeRoutes[i]);
+        AddRouteToDestinationStack(m_TradeRoutes[i]);
     end
 
     Controls.RouteChoiceStack:CalculateSize();
@@ -354,7 +353,7 @@ function RefreshStack()
     end
 
     -- Show No Available Trade Routes message if nothing to select
-    if #tradeRoutes > 0 then
+    if #m_TradeRoutes > 0 then
         Controls.StatusMessage:SetText(L_Lookup("LOC_ROUTECHOOSER_SELECT_DESTINATION"));
     else
         Controls.StatusMessage:SetText(L_Lookup("LOC_ROUTECHOOSER_NO_TRADE_ROUTES"));

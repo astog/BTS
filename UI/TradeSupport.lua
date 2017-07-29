@@ -31,7 +31,7 @@ local SORT_BY_ID:table = {
 local SORT_ASCENDING = 1;
 local SORT_DESCENDING = 2;
 
-local CompareFunctionByID   = {};
+local ScoreFunctionByID = {}
 
 local START_INDEX:number = GameInfo.Yields["YIELD_FOOD"].Index;
 local END_INDEX:number = GameInfo.Yields["YIELD_FAITH"].Index;
@@ -44,15 +44,15 @@ local CULTURE_INDEX:number = GameInfo.Yields["YIELD_CULTURE"].Index;
 local FAITH_INDEX:number = GameInfo.Yields["YIELD_FAITH"].Index;
 
 -- Build lookup table
-CompareFunctionByID[SORT_BY_ID.FOOD]                = function(a, b) return CompareByYield(FOOD_INDEX, a, b) end
-CompareFunctionByID[SORT_BY_ID.PRODUCTION]          = function(a, b) return CompareByYield(PRODUCTION_INDEX, a, b) end
-CompareFunctionByID[SORT_BY_ID.GOLD]                = function(a, b) return CompareByYield(GOLD_INDEX, a, b) end
-CompareFunctionByID[SORT_BY_ID.SCIENCE]             = function(a, b) return CompareByYield(SCIENCE_INDEX, a, b) end
-CompareFunctionByID[SORT_BY_ID.CULTURE]             = function(a, b) return CompareByYield(CULTURE_INDEX, a, b) end
-CompareFunctionByID[SORT_BY_ID.FAITH]               = function(a, b) return CompareByYield(FAITH_INDEX, a, b) end
-CompareFunctionByID[SORT_BY_ID.TURNS_TO_COMPLETE]   = function(a, b) return CompareByTurnsToComplete(a, b) end
-CompareFunctionByID[SORT_BY_ID.ORIGIN_NAME]         = function(a, b) return CompareByOriginCityName(a, b) end
-CompareFunctionByID[SORT_BY_ID.DESTINATION_NAME]    = function(a, b) return CompareByDestinationCityName(a, b) end
+ScoreFunctionByID[SORT_BY_ID.FOOD]                = function(a) return GetYieldForOriginCity(FOOD_INDEX, a, true) end
+ScoreFunctionByID[SORT_BY_ID.PRODUCTION]          = function(a) return GetYieldForOriginCity(PRODUCTION_INDEX, a, true) end
+ScoreFunctionByID[SORT_BY_ID.GOLD]                = function(a) return GetYieldForOriginCity(GOLD_INDEX, a, true) end
+ScoreFunctionByID[SORT_BY_ID.SCIENCE]             = function(a) return GetYieldForOriginCity(SCIENCE_INDEX, a, true) end
+ScoreFunctionByID[SORT_BY_ID.CULTURE]             = function(a) return GetYieldForOriginCity(CULTURE_INDEX, a, true) end
+ScoreFunctionByID[SORT_BY_ID.FAITH]               = function(a) return GetYieldForOriginCity(FAITH_INDEX, a, true) end
+ScoreFunctionByID[SORT_BY_ID.TURNS_TO_COMPLETE]   = function(a) return GetTurnsToComplete(a, true) end
+ScoreFunctionByID[SORT_BY_ID.ORIGIN_NAME]         = function(a) return GetOriginCityName(a) end
+ScoreFunctionByID[SORT_BY_ID.DESTINATION_NAME]    = function(a) return GetDestinationCityName(a) end
 
 -- ===========================================================================
 --  Variables
@@ -79,10 +79,6 @@ end
 
 function GetSortDescendingIdConstant()
     return SORT_DESCENDING;
-end
-
-function GetCompareFunctionByID()
-    return CompareFunctionByID
 end
 
 -- ===========================================================================
@@ -650,9 +646,21 @@ end
 
 -- This requires sort settings table passed.
 function SortTradeRoutes( tradeRoutes:table, sortSettings:table)
-    if #sortSettings > 0 then
-        table.sort(tradeRoutes, function(a, b) return CompleteCompareBy(a, b, sortSettings); end );
+    if table.count(sortSettings) > 0 then
+        -- Score all routes based on sort settings, sort them
+        local routeScores = ScoreRoutes(tradeRoutes, sortSettings)
+        table.sort(routeScores, function(a, b) return ScoreComp(a, b, sortSettings) end )
+
+        -- Build new table based on these sorted scores
+        local routes = {}
+        for i, scoreInfo in ipairs(routeScores) do
+            routes[i] = tradeRoutes[scoreInfo.id]
+        end
+        return routes
     end
+
+    -- No sort settings, return original array
+    return tradeRoutes
 
     -- print("Total func calls: " .. debug_func_calls)
     -- debug_total_calls = debug_total_calls + debug_func_calls
@@ -662,11 +670,64 @@ end
 
 function GetTopRouteFromSortSettings( tradeRoutes:table, sortSettings:table )
     if sortSettings ~= nil and table.count(sortSettings) > 0 then
-        return GetMinEntry(tradeRoutes, function(a, b) return CompleteCompareBy(a, b, sortSettings); end );
+        local routeScores = ScoreRoutes(tradeRoutes, sortSettings)
+        local minScoreInfo = GetMinEntry(routeScores, function(a, b) return ScoreComp(a, b, sortSettings) end )
+
+        return tradeRoutes[minScoreInfo.id]
     end
 
     -- if no sort settings, return top entry
     return tradeRoutes[1];
+end
+
+-- ---------------------------------------------------------------------------
+-- Score Route functions
+-- ---------------------------------------------------------------------------
+
+function ScoreRoutes( tradeRoutes:table, sortSettings:table )
+    local scores = {}
+    for index=1, #tradeRoutes do
+        scores[index] = { id = index, score = ScoreRoute(tradeRoutes[index], sortSettings)}
+    end
+    return scores
+end
+
+function ScoreRoute( routeInfo:table, sortSettings:table )
+    local score = {}
+    for i, sortSetting in ipairs(sortSettings) do
+        local scoreFunction = ScoreFunctionByID[sortSetting.SortByID];
+        local val = scoreFunction(routeInfo)
+
+        -- Change the sign, if in descending order. EX: (-)5 < (-)2
+        if sortSetting.SortOrder == SORT_DESCENDING then
+            val = val * -1
+        end
+        score[#score + 1] = val
+    end
+
+    -- Add final score, ie net yield
+    score[#score + 1] = GetNetYieldForOriginCity(routeInfo, true)
+    return score
+end
+
+function ScoreComp( scoreInfo1, scoreInfo2, sortSettings )
+    local score1 = scoreInfo1.score
+    local score2 = scoreInfo2.score
+    if #score1 ~= #score2 then
+        print("ERROR = scores unequal in length")
+        return false
+    end
+
+    -- Last score is the net yield, it will not have a matching sortSetting
+    for i=1, #score1-1 do
+        if score1[i] < score2[i] then
+            return true
+        elseif score1[i] > score2[i] then
+            return false
+        end
+    end
+
+    return score1[#score1] > score2[#score1] -- Descending order of net yield
 end
 
 -- ---------------------------------------------------------------------------
@@ -712,83 +773,6 @@ function CompareSortEntries( sortEntry1:table, sortEntry2:table)
     end
 
     return false;
-end
-
--- ---------------------------------------------------------------------------
--- Yield/Turn Compare functions
--- ---------------------------------------------------------------------------
-
-function CompareByYield( yieldIndex:number, tradeRoute1, tradeRoute2)
-    local yieldForRoute1, yieldForRoute2;
-    yieldForRoute1 = GetYieldForOriginCity(yieldIndex, tradeRoute1, true);
-    yieldForRoute2 = GetYieldForOriginCity(yieldIndex, tradeRoute2, true);
-
-    -- debug_func_calls = debug_func_calls + 1
-    return yieldForRoute1 < yieldForRoute2;
-end
-
-function CompareByTurnsToComplete( tradeRoute1, tradeRoute2 )
-    -- If the route has turns remaining entry, compare them
-    if tradeRoute1.TurnsRemaining ~= nil and tradeRoute2.TurnsRemaining ~= nil then
-        return tradeRoute1.TurnsRemaining < tradeRoute2.TurnsRemaining;
-    end
-
-    local turnsToCompleteRoute1, turnsToCompleteRoute2;
-    turnsToCompleteRoute1 = GetTurnsToComplete(tradeRoute1);
-    turnsToCompleteRoute2 = GetTurnsToComplete(tradeRoute2);
-
-    -- debug_func_calls = debug_func_calls + 1
-    return turnsToCompleteRoute1 < turnsToCompleteRoute2;
-end
-
-function CompareByNetYield( tradeRoute1:table, tradeRoute2:table )
-    local yieldForRoute1 = GetNetYieldForOriginCity(tradeRoute1, true)
-    local yieldForRoute2 = GetNetYieldForOriginCity(tradeRoute2, true)
-
-    -- debug_func_calls = debug_func_calls + 1
-    return yieldForRoute1 < yieldForRoute2;
-end
-
-function CompareByOriginCityName( tradeRoute1:table, tradeRoute2:table )
-    local city1 = GetOriginCityName(tradeRoute1)
-    local city2 = GetOriginCityName(tradeRoute2)
-
-    -- print("Comparing", city1, city2, ": ", city1 < city2)
-    return city1 < city2
-end
-
-function CompareByDestinationCityName( tradeRoute1:table, tradeRoute2:table )
-    local city1 = GetDestinationCityName(tradeRoute1)
-    local city2 = GetDestinationCityName(tradeRoute2)
-
-    -- print("Comparing", city1, city2, ": ", city1 < city2)
-    return city1 < city2
-end
-
--- Uses the list of compare functions in sort settings, to make one total compare function
--- Used to sort trade routes
-function CompleteCompareBy( tradeRoute1, tradeRoute2, sortSettings:table )
-    -- for index, sortEntry in ipairs(sortSettings) do
-    for i, sortSetting in ipairs(sortSettings) do
-        local compareFunction = CompareFunctionByID[sortSetting.SortByID];
-
-        if compareFunction(tradeRoute1, tradeRoute2) then
-            return (not (sortSetting.SortOrder == SORT_DESCENDING))
-        elseif compareFunction(tradeRoute2, tradeRoute1) then
-            return (sortSetting.SortOrder == SORT_DESCENDING)
-        end
-    end
-
-    -----------------------
-    -- If it reaches here, we used all the settings, and all of them were equal.
-    -----------------------
-
-    -- Just return false (sort won't do anything, hence FASTER)
-    -- return false
-
-    -- Compare by net yield
-    -- SLOWER, but more useful
-    return CompareByNetYield(tradeRoute2, tradeRoute1) -- Descending order
 end
 
 -- ===========================================================================
