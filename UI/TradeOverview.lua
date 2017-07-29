@@ -56,6 +56,16 @@ local RELOAD_CACHE_ID:string = "TradeOverview"; -- Must be unique (usually the s
 local OUTSIDE_SUPPORT_CACHE_ID:string = "TradeOverviewSupport";
 local DATA_ICON_PREFIX:string = "ICON_";
 
+local START_INDEX:number = GameInfo.Yields["YIELD_FOOD"].Index;
+local END_INDEX:number = GameInfo.Yields["YIELD_FAITH"].Index;
+
+local FOOD_INDEX:number = GameInfo.Yields["YIELD_FOOD"].Index;
+local PRODUCTION_INDEX:number = GameInfo.Yields["YIELD_PRODUCTION"].Index;
+local GOLD_INDEX:number = GameInfo.Yields["YIELD_GOLD"].Index;
+local SCIENCE_INDEX:number = GameInfo.Yields["YIELD_SCIENCE"].Index;
+local CULTURE_INDEX:number = GameInfo.Yields["YIELD_CULTURE"].Index;
+local FAITH_INDEX:number = GameInfo.Yields["YIELD_FAITH"].Index;
+
 local TRADE_TABS:table = {
     MY_ROUTES           = 0;
     ROUTES_TO_CITIES    = 1;
@@ -658,12 +668,12 @@ function AddRouteInstanceFromRouteInfo( routeInfo:table )
     ContextPtr:BuildInstanceForControl( "RouteYieldInstance", originYieldInstance, routeInstance.ResourceStack );
     ContextPtr:BuildInstanceForControl( "RouteYieldInstance", destinationYieldInstance, routeInstance.ResourceStack );
 
-    for yieldInfo in GameInfo.Yields() do
-        local originCityYieldValue = GetYieldForOriginCity(yieldInfo.Index, routeInfo, true);
-        local destinationCityYieldValue = GetYieldForDestinationCity(yieldInfo.Index, routeInfo, true);
+    for yieldIndex = START_INDEX, END_INDEX do
+        local originCityYieldValue = GetYieldForOriginCity(yieldIndex, routeInfo, true);
+        local destinationCityYieldValue = GetYieldForDestinationCity(yieldIndex, routeInfo, true);
 
-        SetRouteInstanceYields(originYieldInstance, yieldInfo, originCityYieldValue);
-        SetRouteInstanceYields(destinationYieldInstance, yieldInfo, destinationCityYieldValue);
+        SetRouteInstanceYields(originYieldInstance, yieldIndex, originCityYieldValue);
+        SetRouteInstanceYields(destinationYieldInstance, yieldIndex, destinationCityYieldValue);
     end
 
     routeInstance.ResourceStack:CalculateSize();
@@ -854,24 +864,20 @@ end
 -- Route button helpers
 -- ---------------------------------------------------------------------------
 
-function SetRouteInstanceYields(yieldsInstance, yieldInfo, yieldValue)
-    local iconString, text = FormatYieldText(yieldInfo, yieldValue);
-    if yieldValue == 0 then
-        iconString = "";
-        text = "";
-    end
+function SetRouteInstanceYields(yieldsInstance, yieldIndex, yieldValue)
+    local iconString, text = FormatYieldText(yieldIndex, yieldValue);
 
-    if (yieldInfo.YieldType == "YIELD_FOOD") then
+    if (yieldIndex == FOOD_INDEX) then
         yieldsInstance.YieldFoodLabel:SetText(text .. iconString);
-    elseif (yieldInfo.YieldType == "YIELD_PRODUCTION") then
+    elseif (yieldIndex == PRODUCTION_INDEX) then
         yieldsInstance.YieldProductionLabel:SetText(text .. iconString);
-    elseif (yieldInfo.YieldType == "YIELD_GOLD") then
+    elseif (yieldIndex == GOLD_INDEX) then
         yieldsInstance.YieldGoldLabel:SetText(text .. iconString);
-    elseif (yieldInfo.YieldType == "YIELD_SCIENCE") then
+    elseif (yieldIndex == SCIENCE_INDEX) then
         yieldsInstance.YieldScienceLabel:SetText(text .. iconString);
-    elseif (yieldInfo.YieldType == "YIELD_CULTURE") then
+    elseif (yieldIndex == CULTURE_INDEX) then
         yieldsInstance.YieldCultureLabel:SetText(text .. iconString);
-    elseif (yieldInfo.YieldType == "YIELD_FAITH") then
+    elseif (yieldIndex == FAITH_INDEX) then
         yieldsInstance.YieldFaithLabel:SetText(text .. iconString);
     end
 end

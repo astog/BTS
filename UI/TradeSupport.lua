@@ -31,21 +31,22 @@ local SORT_DESCENDING = 2;
 
 local CompareFunctionByID   = {};
 
-local YIELD_CONSTANTS = {
-    FOOD = GameInfo.Yields["YIELD_FOOD"].Index,
-    PRODUCTION = GameInfo.Yields["YIELD_PRODUCTION"].Index,
-    GOLD = GameInfo.Yields["YIELD_GOLD"].Index,
-    SCIENCE = GameInfo.Yields["YIELD_SCIENCE"].Index,
-    CULTURE = GameInfo.Yields["YIELD_CULTURE"].Index,
-    FAITH = GameInfo.Yields["YIELD_FAITH"].Index
-}
+local START_INDEX:number = GameInfo.Yields["YIELD_FOOD"].Index;
+local END_INDEX:number = GameInfo.Yields["YIELD_FAITH"].Index;
 
-CompareFunctionByID[SORT_BY_ID.FOOD]                = function(a, b) return CompareByYield(YIELD_CONSTANTS.FOOD, a, b) end
-CompareFunctionByID[SORT_BY_ID.PRODUCTION]          = function(a, b) return CompareByYield(YIELD_CONSTANTS.PRODUCTION, a, b) end
-CompareFunctionByID[SORT_BY_ID.GOLD]                = function(a, b) return CompareByYield(YIELD_CONSTANTS.GOLD, a, b) end
-CompareFunctionByID[SORT_BY_ID.SCIENCE]             = function(a, b) return CompareByYield(YIELD_CONSTANTS.SCIENCE, a, b) end
-CompareFunctionByID[SORT_BY_ID.CULTURE]             = function(a, b) return CompareByYield(YIELD_CONSTANTS.CULTURE, a, b) end
-CompareFunctionByID[SORT_BY_ID.FAITH]               = function(a, b) return CompareByYield(YIELD_CONSTANTS.FAITH, a, b) end
+local FOOD_INDEX:number = GameInfo.Yields["YIELD_FOOD"].Index;
+local PRODUCTION_INDEX:number = GameInfo.Yields["YIELD_PRODUCTION"].Index;
+local GOLD_INDEX:number = GameInfo.Yields["YIELD_GOLD"].Index;
+local SCIENCE_INDEX:number = GameInfo.Yields["YIELD_SCIENCE"].Index;
+local CULTURE_INDEX:number = GameInfo.Yields["YIELD_CULTURE"].Index;
+local FAITH_INDEX:number = GameInfo.Yields["YIELD_FAITH"].Index;
+
+CompareFunctionByID[SORT_BY_ID.FOOD]                = function(a, b) return CompareByYield(FOOD_INDEX, a, b) end
+CompareFunctionByID[SORT_BY_ID.PRODUCTION]          = function(a, b) return CompareByYield(PRODUCTION_INDEX, a, b) end
+CompareFunctionByID[SORT_BY_ID.GOLD]                = function(a, b) return CompareByYield(GOLD_INDEX, a, b) end
+CompareFunctionByID[SORT_BY_ID.SCIENCE]             = function(a, b) return CompareByYield(SCIENCE_INDEX, a, b) end
+CompareFunctionByID[SORT_BY_ID.CULTURE]             = function(a, b) return CompareByYield(CULTURE_INDEX, a, b) end
+CompareFunctionByID[SORT_BY_ID.FAITH]               = function(a, b) return CompareByYield(FAITH_INDEX, a, b) end
 CompareFunctionByID[SORT_BY_ID.TURNS_TO_COMPLETE]   = function(a, b) return CompareByTurnsToComplete(a, b) end
 
 local START_INDEX:number = GameInfo.Yields["YIELD_FOOD"].Index;
@@ -1118,26 +1119,32 @@ function IsRoutePossible(originCityPlayerID, originCityID, destinationCityPlayer
     return tradeManager:CanStartRoute(originCityPlayerID, originCityID, destinationCityPlayerID, destinationCityID);
 end
 
-function FormatYieldText(yieldInfo, yieldAmount)
+function FormatYieldText(yieldIndex, yieldAmount)
+    if yieldAmount == 0 then
+        return "", ""
+    end
+
     local text:string = "";
 
-    local iconString = "";
-    if (yieldInfo.YieldType == "YIELD_FOOD") then
+    local iconString:string = "";
+    if (yieldIndex == FOOD_INDEX) then
         iconString = "[ICON_Food]";
-    elseif (yieldInfo.YieldType == "YIELD_PRODUCTION") then
+    elseif (yieldIndex == PRODUCTION_INDEX) then
         iconString = "[ICON_Production]";
-    elseif (yieldInfo.YieldType == "YIELD_GOLD") then
+    elseif (yieldIndex == GOLD_INDEX) then
         iconString = "[ICON_Gold]";
-    elseif (yieldInfo.YieldType == "YIELD_SCIENCE") then
+    elseif (yieldIndex == SCIENCE_INDEX) then
         iconString = "[ICON_Science]";
-    elseif (yieldInfo.YieldType == "YIELD_CULTURE") then
+    elseif (yieldIndex == CULTURE_INDEX) then
         iconString = "[ICON_Culture]";
-    elseif (yieldInfo.YieldType == "YIELD_FAITH") then
+    elseif (yieldIndex == FAITH_INDEX) then
         iconString = "[ICON_Faith]";
     end
 
-    if (yieldAmount >= 0) then
-        text = text .. "+";
+    if yieldAmount > 0 then
+        text = "+";
+    else
+        text = "-";
     end
 
     text = text .. yieldAmount;

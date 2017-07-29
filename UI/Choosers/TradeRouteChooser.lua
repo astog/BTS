@@ -37,6 +37,16 @@ local SORT_BY_ID:table = GetSortByIdConstants();
 local SORT_ASCENDING = GetSortAscendingIdConstant();
 local SORT_DESCENDING = GetSortDescendingIdConstant();
 
+local START_INDEX:number = GameInfo.Yields["YIELD_FOOD"].Index;
+local END_INDEX:number = GameInfo.Yields["YIELD_FAITH"].Index;
+
+local FOOD_INDEX:number = GameInfo.Yields["YIELD_FOOD"].Index;
+local PRODUCTION_INDEX:number = GameInfo.Yields["YIELD_PRODUCTION"].Index;
+local GOLD_INDEX:number = GameInfo.Yields["YIELD_GOLD"].Index;
+local SCIENCE_INDEX:number = GameInfo.Yields["YIELD_SCIENCE"].Index;
+local CULTURE_INDEX:number = GameInfo.Yields["YIELD_CULTURE"].Index;
+local FAITH_INDEX:number = GameInfo.Yields["YIELD_FAITH"].Index;
+
 -- ===========================================================================
 --  VARIABLES
 -- ===========================================================================
@@ -416,11 +426,11 @@ function AddRouteToDestinationStack(routeInfo:table)
     ContextPtr:BuildInstanceForControl( "RouteYieldInstance", originYieldInstance, cityEntry.ResourceList );
     ContextPtr:BuildInstanceForControl( "RouteYieldInstance", destinationYieldInstance, cityEntry.ResourceList );
 
-    for yieldInfo in GameInfo.Yields() do
+    for yieldIndex = START_INDEX, END_INDEX do
         -- Don't used a cache call here, since we need more info for the tooltip
-        local originYieldValue, sourceText = GetYieldForCity(yieldInfo.Index, destinationCity, true);
+        local originYieldValue, sourceText = GetYieldForCity(yieldIndex, destinationCity, true);
         -- Normal cached call here
-        local destinationYieldValue = GetYieldForDestinationCity(yieldInfo.Index, routeInfo, true);
+        local destinationYieldValue = GetYieldForDestinationCity(yieldIndex, routeInfo, true);
 
         if originYieldValue > 0 then
             if (tooltipText ~= "" and originYieldValue > 0) then
@@ -429,8 +439,8 @@ function AddRouteToDestinationStack(routeInfo:table)
             tooltipText = tooltipText .. sourceText;
         end
 
-        SetRouteInstanceYields(originYieldInstance, yieldInfo, originYieldValue)
-        SetRouteInstanceYields(destinationYieldInstance, yieldInfo, destinationYieldValue)
+        SetRouteInstanceYields(originYieldInstance, yieldIndex, originYieldValue)
+        SetRouteInstanceYields(destinationYieldInstance, yieldIndex, destinationYieldValue)
     end
 
     -- Cleanup
@@ -448,24 +458,20 @@ end
 -- Route button helpers
 -- ---------------------------------------------------------------------------
 
-function SetRouteInstanceYields(yieldsInstance, yieldInfo, yieldValue)
-    local iconString, text = FormatYieldText(yieldInfo, yieldValue);
-    if yieldValue == 0 then
-        iconString = "";
-        text = "";
-    end
+function SetRouteInstanceYields(yieldsInstance, yieldIndex, yieldValue)
+    local iconString, text = FormatYieldText(yieldIndex, yieldValue);
 
-    if (yieldInfo.YieldType == "YIELD_FOOD") then
+    if (yieldIndex == FOOD_INDEX) then
         yieldsInstance.YieldFoodLabel:SetText(text .. iconString);
-    elseif (yieldInfo.YieldType == "YIELD_PRODUCTION") then
+    elseif (yieldIndex == PRODUCTION_INDEX) then
         yieldsInstance.YieldProductionLabel:SetText(text .. iconString);
-    elseif (yieldInfo.YieldType == "YIELD_GOLD") then
+    elseif (yieldIndex == GOLD_INDEX) then
         yieldsInstance.YieldGoldLabel:SetText(text .. iconString);
-    elseif (yieldInfo.YieldType == "YIELD_SCIENCE") then
+    elseif (yieldIndex == SCIENCE_INDEX) then
         yieldsInstance.YieldScienceLabel:SetText(text .. iconString);
-    elseif (yieldInfo.YieldType == "YIELD_CULTURE") then
+    elseif (yieldIndex == CULTURE_INDEX) then
         yieldsInstance.YieldCultureLabel:SetText(text .. iconString);
-    elseif (yieldInfo.YieldType == "YIELD_FAITH") then
+    elseif (yieldIndex == FAITH_INDEX) then
         yieldsInstance.YieldFaithLabel:SetText(text .. iconString);
     end
 end
