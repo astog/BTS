@@ -141,7 +141,7 @@ local m_FilterSettingsChanged:boolean = true;
 local m_InGroupSortBySettings = {}; -- Stores the setting each group will have within it. Applicable when routes are grouped
 local m_GroupSortBySettings = {}; -- Stores the overall group sort setting. This is used, when routes are NOT grouped
 
-local preRefreshClock = 0;
+local preRefreshTime = 0; -- Used to track time to sort stuff
 
 -- ===========================================================================
 --  Refresh functions
@@ -150,9 +150,6 @@ local preRefreshClock = 0;
 -- Finds and adds all possible trade routes
 function RebuildAvailableTradeRoutesTable()
     print ("Rebuilding Trade Routes table");
-
-    local preRefreshClock = os.clock();
-
     m_AvailableTradeRoutes = {};
 
     local sourcePlayerID = Game.GetLocalPlayer();
@@ -219,7 +216,7 @@ function RebuildAvailableTraders()
 end
 
 function Refresh()
-    preRefreshClock = os.clock();
+    preRefreshTime = Automation.GetTime();
     print("Refresh start")
     PreRefresh();
 
@@ -241,10 +238,9 @@ function Refresh()
         ViewMyRoutes();
     end
 
-    local postRefreshClock:number = os.clock()
-    print("Time taken to refresh: " .. (postRefreshClock - preRefreshClock) .. " secs");
-
     PostRefresh();
+    local postRefreshTime = Automation.GetTime()
+    print("Time taken to refresh: " .. (postRefreshTime - preRefreshTime) .. " secs");
 end
 
 function PreRefresh()
@@ -436,19 +432,25 @@ function ViewAvailableRoutes()
         return;
     end
 
+    local time1, time2;
+
     -- Update Header
     Controls.HeaderLabel:SetText(L_Upper("LOC_TRADE_OVERVIEW_AVAILABLE_ROUTES"));
     Controls.ActiveRoutesLabel:SetHide(true);
 
     -- Dont rebuild if the turn has not advanced
     if (not m_HasBuiltTradeRouteTable) or Game.GetCurrentGameTurn() > m_LastTurnBuiltTradeRouteTable then
+        time1 = Automation.GetTime()
         RebuildAvailableTradeRoutesTable();
-        print("Time taken to build routes: " .. (os.clock()- preRefreshClock) .. " sec(s)");
+        time2 = Automation.GetTime()
+        print("Time taken to build routes: " .. (time2-time1) .. " sec(s)");
 
         -- Cache routes info.
+        time1 = Automation.GetTime()
         CacheEmpty();
         if CacheRoutesInfo(m_AvailableTradeRoutes) then
-            print("Time taken till cache: " .. (os.clock() - preRefreshClock) .. " sec(s)")
+            time2 = Automation.GetTime()
+            print("Time taken to cache: " .. (time2-time1) .. " sec(s)")
         end
 
         -- Just rebuilt base routes table. need to do everything again
@@ -462,8 +464,10 @@ function ViewAvailableRoutes()
 
     -- Filter the routes
     if m_FilterSettingsChanged then
+        time1 = Automation.GetTime()
         m_FinalTradeRoutes = FilterTradeRoutes(m_AvailableTradeRoutes);
-        print("Time taken till filter: " .. (os.clock() - preRefreshClock) .. " sec(s)")
+        time2 = Automation.GetTime()
+        print("Time taken to filter: " .. (time2-time1) .. " sec(s)")
 
         -- Need to regroup routes
         m_GroupSettingsChanged = true
@@ -476,8 +480,10 @@ function ViewAvailableRoutes()
         -- Group routes. Use the filtered list of routes
         if m_GroupSettingsChanged then
             -- Group from the filtered routes
+            time1 = Automation.GetTime()
             m_AvailableGroupedRoutes = GroupRoutes(m_FinalTradeRoutes, m_groupByList[m_groupBySelected].groupByID)
-            print("Time taken till group: " .. (os.clock() - preRefreshClock) .. " sec(s)")
+            time2 = Automation.GetTime()
+            print("Time taken to group: " .. (time2-time1) .. " sec(s)")
 
             -- Need to resort
             m_SortSettingsChanged = true
@@ -488,14 +494,18 @@ function ViewAvailableRoutes()
         -- Sort within each group, and then sort groups
         if m_SortSettingsChanged then
             -- Sort within each group
+            time1 = Automation.GetTime()
             for i=1, #m_AvailableGroupedRoutes do
                 SortTradeRoutes(m_AvailableGroupedRoutes[i], m_InGroupSortBySettings)
             end
-            print("Time taken till within group sort: " .. (os.clock() - preRefreshClock) .. " sec(s)")
+            time2 = Automation.GetTime()
+            print("Time taken to within group sort: " .. (time2-time1) .. " sec(s)")
 
             -- Sort the order of groups. You need to do this AFTER each group has been sorted
+            time1 = Automation.GetTime()
             SortGroupedRoutes(m_AvailableGroupedRoutes, m_GroupSortBySettings);
-            print("Time taken till group sort: " .. (os.clock()- preRefreshClock) .. " sec(s)");
+            time2 = Automation.GetTime()
+            print("Time taken to group sort: " .. (time2-time1) .. " sec(s)");
         else
             print("OPT: Not resorting within and of groups")
         end
@@ -517,8 +527,10 @@ function ViewAvailableRoutes()
     else
         if m_FinalTradeRoutes ~= nil then
             if m_SortSettingsChanged or m_GroupSettingsChanged then
+                time1 = Automation.GetTime()
                 SortTradeRoutes(m_FinalTradeRoutes, m_GroupSortBySettings);
-                print("Time taken till sort: " .. (os.clock() - preRefreshClock) .. " sec(s)")
+                time2 = Automation.GetTime()
+                print("Time taken to sort: " .. (time2-time1) .. " sec(s)")
             else
                 print("OPT: Not resorting routes")
             end
@@ -631,11 +643,11 @@ function AddRouteInstancesFromTable( tradeRoutes:table, showCount:number )
             AddRouteInstanceFromRouteInfo(tradeRoutes[i]);
         end
     else
-        local tClock = os.clock();
+        local tTime = Automation.GetTime();
         for i=1, #tradeRoutes do
-            if (tClock < os.clock()) then
+            if (tTime + 1 < Automation.GetTime()) then
                 print("+1 sec ... " .. i)
-                tClock = os.clock()
+                tTime = Automation.GetTime()
             end
             AddRouteInstanceFromRouteInfo(tradeRoutes[i]);
         end
