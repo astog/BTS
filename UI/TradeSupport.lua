@@ -869,28 +869,25 @@ function GetTradeRouteYieldString( routeInfo:table )
     local destinationCity:table = destinationPlayer:GetCities():FindID(routeInfo.DestinationCityID);
 
 
-    for yieldInfo in GameInfo.Yields() do
-        local originCityYieldValue = GetYieldForOriginCity(yieldInfo.Index, routeInfo, true);
+    for yieldIndex = START_INDEX, END_INDEX do
+        local originCityYieldValue = GetYieldForOriginCity(yieldIndex, routeInfo, true);
+        -- Skip if yield is not more than 0
+        if originCityYieldValue > 0 then
+            local iconString, text = FormatYieldText(yieldIndex, originCityYieldValue);
 
-        local iconString, text = FormatYieldText(yieldInfo, originCityYieldValue);
-
-        if originCityYieldValue == 0 then
-            iconString = "";
-            text = "";
-        end
-
-        if (yieldInfo.YieldType == "YIELD_FOOD") then
-            returnString = returnString .. text .. iconString .. " ";
-        elseif (yieldInfo.YieldType == "YIELD_PRODUCTION") then
-            returnString = returnString .. text .. iconString .. " ";
-        elseif (yieldInfo.YieldType == "YIELD_GOLD") then
-            returnString = returnString .. text .. iconString .. " ";
-        elseif (yieldInfo.YieldType == "YIELD_SCIENCE") then
-            returnString = returnString .. text .. iconString .. " ";
-        elseif (yieldInfo.YieldType == "YIELD_CULTURE") then
-            returnString = returnString .. text .. iconString .. " ";
-        elseif (yieldInfo.YieldType == "YIELD_FAITH") then
-            returnString = returnString .. text .. iconString;
+            if (yieldIndex == FOOD_INDEX) then
+                returnString = returnString .. text .. iconString .. " ";
+            elseif (yieldIndex == PRODUCTION_INDEX) then
+                returnString = returnString .. text .. iconString .. " ";
+            elseif (yieldIndex == GOLD_INDEX) then
+                returnString = returnString .. text .. iconString .. " ";
+            elseif (yieldIndex == SCIENCE_INDEX) then
+                returnString = returnString .. text .. iconString .. " ";
+            elseif (yieldIndex == CULTURE_INDEX) then
+                returnString = returnString .. text .. iconString .. " ";
+            elseif (yieldIndex == FAITH_INDEX) then
+                returnString = returnString .. text .. iconString;
+            end
         end
     end
 
