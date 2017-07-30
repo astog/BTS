@@ -1338,6 +1338,16 @@ function invert_char_code(code:number)
     return delta + string.byte("A", 1)
 end
 
+function table_nnill_count(T:table)
+    local count = 0
+    for k in pairs(T) do
+        if T[k] ~= nil then
+            count = count + 1
+        end
+    end
+    return count
+end
+
 function findIndex(T, searchItem, compareFunc)
     for index, item in ipairs(T) do
         if compareFunc(item, searchItem) then

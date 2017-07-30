@@ -860,19 +860,15 @@ function AddRouteInstanceFromRouteInfo( routeInfo:table )
             local co = coroutine.create(
                 function()
                     while true do -- Infinitely cycle
-                        if m_AvailableTraders ~= nil and tcount(m_AvailableTraders) > 0 then
+                        -- Do we have traders to cycle between?
+                        if CountTraders(m_AvailableTraders) > 0 then
                             for cityID in pairs(m_AvailableTraders) do
-                                if m_AvailableTraders[cityID] ~= nil and tcount(m_AvailableTraders[cityID]) > 0 then
-                                    for i in pairs(m_AvailableTraders[cityID]) do
-                                        local traderID = m_AvailableTraders[cityID][i]
-                                        local tradeUnit:table = originPlayer:GetUnits():FindID(traderID);
-                                        print("Calling transfer from " .. cityID)
-                                        TransferTraderTo(tradeUnit, originCity)
-                                        coroutine.yield()
-                                    end
-                                else
-                                    print("Backup 1 yield")
-                                    coroutine.yield() -- gauranteed yield to prevent infinite cycle bug
+                                for i in pairs(m_AvailableTraders[cityID]) do
+                                    local traderID = m_AvailableTraders[cityID][i]
+                                    local tradeUnit:table = originPlayer:GetUnits():FindID(traderID);
+                                    print("Calling transfer from " .. cityID)
+                                    TransferTraderTo(tradeUnit, originCity)
+                                    coroutine.yield()
                                 end
                             end
                         else
@@ -1719,7 +1715,7 @@ function SelectFreeTrader( unit:table, destinationCityOwnerID:number, destinatio
 end
 
 function CycleTraders(co)
-    if m_AvailableTraders ~= nil and tcount(m_AvailableTraders) > 0 then
+    if CountTraders(m_AvailableTraders) > 0 then
         coroutine.resume(co)
     else
         print("No Trader available")
@@ -1731,6 +1727,23 @@ function TransferTraderTo( unit:table, transferCity:table )
     LuaEvents.TradeOverview_ChangeOriginCityFromOverview(transferCity)
 end
 
+-- Prevents nill entries being counted as "traders"
+function CountTraders( traders )
+    local count = 0
+    if traders ~= nil then
+        for cityID in pairs(traders) do
+            if traders[cityID] ~= nil then
+                for i in pairs(traders[cityID]) do
+                    if traders[cityID][i] ~= nil then
+                        count = count + 1
+                    end
+                end
+            end
+        end
+    end
+    return count
+end
+
 function RemoveTrader( traderID )
     for cityID in pairs(m_AvailableTraders) do
         for i in pairs(m_AvailableTraders[cityID]) do
@@ -1740,7 +1753,7 @@ function RemoveTrader( traderID )
                 tremove(m_AvailableTraders[cityID], i)
 
                 -- Check if for that city has no traders. Remove the city entry if it does
-                if tcount(m_AvailableTraders[cityID]) <= 0 then
+                if table_nnill_count(m_AvailableTraders[cityID]) <= 0 then
                     print("Removing city " .. cityID)
                     tremove(m_AvailableTraders, cityID)
                 end
