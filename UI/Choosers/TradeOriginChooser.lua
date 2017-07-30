@@ -171,7 +171,7 @@ function OnChangeOriginCityFromOverview( city:table )
         if (m_AnimSupport:IsVisible()) then
             Refresh();
         else
-            Open();
+            OnOpen();
         end
     end
 end
@@ -244,6 +244,7 @@ end
 
 -- ===========================================================================
 function OnOpen()
+    LuaEvents.TradeRouteChooser_Close()
     Open();
 end
 

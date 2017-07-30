@@ -1228,7 +1228,15 @@ end
 -- ===========================================================================
 --  Setup
 -- ===========================================================================
-function l(object) print("Attributes:") for k, v in pairs(getmetatable(object).__index) do print(k); end; print("End attributes."); end
+
+function InitButton(control, callbackLClick, callbackRClick)
+    control:RegisterCallback(M_LCick, callbackLClick)
+    if callbackRClick ~= nil then
+        control:RegisterCallback(M_RClick, callbackRClick)
+    end
+    control:RegisterCallback( M_Enter, function() UI.PlaySound("Main_Menu_Mouse_Over") end)
+end
+
 function Initialize()
     print("Initializing BTS Trade Route Chooser");
 
@@ -1244,6 +1252,7 @@ function Initialize()
 
     -- Context Events
     LuaEvents.TradeOverview_SelectRouteFromOverview.Add( OnSelectRouteFromOverview );
+    LuaEvents.TradeRouteChooser_Close.Add( OnClose )
 
     -- Game Engine Events
     Events.InterfaceModeChanged.Add( OnInterfaceModeChanged );
@@ -1255,46 +1264,25 @@ function Initialize()
     Events.GovernmentPolicyObsoleted.Add( OnPolicyChanged );
 
     -- Control Events
-    Controls.BeginRouteButton:RegisterCallback( eLClick, RequestTradeRoute );
-    Controls.BeginRouteButton:RegisterCallback( M_Enter, function() UI.PlaySound("Main_Menu_Mouse_Over"); end);
+    InitButton(Controls.BeginRouteButton, RequestTradeRoute)
+    InitButton(Controls.Header_CloseButton, OnClose )
+
+    -- Filter
     Controls.FilterButton:RegisterCallback( eLClick, UpdateFilterArrow );
     Controls.DestinationFilterPulldown:RegisterSelectionCallback( OnFilterSelected );
-    Controls.Header_CloseButton:RegisterCallback( eLClick, OnClose );
+
     -- Control events - checkboxes
-    Controls.RepeatRouteCheckbox:RegisterCallback( eLClick, OnRepeatRouteCheckbox );
-    Controls.RepeatRouteCheckbox:RegisterCallback( M_Enter, function() UI.PlaySound("Main_Menu_Mouse_Over"); end);
-    Controls.FromTopSortEntryCheckbox:RegisterCallback( eLClick, OnFromTopSortEntryCheckbox );
-    Controls.FromTopSortEntryCheckbox:RegisterCallback( M_Enter, function() UI.PlaySound("Main_Menu_Mouse_Over"); end);
+    InitButton(Controls.RepeatRouteCheckbox, OnRepeatRouteCheckbox );
+    InitButton(Controls.FromTopSortEntryCheckbox, OnFromTopSortEntryCheckbox );
 
 
     -- Control events - sort bar
-    Controls.FoodSortButton:RegisterCallback( M_LCick, OnSortByFood);
-    Controls.FoodSortButton:RegisterCallback( M_RClick, OnNotSortByFood);
-    Controls.FoodSortButton:RegisterCallback( M_Enter, function() UI.PlaySound("Main_Menu_Mouse_Over"); end);
-
-    Controls.ProductionSortButton:RegisterCallback( M_LCick, OnSortByProduction);
-    Controls.ProductionSortButton:RegisterCallback( M_RClick, OnNotSortByProduction);
-    Controls.ProductionSortButton:RegisterCallback( M_Enter, function() UI.PlaySound("Main_Menu_Mouse_Over"); end);
-
-    Controls.GoldSortButton:RegisterCallback( M_LCick, OnSortByGold);
-    Controls.GoldSortButton:RegisterCallback( M_RClick, OnNotSortByGold);
-    Controls.GoldSortButton:RegisterCallback( M_Enter, function() UI.PlaySound("Main_Menu_Mouse_Over"); end);
-
-    Controls.ScienceSortButton:RegisterCallback( M_LCick, OnSortByScience);
-    Controls.ScienceSortButton:RegisterCallback( M_RClick, OnNotSortByScience);
-    Controls.ScienceSortButton:RegisterCallback( M_Enter, function() UI.PlaySound("Main_Menu_Mouse_Over"); end);
-
-    Controls.CultureSortButton:RegisterCallback( M_LCick, OnSortByCulture);
-    Controls.CultureSortButton:RegisterCallback( M_RClick, OnNotSortByCulture);
-    Controls.CultureSortButton:RegisterCallback( M_Enter, function() UI.PlaySound("Main_Menu_Mouse_Over"); end);
-
-    Controls.FaithSortButton:RegisterCallback( M_LCick, OnSortByFaith);
-    Controls.FaithSortButton:RegisterCallback( M_RClick, OnNotSortByFaith);
-    Controls.FaithSortButton:RegisterCallback( M_Enter, function() UI.PlaySound("Main_Menu_Mouse_Over"); end);
-
-    Controls.TurnsToCompleteSortButton:RegisterCallback( M_LCick, OnSortByTurnsToComplete);
-    Controls.TurnsToCompleteSortButton:RegisterCallback( M_RClick, OnNotSortByTurnsToComplete);
-    Controls.TurnsToCompleteSortButton:RegisterCallback( M_Enter, function() UI.PlaySound("Main_Menu_Mouse_Over"); end);
-
+    InitButton(Controls.FoodSortButton, OnSortByFood, OnNotSortByFood)
+    InitButton(Controls.ProductionSortButton, OnSortByProduction, OnNotSortByProduction)
+    InitButton(Controls.GoldSortButton, OnSortByGold, OnNotSortByGold)
+    InitButton(Controls.ScienceSortButton, OnSortByScience, OnNotSortByScience)
+    InitButton(Controls.CultureSortButton, OnSortByCulture, OnNotSortByCulture)
+    InitButton(Controls.FaithSortButton, OnSortByFaith, OnNotSortByFaith)
+    InitButton(Controls.TurnsToCompleteSortButton, OnSortByTurnsToComplete, OnNotSortByTurnsToComplete)
 end
 Initialize();

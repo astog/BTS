@@ -268,7 +268,7 @@ local function TradeSupportTracker_OnUnitOperationsCleared(ownerID:number, unitI
                 LoadTraderAutomatedInfo();
 
                 -- Remove entry from local players running routes
-                for i, route in ipairs(m_LocalPlayerRunningRoutes) do
+                for _, route in ipairs(m_LocalPlayerRunningRoutes) do
                     if route.TraderUnitID == unitID then
                         if m_TradersAutomatedSettings[unitID] == nil then
                             print("Couldn't find trader automated info. Creating one.")
@@ -705,13 +705,18 @@ end
 
 function ScoreRoute( routeInfo:table, sortSettings:table )
     local score = {}
-    for i, sortSetting in ipairs(sortSettings) do
+    for _, sortSetting in ipairs(sortSettings) do
         local scoreFunction = ScoreFunctionByID[sortSetting.SortByID];
         local val = scoreFunction(routeInfo)
 
         -- Change the sign, if in descending order. EX: (-)5 < (-)2
         if sortSetting.SortOrder == SORT_DESCENDING then
-            val = val * -1
+            -- Handle if val is string
+            if type(val) == "string" then
+                val = invert_string(val)
+            else
+                val = val * -1
+            end
         end
         score[#score + 1] = val
     end
@@ -804,9 +809,9 @@ function GetIdleTradeUnits( playerID:number )
 
             -- Determine if those trade units are busy by checking outgoing routes from the players cities
             local localPlayerCities:table = Players[playerID]:GetCities();
-            for i,city in localPlayerCities:Members() do
+            for _, city in localPlayerCities:Members() do
                 local routes = city:GetTrade():GetOutgoingRoutes();
-                for i,route in ipairs(routes) do
+                for _, route in ipairs(routes) do
                     if route.TraderUnitID == unit:GetID() then
                         doestradeUnitHasRoute = true;
                     end
@@ -1228,30 +1233,30 @@ end
 function RemoveRouteFromTable( routeToDelete:table , routeTable:table, groupedRoutes:boolean )
     -- If grouping by something, go one level deeper
     if groupedRoutes then
-        local targetIndex:number;
-        local targetGroupIndex:number;
+        local targetIndex:number = -1;
+        local targetGroupIndex:number = -1;
 
         for i, groupedRoutes in ipairs(routeTable) do
             for j, route in ipairs(groupedRoutes) do
                 if CheckRouteEquality( route, routeToDelete ) then
                     targetIndex = j;
                     targetGroupIndex = i;
+                    break
                 end
             end
         end
 
         -- Remove route
-        if targetIndex then
+        if targetIndex ~= -1 and targetGroupIndex ~= -1 then
             table.remove(routeTable[targetGroupIndex], targetIndex);
-        end
-        -- If that group is empty, remove that group
-        if table.count(routeTable[targetGroupIndex]) <= 0 then
-            if targetGroupIndex then
+
+            -- If that group is empty, remove that group
+            if table.count(routeTable[targetGroupIndex]) <= 0 then
                 table.remove(routeTable, targetGroupIndex);
             end
         end
     else
-        local targetIndex:number;
+        local targetIndex:number = -1;
 
         for i, route in ipairs(routeTable) do
             if CheckRouteEquality( route, routeToDelete ) then
@@ -1260,7 +1265,7 @@ function RemoveRouteFromTable( routeToDelete:table , routeTable:table, groupedRo
         end
 
         -- Remove route
-        if targetIndex then
+        if targetIndex ~= -1 then
             table.remove(routeTable, targetIndex);
         end
     end
@@ -1316,6 +1321,23 @@ end
 --  Helper Utility functions
 -- ===========================================================================
 
+-- Converts 'A' -> 'Z' || 'Z' -> 'A'
+function invert_string(s:string)
+    s = s:upper()
+    print("org: " .. s)
+    local newS:string = ""
+    for i=1, s:len() do
+        newS = newS .. string.char(invert_char_code(s:byte(i)))
+    end
+    print("inv: " .. newS)
+    return newS
+end
+
+function invert_char_code(code:number)
+    local delta = string.byte("Z", 1) - code
+    return delta + string.byte("A", 1)
+end
+
 function findIndex(T, searchItem, compareFunc)
     for index, item in ipairs(T) do
         if compareFunc(item, searchItem) then
@@ -1338,238 +1360,238 @@ end
 
 -- ========== START OF DataDumper.lua =================
 --[[ DataDumper.lua
-Copyright (c) 2007 Olivetti-Engineering SA
+  Copyright (c) 2007 Olivetti-Engineering SA
 
-Permission is hereby granted, free of charge, to any person
-obtaining a copy of this software and associated documentation
-files (the "Software"), to deal in the Software without
-restriction, including without limitation the rights to use,
-copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the
-Software is furnished to do so, subject to the following
-conditions:
+  Permission is hereby granted, free of charge, to any person
+  obtaining a copy of this software and associated documentation
+  files (the "Software"), to deal in the Software without
+  restriction, including without limitation the rights to use,
+  copy, modify, merge, publish, distribute, sublicense, and/or sell
+  copies of the Software, and to permit persons to whom the
+  Software is furnished to do so, subject to the following
+  conditions:
 
-The above copyright notice and this permission notice shall be
-included in all copies or substantial portions of the Software.
+  The above copyright notice and this permission notice shall be
+  included in all copies or substantial portions of the Software.
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
-EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
-OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
-NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
-HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
-WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
-FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
-OTHER DEALINGS IN THE SOFTWARE.
-]]
+  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+  EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
+  OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+  NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+  HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+  WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+  FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+  OTHER DEALINGS IN THE SOFTWARE.
+  ]]
 
-function dump(...)
-  print(DataDumper(...), "\n---")
-end
-
-local dumplua_closure = [[
-local closures = {}
-local function closure(t)
-  closures[#closures+1] = t
-  t[1] = assert(loadstring(t[1]))
-  return t[1]
-end
-
-for _,t in pairs(closures) do
-  for i = 2,#t do
-    debug.setupvalue(t[1], i-1, t[i])
+  function dump(...)
+    print(DataDumper(...), "\n---")
   end
-end
-]]
 
-local lua_reserved_keywords = {
-  'and', 'break', 'do', 'else', 'elseif', 'end', 'false', 'for',
-  'function', 'if', 'in', 'local', 'nil', 'not', 'or', 'repeat',
-  'return', 'then', 'true', 'until', 'while' }
+  local dumplua_closure = [[
+  local closures = {}
+  local function closure(t)
+    closures[#closures+1] = t
+    t[1] = assert(loadstring(t[1]))
+    return t[1]
+  end
 
-local function keys(t)
-  local res = {}
-  local oktypes = { stringstring = true, numbernumber = true }
-  local function cmpfct(a,b)
-    if oktypes[type(a)..type(b)] then
-      return a < b
-    else
-      return type(a) < type(b)
+  for _,t in pairs(closures) do
+    for i = 2,#t do
+      debug.setupvalue(t[1], i-1, t[i])
     end
   end
-  for k in pairs(t) do
-    res[#res+1] = k
-  end
-  table.sort(res, cmpfct)
-  return res
-end
+  ]]
 
-local c_functions = {}
-for _,lib in pairs{'_G', 'string', 'table', 'math',
-    'io', 'os', 'coroutine', 'package', 'debug'} do
-  local t = {}
-  lib = lib .. "."
-  if lib == "_G." then lib = "" end
-  for k,v in pairs(t) do
-    if type(v) == 'function' and not pcall(string.dump, v) then
-      c_functions[v] = lib..k
-    end
-  end
-end
+  local lua_reserved_keywords = {
+    'and', 'break', 'do', 'else', 'elseif', 'end', 'false', 'for',
+    'function', 'if', 'in', 'local', 'nil', 'not', 'or', 'repeat',
+    'return', 'then', 'true', 'until', 'while' }
 
-function DataDumper(value, varname, fastmode, ident)
-  local defined, dumplua = {}
-  -- Local variables for speed optimization
-  local string_format, type, string_dump, string_rep =
-        string.format, type, string.dump, string.rep
-  local tostring, pairs, table_concat =
-        tostring, pairs, table.concat
-  local keycache, strvalcache, out, closure_cnt = {}, {}, {}, 0
-  setmetatable(strvalcache, {__index = function(t,value)
-    local res = string_format('%q', value)
-    t[value] = res
-    return res
-  end})
-  local fcts = {
-    string = function(value) return strvalcache[value] end,
-    number = function(value) return value end,
-    boolean = function(value) return tostring(value) end,
-    ['nil'] = function(value) return 'nil' end,
-    ['function'] = function(value)
-      return string_format("loadstring(%q)", string_dump(value))
-    end,
-    userdata = function() error("Cannot dump userdata") end,
-    thread = function() error("Cannot dump threads") end,
-  }
-  local function test_defined(value, path)
-    if defined[value] then
-      if path:match("^getmetatable.*%)$") then
-        out[#out+1] = string_format("s%s, %s)\n", path:sub(2,-2), defined[value])
+  local function keys(t)
+    local res = {}
+    local oktypes = { stringstring = true, numbernumber = true }
+    local function cmpfct(a,b)
+      if oktypes[type(a)..type(b)] then
+        return a < b
       else
-        out[#out+1] = path .. " = " .. defined[value] .. "\n"
+        return type(a) < type(b)
       end
-      return true
     end
-    defined[value] = path
+    for k in pairs(t) do
+      res[#res+1] = k
+    end
+    table.sort(res, cmpfct)
+    return res
   end
-  local function make_key(t, key)
-    local s
-    if type(key) == 'string' and key:match('^[_%a][_%w]*$') then
-      s = key .. "="
-    else
-      s = "[" .. dumplua(key, 0) .. "]="
+
+  local c_functions = {}
+  for _,lib in pairs{'_G', 'string', 'table', 'math',
+      'io', 'os', 'coroutine', 'package', 'debug'} do
+    local t = {}
+    lib = lib .. "."
+    if lib == "_G." then lib = "" end
+    for k,v in pairs(t) do
+      if type(v) == 'function' and not pcall(string.dump, v) then
+        c_functions[v] = lib..k
+      end
     end
-    t[key] = s
-    return s
   end
-  for _,k in ipairs(lua_reserved_keywords) do
-    keycache[k] = '["'..k..'"] = '
-  end
-  if fastmode then
-    fcts.table = function (value)
-      -- Table value
-      local numidx = 1
-      out[#out+1] = "{"
-      for key,val in pairs(value) do
-        if key == numidx then
-          numidx = numidx + 1
-        else
-          out[#out+1] = keycache[key]
-        end
-        local str = dumplua(val)
-        out[#out+1] = str..","
-      end
-      if string.sub(out[#out], -1) == "," then
-        out[#out] = string.sub(out[#out], 1, -2);
-      end
-      out[#out+1] = "}"
-      return ""
-    end
-  else
-    fcts.table = function (value, ident, path)
-      if test_defined(value, path) then return "nil" end
-      -- Table value
-      local sep, str, numidx, totallen = " ", {}, 1, 0
-      local meta, metastr = getmetatable(value)
-      if meta then
-        ident = ident + 1
-        metastr = dumplua(meta, ident, "getmetatable("..path..")")
-        totallen = totallen + #metastr + 16
-      end
-      for _,key in pairs(keys(value)) do
-        local val = value[key]
-        local s = ""
-        local subpath = path or ""
-        if key == numidx then
-          subpath = subpath .. "[" .. numidx .. "]"
-          numidx = numidx + 1
-        else
-          s = keycache[key]
-          if not s:match "^%[" then subpath = subpath .. "." end
-          subpath = subpath .. s:gsub("%s*=%s*$","")
-        end
-        s = s .. dumplua(val, ident+1, subpath)
-        str[#str+1] = s
-        totallen = totallen + #s + 2
-      end
-      if totallen > 80 then
-        sep = "\n" .. string_rep("  ", ident+1)
-      end
-      str = "{"..sep..table_concat(str, ","..sep).." "..sep:sub(1,-3).."}"
-      if meta then
-        sep = sep:sub(1,-3)
-        return "setmetatable("..sep..str..","..sep..metastr..sep:sub(1,-3)..")"
-      end
-      return str
-    end
-    fcts['function'] = function (value, ident, path)
-      if test_defined(value, path) then return "nil" end
-      if c_functions[value] then
-        return c_functions[value]
-      elseif debug == nil or debug.getupvalue(value, 1) == nil then
+
+  function DataDumper(value, varname, fastmode, ident)
+    local defined, dumplua = {}
+    -- Local variables for speed optimization
+    local string_format, type, string_dump, string_rep =
+          string.format, type, string.dump, string.rep
+    local tostring, pairs, table_concat =
+          tostring, pairs, table.concat
+    local keycache, strvalcache, out, closure_cnt = {}, {}, {}, 0
+    setmetatable(strvalcache, {__index = function(t,value)
+      local res = string_format('%q', value)
+      t[value] = res
+      return res
+    end})
+    local fcts = {
+      string = function(value) return strvalcache[value] end,
+      number = function(value) return value end,
+      boolean = function(value) return tostring(value) end,
+      ['nil'] = function(value) return 'nil' end,
+      ['function'] = function(value)
         return string_format("loadstring(%q)", string_dump(value))
+      end,
+      userdata = function() error("Cannot dump userdata") end,
+      thread = function() error("Cannot dump threads") end,
+    }
+    local function test_defined(value, path)
+      if defined[value] then
+        if path:match("^getmetatable.*%)$") then
+          out[#out+1] = string_format("s%s, %s)\n", path:sub(2,-2), defined[value])
+        else
+          out[#out+1] = path .. " = " .. defined[value] .. "\n"
+        end
+        return true
       end
-      closure_cnt = closure_cnt + 1
-      local res = {string.dump(value)}
-      for i = 1,math.huge do
-        local name, v = debug.getupvalue(value,i)
-        if name == nil then break end
-        res[i+1] = v
+      defined[value] = path
+    end
+    local function make_key(t, key)
+      local s
+      if type(key) == 'string' and key:match('^[_%a][_%w]*$') then
+        s = key .. "="
+      else
+        s = "[" .. dumplua(key, 0) .. "]="
       end
-      return "closure " .. dumplua(res, ident, "closures["..closure_cnt.."]")
+      t[key] = s
+      return s
     end
-  end
-  function dumplua(value, ident, path)
-    return fcts[type(value)](value, ident, path)
-  end
-  if varname == nil then
-    varname = ""
-  elseif varname:match("^[%a_][%w_]*$") then
-    varname = varname .. " = "
-  end
-  if fastmode then
-    setmetatable(keycache, {__index = make_key })
-    out[1] = varname
-    table.insert(out,dumplua(value, 0))
-    return table.concat(out)
-  else
-    setmetatable(keycache, {__index = make_key })
-    local items = {}
-    for i=1,10 do items[i] = '' end
-    items[3] = dumplua(value, ident or 0, "t")
-    if closure_cnt > 0 then
-      items[1], items[6] = dumplua_closure:match("(.*\n)\n(.*)")
-      out[#out+1] = ""
+    for _,k in ipairs(lua_reserved_keywords) do
+      keycache[k] = '["'..k..'"] = '
     end
-    if #out > 0 then
-      items[2], items[4] = "local t = ", "\n"
-      items[5] = table.concat(out)
-      items[7] = varname .. "t"
+    if fastmode then
+      fcts.table = function (value)
+        -- Table value
+        local numidx = 1
+        out[#out+1] = "{"
+        for key,val in pairs(value) do
+          if key == numidx then
+            numidx = numidx + 1
+          else
+            out[#out+1] = keycache[key]
+          end
+          local str = dumplua(val)
+          out[#out+1] = str..","
+        end
+        if string.sub(out[#out], -1) == "," then
+          out[#out] = string.sub(out[#out], 1, -2);
+        end
+        out[#out+1] = "}"
+        return ""
+      end
     else
-      items[2] = varname
+      fcts.table = function (value, ident, path)
+        if test_defined(value, path) then return "nil" end
+        -- Table value
+        local sep, str, numidx, totallen = " ", {}, 1, 0
+        local meta, metastr = getmetatable(value)
+        if meta then
+          ident = ident + 1
+          metastr = dumplua(meta, ident, "getmetatable("..path..")")
+          totallen = totallen + #metastr + 16
+        end
+        for _,key in pairs(keys(value)) do
+          local val = value[key]
+          local s = ""
+          local subpath = path or ""
+          if key == numidx then
+            subpath = subpath .. "[" .. numidx .. "]"
+            numidx = numidx + 1
+          else
+            s = keycache[key]
+            if not s:match "^%[" then subpath = subpath .. "." end
+            subpath = subpath .. s:gsub("%s*=%s*$","")
+          end
+          s = s .. dumplua(val, ident+1, subpath)
+          str[#str+1] = s
+          totallen = totallen + #s + 2
+        end
+        if totallen > 80 then
+          sep = "\n" .. string_rep("  ", ident+1)
+        end
+        str = "{"..sep..table_concat(str, ","..sep).." "..sep:sub(1,-3).."}"
+        if meta then
+          sep = sep:sub(1,-3)
+          return "setmetatable("..sep..str..","..sep..metastr..sep:sub(1,-3)..")"
+        end
+        return str
+      end
+      fcts['function'] = function (value, ident, path)
+        if test_defined(value, path) then return "nil" end
+        if c_functions[value] then
+          return c_functions[value]
+        elseif debug == nil or debug.getupvalue(value, 1) == nil then
+          return string_format("loadstring(%q)", string_dump(value))
+        end
+        closure_cnt = closure_cnt + 1
+        local res = {string.dump(value)}
+        for i = 1,math.huge do
+          local name, v = debug.getupvalue(value,i)
+          if name == nil then break end
+          res[i+1] = v
+        end
+        return "closure " .. dumplua(res, ident, "closures["..closure_cnt.."]")
+      end
     end
-    return table.concat(items)
+    function dumplua(value, ident, path)
+      return fcts[type(value)](value, ident, path)
+    end
+    if varname == nil then
+      varname = ""
+    elseif varname:match("^[%a_][%w_]*$") then
+      varname = varname .. " = "
+    end
+    if fastmode then
+      setmetatable(keycache, {__index = make_key })
+      out[1] = varname
+      table.insert(out,dumplua(value, 0))
+      return table.concat(out)
+    else
+      setmetatable(keycache, {__index = make_key })
+      local items = {}
+      for i=1,10 do items[i] = '' end
+      items[3] = dumplua(value, ident or 0, "t")
+      if closure_cnt > 0 then
+        items[1], items[6] = dumplua_closure:match("(.*\n)\n(.*)")
+        out[#out+1] = ""
+      end
+      if #out > 0 then
+        items[2], items[4] = "local t = ", "\n"
+        items[5] = table.concat(out)
+        items[7] = varname .. "t"
+      else
+        items[2] = varname
+      end
+      return table.concat(items)
+    end
   end
-end
 -- ========== END OF DataDumper.lua =================
 
 -- ===========================================================================

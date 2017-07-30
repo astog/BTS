@@ -203,7 +203,9 @@ function RebuildAvailableTraders()
                 local cityID = pCity:GetID()
 
                 -- Make entry if none exists
-                if m_AvailableTraders[cityID] == nil then m_AvailableTraders[cityID] = {} end
+                if m_AvailableTraders[cityID] == nil then
+                    m_AvailableTraders[cityID] = {}
+                end
 
                 -- Append unit into the entry
                 tinsert(m_AvailableTraders[cityID], unitID)
@@ -466,14 +468,14 @@ function ViewAvailableRoutes()
         print("OPT: Not Rebuilding or recaching routes table")
     end
 
-    -- Filter the routes
+    -- Filter the routes here. This allows for max improvement in speed if a filter is selected
     if m_FilterSettingsChanged then
         time1 = Automation.GetTime()
         m_FinalTradeRoutes = FilterTradeRoutes(m_AvailableTradeRoutes);
         time2 = Automation.GetTime()
         print(string.format("Time taken to filter: %.4f sec(s)", time2-time1))
 
-        -- Need to regroup routes
+        -- Need to regroup routes (some groups could dissapear because of filter)
         m_GroupSettingsChanged = true
     else
         print("OPT: Not refiltering routes")
@@ -483,13 +485,12 @@ function ViewAvailableRoutes()
     if not GroupSettingIsNone(m_groupBySelected) then
         -- Group routes. Use the filtered list of routes
         if m_GroupSettingsChanged then
-            -- Group from the filtered routes
             time1 = Automation.GetTime()
             m_AvailableGroupedRoutes = GroupRoutes(m_FinalTradeRoutes, m_groupByList[m_groupBySelected].groupByID)
             time2 = Automation.GetTime()
             print(string.format("Time taken to group: %.4f sec(s)", time2-time1))
 
-            -- Need to resort
+            -- Need to resort to show correct order
             m_SortSettingsChanged = true
         else
             print("OPT: Not regrouping routes")
@@ -859,15 +860,25 @@ function AddRouteInstanceFromRouteInfo( routeInfo:table )
             local co = coroutine.create(
                 function()
                     while true do -- Infinitely cycle
-                        for cityID in pairs(m_AvailableTraders) do
-                            for i in pairs(m_AvailableTraders[cityID]) do
-                                local traderID = m_AvailableTraders[cityID][i]
-                                local tradeUnit:table = originPlayer:GetUnits():FindID(traderID);
-                                TransferTraderTo(tradeUnit, originCity)
-                                coroutine.yield()
+                        if m_AvailableTraders ~= nil and tcount(m_AvailableTraders) > 0 then
+                            for cityID in pairs(m_AvailableTraders) do
+                                if m_AvailableTraders[cityID] ~= nil and tcount(m_AvailableTraders[cityID]) > 0 then
+                                    for i in pairs(m_AvailableTraders[cityID]) do
+                                        local traderID = m_AvailableTraders[cityID][i]
+                                        local tradeUnit:table = originPlayer:GetUnits():FindID(traderID);
+                                        print("Calling transfer from " .. cityID)
+                                        TransferTraderTo(tradeUnit, originCity)
+                                        coroutine.yield()
+                                    end
+                                else
+                                    print("Backup 1 yield")
+                                    coroutine.yield() -- gauranteed yield to prevent infinite cycle bug
+                                end
                             end
+                        else
+                            print("Backup 2 yield")
+                            coroutine.yield() -- gauranteed yield to prevent infinite cycle bug
                         end
-                        coroutine.yield() -- gauranteed yield to prevent infinite cycle bug
                     end
                 end
             );
@@ -1334,7 +1345,7 @@ function FilterTradeRoutes ( tradeRoutes:table )
     local filtertedRoutes:table = {};
     local hasEntry:boolean = false
 
-    for index, tradeRoute in ipairs(tradeRoutes) do
+    for _, tradeRoute in ipairs(tradeRoutes) do
         local pPlayer = Players[tradeRoute.DestinationCityPlayer];
         if m_filterList[m_filterSelected].FilterFunction and m_filterList[m_filterSelected].FilterFunction(pPlayer) then
             tinsert(filtertedRoutes, tradeRoute);
@@ -1375,7 +1386,7 @@ function RefreshFilters()
 
     -- Add Filters by Civ
     local players:table = Game.GetPlayers();
-    for index, pPlayer in ipairs(players) do
+    for _, pPlayer in ipairs(players) do
         if pPlayer and pPlayer:IsAlive() and pPlayer:IsMajor() then
 
             -- Has the local player met the civ?
@@ -1391,8 +1402,8 @@ function RefreshFilters()
     AddFilter(L_Lookup("LOC_HUD_REPORTS_CITY_STATE"), IsCityState);
 
     -- Add filters to pulldown
-    for index, filter in ipairs(m_filterList) do
-        AddFilterEntry(index);
+    for filter in pairs(m_filterList) do
+        AddFilterEntry(filter);
     end
 
     -- Select first filter
@@ -1406,7 +1417,7 @@ end
 
 function AddFilter( filterName:string, filterFunction )
     -- Make sure we don't add duplicate filters
-    for index, filter in ipairs(m_filterList) do
+    for _, filter in ipairs(m_filterList) do
         if filter.FilterText == filterName then
             return;
         end
@@ -1586,7 +1597,7 @@ function RefreshSortButtons( sortSettings:table )
     Controls.TurnsToCompleteSortButton:SetColorByName("ButtonDisabledCS");
 
     -- Go through settings and display arrows
-    for index, sortEntry in ipairs(sortSettings) do
+    for _, sortEntry in ipairs(sortSettings) do
         if sortEntry.SortByID == SORT_BY_ID.FOOD then
             SetSortArrow(Controls.FoodAscArrow, Controls.FoodDescArrow, sortEntry.SortOrder)
             Controls.FoodSortButton:SetColorByName("ButtonCS");
@@ -1613,7 +1624,7 @@ function RefreshSortButtons( sortSettings:table )
 end
 
 function RefreshSortOrderLabels( sortSettings:table )
-    for index, sortEntry in ipairs(sortSettings) do
+    for _, sortEntry in ipairs(sortSettings) do
         if sortEntry.SortByID == SORT_BY_ID.FOOD then
             Controls.FoodSortOrder:SetHide(false);
             Controls.FoodSortOrder:SetText(index);
@@ -1708,7 +1719,11 @@ function SelectFreeTrader( unit:table, destinationCityOwnerID:number, destinatio
 end
 
 function CycleTraders(co)
-    coroutine.resume(co)
+    if m_AvailableTraders ~= nil and tcount(m_AvailableTraders) > 0 then
+        coroutine.resume(co)
+    else
+        print("No Trader available")
+    end
 end
 
 function TransferTraderTo( unit:table, transferCity:table )
@@ -1724,8 +1739,9 @@ function RemoveTrader( traderID )
                 print("Removing trader " .. traderID .. " from available traders.")
                 tremove(m_AvailableTraders[cityID], i)
 
-                -- Check if for that city no traders exist
+                -- Check if for that city has no traders. Remove the city entry if it does
                 if tcount(m_AvailableTraders[cityID]) <= 0 then
+                    print("Removing city " .. cityID)
                     tremove(m_AvailableTraders, cityID)
                 end
 
@@ -2013,9 +2029,9 @@ function OnUnitOperationStarted( ownerID:number, unitID:number, operationID:numb
         if ownerID == Game.GetLocalPlayer() and operationID == UnitOperationTypes.MAKE_TRADE_ROUTE then
             -- Unit was just started a trade route. Find the route, and update the tables
             local localPlayerCities:table = Players[ownerID]:GetCities();
-            for i,city in localPlayerCities:Members() do
+            for _, city in localPlayerCities:Members() do
                 local outgoingRoutes = city:GetTrade():GetOutgoingRoutes();
-                for j,route in ipairs(outgoingRoutes) do
+                for _, route in ipairs(outgoingRoutes) do
                     if route.TraderUnitID == unitID then
                         -- Remove it from the available routes
                         if m_groupByList[m_groupBySelected].groupByID ~= GROUP_BY_SETTINGS.NONE then
@@ -2144,6 +2160,18 @@ function OnPolicyChanged( ePlayer )
     end
 end
 
+-- ===========================================================================
+--  Setup
+-- ===========================================================================
+
+function InitButton(control, callbackLClick, callbackRClick)
+    control:RegisterCallback(M_LCick, callbackLClick)
+    if callbackRClick ~= nil then
+        control:RegisterCallback(M_RClick, callbackRClick)
+    end
+    control:RegisterCallback( M_Enter, function() UI.PlaySound("Main_Menu_Mouse_Over") end)
+end
+
 function Initialize()
     print("Initializing BTS Trade Overview");
 
@@ -2154,55 +2182,30 @@ function Initialize()
     ContextPtr:SetInputHandler( OnInputHandler, true );
 
     -- Control Events
-    Controls.CloseButton:RegisterCallback(M_LCick, OnClose);
-    Controls.CloseButton:RegisterCallback( M_Enter, function() UI.PlaySound("Main_Menu_Mouse_Over"); end);
-    Controls.MyRoutesButton:RegisterCallback(M_LCick,         OnMyRoutesButton);
-    Controls.MyRoutesButton:RegisterCallback( M_Enter, function() UI.PlaySound("Main_Menu_Mouse_Over"); end);
-    Controls.RoutesToCitiesButton:RegisterCallback(M_LCick,   OnRoutesToCitiesButton);
-    Controls.RoutesToCitiesButton:RegisterCallback( M_Enter, function() UI.PlaySound("Main_Menu_Mouse_Over"); end);
-    Controls.AvailableRoutesButton:RegisterCallback(M_LCick,  OnAvailableRoutesButton);
-    Controls.AvailableRoutesButton:RegisterCallback( M_Enter, function() UI.PlaySound("Main_Menu_Mouse_Over"); end);
+    InitButton(Controls.CloseButton, OnClose)
+    InitButton(Controls.MyRoutesButton, OnMyRoutesButton)
+    InitButton(Controls.RoutesToCitiesButton, OnRoutesToCitiesButton)
+    InitButton(Controls.AvailableRoutesButton, OnAvailableRoutesButton)
+
     -- Control events - sort bar
-    Controls.FoodSortButton:RegisterCallback( M_LCick, OnSortByFood);
-    Controls.FoodSortButton:RegisterCallback( M_RClick, OnNotSortByFood);
-    Controls.FoodSortButton:RegisterCallback( M_Enter, function() UI.PlaySound("Main_Menu_Mouse_Over"); end);
-
-    Controls.ProductionSortButton:RegisterCallback( M_LCick, OnSortByProduction);
-    Controls.ProductionSortButton:RegisterCallback( M_RClick, OnNotSortByProduction);
-    Controls.ProductionSortButton:RegisterCallback( M_Enter, function() UI.PlaySound("Main_Menu_Mouse_Over"); end);
-
-    Controls.GoldSortButton:RegisterCallback( M_LCick, OnSortByGold);
-    Controls.GoldSortButton:RegisterCallback( M_RClick, OnNotSortByGold);
-    Controls.GoldSortButton:RegisterCallback( M_Enter, function() UI.PlaySound("Main_Menu_Mouse_Over"); end);
-
-    Controls.ScienceSortButton:RegisterCallback( M_LCick, OnSortByScience);
-    Controls.ScienceSortButton:RegisterCallback( M_RClick, OnNotSortByScience);
-    Controls.ScienceSortButton:RegisterCallback( M_Enter, function() UI.PlaySound("Main_Menu_Mouse_Over"); end);
-
-    Controls.CultureSortButton:RegisterCallback( M_LCick, OnSortByCulture);
-    Controls.CultureSortButton:RegisterCallback( M_RClick, OnNotSortByCulture);
-    Controls.CultureSortButton:RegisterCallback( M_Enter, function() UI.PlaySound("Main_Menu_Mouse_Over"); end);
-
-    Controls.FaithSortButton:RegisterCallback( M_LCick, OnSortByFaith);
-    Controls.FaithSortButton:RegisterCallback( M_RClick, OnNotSortByFaith);
-    Controls.FaithSortButton:RegisterCallback( M_Enter, function() UI.PlaySound("Main_Menu_Mouse_Over"); end);
-
-    Controls.TurnsToCompleteSortButton:RegisterCallback( M_LCick, OnSortByTurnsToComplete);
-    Controls.TurnsToCompleteSortButton:RegisterCallback( M_RClick, OnNotSortByTurnsToComplete);
-    Controls.TurnsToCompleteSortButton:RegisterCallback( M_Enter, function() UI.PlaySound("Main_Menu_Mouse_Over"); end);
+    InitButton(Controls.FoodSortButton, OnSortByFood, OnNotSortByFood)
+    InitButton(Controls.ProductionSortButton, OnSortByProduction, OnNotSortByProduction)
+    InitButton(Controls.GoldSortButton, OnSortByGold, OnNotSortByGold)
+    InitButton(Controls.ScienceSortButton, OnSortByScience, OnNotSortByScience)
+    InitButton(Controls.CultureSortButton, OnSortByCulture, OnNotSortByCulture)
+    InitButton(Controls.FaithSortButton, OnSortByFaith, OnNotSortByFaith)
+    InitButton(Controls.TurnsToCompleteSortButton, OnSortByTurnsToComplete, OnNotSortByTurnsToComplete)
 
     --Filter Pulldown
     Controls.OverviewFilterButton:RegisterCallback( eLClick, UpdateFilterArrow );
     Controls.OverviewDestinationFilterPulldown:RegisterSelectionCallback( OnFilterSelected );
+
     -- Group By Pulldown
     Controls.OverviewGroupByButton:RegisterCallback( eLClick, UpdateGroupByArrow );
     Controls.OverviewGroupByPulldown:RegisterSelectionCallback( OnGroupBySelected );
 
-    Controls.GroupExpandAllCheckBox:RegisterCallback( eLClick, OnGroupExpandAll );
-    Controls.GroupExpandAllCheckBox:RegisterCallback( M_Enter, function() UI.PlaySound("Main_Menu_Mouse_Over"); end);
-
-    Controls.GroupCollapseAllCheckBox:RegisterCallback( eLClick, OnGroupCollapseAll );
-    Controls.GroupCollapseAllCheckBox:RegisterCallback( M_Enter, function() UI.PlaySound("Main_Menu_Mouse_Over"); end);
+    InitButton(Controls.GroupExpandAllCheckBox, OnGroupExpandAll)
+    InitButton(Controls.GroupCollapseAllCheckBox, OnGroupCollapseAll)
 
     -- Lua Events
     LuaEvents.PartialScreenHooks_OpenTradeOverview.Add( OnOpen );
