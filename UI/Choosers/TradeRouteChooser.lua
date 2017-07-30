@@ -110,11 +110,8 @@ function Refresh()
     end
 
     RefreshHeader();
-
     RefreshTopPanel();
-
     RefreshSortBar();
-
     RefreshChooserPanel();
 end
 
@@ -237,13 +234,14 @@ function RefreshTopPanel()
 end
 
 function RefreshChooserPanel()
+    local tradeManager:table = Game.GetTradeManager();
+
     -- Do we rebuild available routes?
     if m_RebuildAvailableRoutes then
         -- Reset Available routes
         m_AvailableTradeRoutes = {};
 
         -- Gather available routes
-        local tradeManager:table = Game.GetTradeManager();
         local originCityPlayerID = m_originCity:GetOwner()
         local originCityID = m_originCity:GetID()
         local players:table = Game.GetPlayers{ Alive=true };
@@ -284,6 +282,40 @@ function RefreshChooserPanel()
 
     -- Update Destination Choice Stack
     RefreshStack();
+
+    -- Send Trade Route Paths to Engine
+    UILens.ClearLayerHexes( LensLayers.TRADE_ROUTE );
+
+    local DEFAULT_TINT = RGBAValuesToABGRHex(1, 1, 1, 1);
+    local FADED_TINT = RGBAValuesToABGRHex(0.3, 0.3, 0.3, 1);
+
+    -- If a city is selected, fade the other routes
+    local kUnselectedColor = DEFAULT_TINT;
+    if (m_destinationCity ~= nil) then kUnselectedColor = FADED_TINT; end
+
+    -- Show all paths that aren't selected
+    local pathPlots:table = {};
+    for _, routeInfo in ipairs(m_TradeRoutes) do
+        local destinationPlayer:table = Players[routeInfo.DestinationCityPlayer];
+        local destinationCity:table = destinationPlayer:GetCities():FindID(routeInfo.DestinationCityID);
+
+        pathPlots = tradeManager:GetTradeRoutePath(m_originCity:GetOwner(), m_originCity:GetID(), destinationCity:GetOwner(), destinationCity:GetID() );
+        local kVariations:table = {};
+        local lastElement:number = table.count(pathPlots);
+        table.insert(kVariations, {"TradeRoute_Destination", pathPlots[lastElement]} );
+        if (destinationCity ~= m_destinationCity) then
+            UILens.SetLayerHexesPath( LensLayers.TRADE_ROUTE, Game.GetLocalPlayer(), pathPlots, kVariations, kUnselectedColor );
+        end
+    end
+
+    -- Show the selected path last if it exists so it's on top
+    if m_destinationCity ~= nil then
+        pathPlots = tradeManager:GetTradeRoutePath(m_originCity:GetOwner(), m_originCity:GetID(), m_destinationCity:GetOwner(), m_destinationCity:GetID() );
+        local kVariations:table = {};
+        local lastElement : number = table.count(pathPlots);
+        table.insert(kVariations, {"TradeRoute_Destination", pathPlots[lastElement]} );
+        UILens.SetLayerHexesPath( LensLayers.TRADE_ROUTE, Game.GetLocalPlayer(), pathPlots, kVariations, DEFAULT_TINT );
+    end
 end
 
 -- ===========================================================================
@@ -307,9 +339,6 @@ function RefreshStack()
         print("OPT: Not refiltering.")
     end
 
-    -- Send Trade Route Paths to Engine (after filter applied)
-    UILens.ClearLayerHexes(LensLayers.TRADE_ROUTE);
-
     if m_SortSettingsChanged then
         m_TradeRoutes = SortTradeRoutes(m_TradeRoutes, m_SortBySettings);
         m_SortSettingsChanged = false -- done sorting
@@ -317,26 +346,8 @@ function RefreshStack()
         print("OPT: Not resorting.")
     end
 
-    -- If a destination City is chosen, send path only for that
-    if m_destinationCity ~= nil and m_originCity ~= nil then
-        local pathPlots = tradeManager:GetTradeRoutePath(m_originCity:GetOwner(), m_originCity:GetID(), m_destinationCity:GetOwner(), m_destinationCity:GetID());
-        local kVariations:table = {};
-        local lastElement:number = tcount(pathPlots);
-        tinsert(kVariations, {"TradeRoute_Destination", pathPlots[lastElement]} );
-        UILens.SetLayerHexesPath( LensLayers.TRADE_ROUTE, m_originCity:GetOwner(), pathPlots, kVariations );
-    end
-
     -- for i, tradeRoute in ipairs(tradeRoutes) do
     for i=1, #m_TradeRoutes do
-        -- If no destination city is selected, show all routes path on the map
-        if m_destinationCity == nil then
-            local pathPlots = tradeManager:GetTradeRoutePath(m_TradeRoutes[i].OriginCityPlayer, m_TradeRoutes[i].OriginCityID, m_TradeRoutes[i].DestinationCityPlayer, m_TradeRoutes[i].DestinationCityID);
-            local kVariations:table = {};
-            local lastElement:number = tcount(pathPlots);
-            tinsert(kVariations, {"TradeRoute_Destination", pathPlots[lastElement]} );
-            UILens.SetLayerHexesPath( LensLayers.TRADE_ROUTE, m_TradeRoutes[i].OriginCityPlayer, pathPlots, kVariations );
-        end
-
         AddRouteToDestinationStack(m_TradeRoutes[i]);
     end
 
@@ -733,10 +744,10 @@ function TradeRouteSelected( cityOwner:number, cityID:number )
     local player:table = Players[cityOwner];
     if player then
         local pCity:table = player:GetCities():FindID(cityID);
-        if pCity then
+        if pCity ~= nil then
             m_destinationCity = pCity;
         else
-            error("Unable to find city '"..tostring(cityID).."' for creating a trade route.");
+            error("Unable to find city '".. tostring(cityID).."' for creating a trade route.");
         end
     end
 
