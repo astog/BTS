@@ -324,12 +324,58 @@
           <Box Size="300,2" Anchor="C,C" Offset="0,13" Color="50,53,54,255"/>
 
           <!-- Resource Stack -->
-          <Stack ID="ResourceStack" StackGrowth="Down" Anchor="C,T" Offset="0,31" StackPadding="2">
-            <!-- <Stack ID="DestinationResourceStack" Size="50,50" Offset="2,1" StackGrowth="Right" StackPadding="2"/>
-            <Label ID="DestinationNoBenefitsLabel" Size="50,parent" Offset="0,7" Anchor="C,T" Style="FontNormal14" String="LOC_ROUTECHOOSER_NO_BENEFITS_FROM_ROUTE"/>
+          <Stack ID="ResourceStack" StackGrowth="Down" Anchor="C,T" Offset="0,31" StackPadding="4">
+            <Stack ID="OriginYields" Anchor="C,T" StackGrowth="Right" StackPadding="2">
+              <Container Size="48,20">
+                <Label ID="OriginYieldFoodLabel" Color="Food" Anchor="C,C" Offset="0,0" Style="FontNormal14" FontStyle="Shadow" String="+15[Icon_Food]"/>
+              </Container>
 
-            <Stack ID="OriginResourceStack" Size="50,50" Offset="2,-2" Anchor="L,B"StackGrowth="Right" StackPadding="2"/>
-            <Label ID="OriginNoBenefitsLabel" Size="50,parent" Offset="0,4" Anchor="C,B" Style="FontNormal14" String="LOC_ROUTECHOOSER_NO_BENEFITS_FROM_ROUTE"/> -->
+              <Container Size="48,20">
+                <Label ID="OriginYieldProductionLabel" Color="Production" Anchor="C,C" Offset="0,0" Style="FontNormal14" FontStyle="Shadow" String="+15[Icon_Production]"/>
+              </Container>
+
+              <Container Size="48,20">
+                <Label ID="OriginYieldGoldLabel" Color="Gold" Anchor="C,C" Offset="0,0" Style="FontNormal14" FontStyle="Shadow" String="+15[Icon_Gold]"/>
+              </Container>
+
+              <Container Size="48,20">
+                <Label ID="OriginYieldScienceLabel" Color="Science" Anchor="C,C" Offset="0,0" Style="FontNormal14" FontStyle="Shadow" String="+15[Icon_Science]"/>
+              </Container>
+
+              <Container Size="48,20">
+                <Label ID="OriginYieldCultureLabel" Color="Culture" Anchor="C,C" Offset="0,0" Style="FontNormal14" FontStyle="Shadow" String="+15[Icon_Culture]"/>
+              </Container>
+
+              <Container Size="48,20">
+                <Label ID="OriginYieldFaithLabel" Color="Faith" Anchor="C,C" Offset="0,0" Style="FontNormal14" FontStyle="Shadow" String="+15[Icon_Faith]"/>
+              </Container>
+            </Stack>
+
+            <Stack ID="DestinationYields" Anchor="C,T" StackGrowth="Right" StackPadding="2">
+              <Container Size="48,20">
+                <Label ID="DestinationYieldFoodLabel" Color="Food" Anchor="C,C" Offset="0,0" Style="FontNormal14" FontStyle="Shadow" String="+15[Icon_Food]"/>
+              </Container>
+
+              <Container Size="48,20">
+                <Label ID="DestinationYieldProductionLabel" Color="Production" Anchor="C,C" Offset="0,0" Style="FontNormal14" FontStyle="Shadow" String="+15[Icon_Production]"/>
+              </Container>
+
+              <Container Size="48,20">
+                <Label ID="DestinationYieldGoldLabel" Color="Gold" Anchor="C,C" Offset="0,0" Style="FontNormal14" FontStyle="Shadow" String="+15[Icon_Gold]"/>
+              </Container>
+
+              <Container Size="48,20">
+                <Label ID="DestinationYieldScienceLabel" Color="Science" Anchor="C,C" Offset="0,0" Style="FontNormal14" FontStyle="Shadow" String="+15[Icon_Science]"/>
+              </Container>
+
+              <Container Size="48,20">
+                <Label ID="DestinationYieldCultureLabel" Color="Culture" Anchor="C,C" Offset="0,0" Style="FontNormal14" FontStyle="Shadow" String="+15[Icon_Culture]"/>
+              </Container>
+
+              <Container Size="48,20">
+                <Label ID="DestinationYieldFaithLabel" Color="Faith" Anchor="C,C" Offset="0,0" Style="FontNormal14" FontStyle="Shadow" String="+15[Icon_Faith]"/>
+              </Container>
+            </Stack>
           </Stack>
 
           <Button ID="CancelAutomation" Anchor="L,T" Offset="6,6" Size="21,21" Texture="Controls_CloseButtonAltSmall" StateOffsetIncrement="0,21" ToolTip="LOC_TRADE_CANCEL_AUTOMATION_TOOLTIP" Hidden="1"/>
@@ -344,35 +390,6 @@
         <GridData Texture="Controls_ListButton" SliceCorner="209,29"  SliceTextureSize="417,51" StateOffsetIncrement="0,51"/>
       </GridButton>
     </Container>
-  </Instance>
-
-  <!-- Route Yields Instance -->
-  <Instance Name="RouteYieldInstance">
-    <Stack StackGrowth="Right" StackPadding="2">
-      <Container Size="48,20">
-        <Label ID="YieldFoodLabel" Color="Food" Anchor="C,C" Offset="0,0" Style="FontNormal14" FontStyle="Shadow" String="+15[Icon_Food]"/>
-      </Container>
-
-      <Container Size="48,20">
-        <Label ID="YieldProductionLabel" Color="Production" Anchor="C,C" Offset="0,0" Style="FontNormal14" FontStyle="Shadow" String="+15[Icon_Production]"/>
-      </Container>
-
-      <Container Size="48,20">
-        <Label ID="YieldGoldLabel" Color="Gold" Anchor="C,C" Offset="0,0" Style="FontNormal14" FontStyle="Shadow" String="+15[Icon_Gold]"/>
-      </Container>
-
-      <Container Size="48,20">
-        <Label ID="YieldScienceLabel" Color="Science" Anchor="C,C" Offset="0,0" Style="FontNormal14" FontStyle="Shadow" String="+15[Icon_Science]"/>
-      </Container>
-
-      <Container Size="48,20">
-        <Label ID="YieldCultureLabel" Color="Culture" Anchor="C,C" Offset="0,0" Style="FontNormal14" FontStyle="Shadow" String="+15[Icon_Culture]"/>
-      </Container>
-
-      <Container Size="48,20">
-        <Label ID="YieldFaithLabel" Color="Faith" Anchor="C,C" Offset="0,0" Style="FontNormal14" FontStyle="Shadow" String="+15[Icon_Faith]"/>
-      </Container>
-    </Stack>
   </Instance>
 
     <!-- Dialog Support -->

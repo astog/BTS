@@ -17,6 +17,7 @@ local labelColorOffset = -27
 local labelColorOpacity = 255
 
 -- Color Settings for Route Entry
+local tintRouteEntry = false
 local tintColorOffset = 80
 local tintColorOpacity = 205
 
@@ -141,8 +142,6 @@ local m_FilterSettingsChanged:boolean = true;
 local m_InGroupSortBySettings = {}; -- Stores the setting each group will have within it. Applicable when routes are grouped
 local m_GroupSortBySettings = {}; -- Stores the overall group sort setting. This is used, when routes are NOT grouped
 
-local preRefreshTime = 0; -- Used to track time to sort stuff
-
 -- ===========================================================================
 --  Refresh functions
 -- ===========================================================================
@@ -216,7 +215,7 @@ function RebuildAvailableTraders()
 end
 
 function Refresh()
-    preRefreshTime = Automation.GetTime();
+    local time1 = Automation.GetTime();
     print("Refresh start")
     PreRefresh();
 
@@ -239,8 +238,8 @@ function Refresh()
     end
 
     PostRefresh();
-    local postRefreshTime = Automation.GetTime()
-    print("Time taken to refresh: " .. (postRefreshTime - preRefreshTime) .. " secs");
+    local time2 = Automation.GetTime()
+    print(string.format("Time taken to refresh: %.4f sec(s)", time2-time1))
 end
 
 function PreRefresh()
@@ -251,12 +250,15 @@ function PreRefresh()
 end
 
 function PostRefresh()
-    -- Calculate Stack Sizess
+    -- Calculate Stack Sizes
+    local time1 = Automation.GetTime()
     Controls.HeaderStack:CalculateSize();
     Controls.HeaderStack:ReprocessAnchoring();
     Controls.BodyScrollPanel:CalculateSize();
     Controls.BodyScrollPanel:ReprocessAnchoring();
     Controls.BodyScrollPanel:CalculateInternalSize();
+    local time2 = Automation.GetTime()
+    print(string.format("Time to calculate stack sizes: %.4f sec(s)", time2-time1))
 end
 
 -- ===========================================================================
@@ -445,14 +447,14 @@ function ViewAvailableRoutes()
         time1 = Automation.GetTime()
         RebuildAvailableTradeRoutesTable();
         time2 = Automation.GetTime()
-        print("Time taken to build routes: " .. (time2-time1) .. " sec(s)");
+        print(string.format("Time taken to build routes: %.4f sec(s)", time2-time1))
 
         -- Cache routes info.
         time1 = Automation.GetTime()
         CacheEmpty();
         if CacheRoutesInfo(m_AvailableTradeRoutes) then
             time2 = Automation.GetTime()
-            print("Time taken to cache: " .. (time2-time1) .. " sec(s)")
+            print(string.format("Time taken to cache: %.4f sec(s)", time2-time1))
         end
 
         -- Just rebuilt base routes table. need to do everything again
@@ -469,7 +471,7 @@ function ViewAvailableRoutes()
         time1 = Automation.GetTime()
         m_FinalTradeRoutes = FilterTradeRoutes(m_AvailableTradeRoutes);
         time2 = Automation.GetTime()
-        print("Time taken to filter: " .. (time2-time1) .. " sec(s)")
+        print(string.format("Time taken to filter: %.4f sec(s)", time2-time1))
 
         -- Need to regroup routes
         m_GroupSettingsChanged = true
@@ -485,7 +487,7 @@ function ViewAvailableRoutes()
             time1 = Automation.GetTime()
             m_AvailableGroupedRoutes = GroupRoutes(m_FinalTradeRoutes, m_groupByList[m_groupBySelected].groupByID)
             time2 = Automation.GetTime()
-            print("Time taken to group: " .. (time2-time1) .. " sec(s)")
+            print(string.format("Time taken to group: %.4f sec(s)", time2-time1))
 
             -- Need to resort
             m_SortSettingsChanged = true
@@ -501,13 +503,13 @@ function ViewAvailableRoutes()
                 m_AvailableGroupedRoutes[i] = SortTradeRoutes(m_AvailableGroupedRoutes[i], m_InGroupSortBySettings)
             end
             time2 = Automation.GetTime()
-            print("Time taken to within group sort: " .. (time2-time1) .. " sec(s)")
+            print(string.format("Time taken to within group sort: %.4f sec(s)", time2-time1))
 
             -- Sort the order of groups. You need to do this AFTER each group has been sorted
             time1 = Automation.GetTime()
             m_AvailableGroupedRoutes = SortGroupedRoutes(m_AvailableGroupedRoutes, m_GroupSortBySettings);
             time2 = Automation.GetTime()
-            print("Time taken to group sort: " .. (time2-time1) .. " sec(s)");
+            print(string.format("Time taken to group sort: %.4f sec(s)", time2-time1))
         else
             print("OPT: Not resorting within and of groups")
         end
@@ -532,7 +534,7 @@ function ViewAvailableRoutes()
                 time1 = Automation.GetTime()
                 m_FinalTradeRoutes = SortTradeRoutes(m_FinalTradeRoutes, m_GroupSortBySettings);
                 time2 = Automation.GetTime()
-                print("Time taken to sort: " .. (time2-time1) .. " sec(s)")
+                print(string.format("Time taken to sort: %.4f sec(s)", time2-time1))
             else
                 print("OPT: Not resorting routes")
             end
@@ -670,7 +672,10 @@ function AddRouteInstanceFromRouteInfo( routeInfo:table )
     local tintBackColor = DarkenLightenColor(destinationBackColor, tintColorOffset, tintColorOpacity);
 
     -- Update colors
-    routeInstance.GridButton:SetColor(tintBackColor);
+    if tintRouteEntry then
+        routeInstance.GridButton:SetColor(tintBackColor);
+    end
+
     routeInstance.TurnsToComplete:SetColor(destinationFrontColor);
     routeInstance.BannerBase:SetColor(destinationBackColor);
     routeInstance.BannerDarker:SetColor(darkerBackColor);
@@ -684,22 +689,15 @@ function AddRouteInstanceFromRouteInfo( routeInfo:table )
     routeInstance.OriginCivArrow:SetColor(originFrontColor);
     routeInstance.DestinationCivArrow:SetColor(destinationFrontColor);
 
-    routeInstance.ResourceStack:DestroyAllChildren();
 
-    local originYieldInstance:table = {};
-    local destinationYieldInstance:table = {};
-    ContextPtr:BuildInstanceForControl( "RouteYieldInstance", originYieldInstance, routeInstance.ResourceStack );
-    ContextPtr:BuildInstanceForControl( "RouteYieldInstance", destinationYieldInstance, routeInstance.ResourceStack );
-
-    for yieldIndex = START_INDEX, END_INDEX do
-        local originCityYieldValue = GetYieldForOriginCity(yieldIndex, routeInfo, true);
-        local destinationCityYieldValue = GetYieldForDestinationCity(yieldIndex, routeInfo, true);
-
-        SetRouteInstanceYields(originYieldInstance, yieldIndex, originCityYieldValue);
-        SetRouteInstanceYields(destinationYieldInstance, yieldIndex, destinationCityYieldValue);
+    SetOriginRouteInstanceYields(routeInstance, routeInfo)
+    if GetNetYieldForDestinationCity(routeInfo, true) > 0 then
+        print(GetTradeRouteString(routeInfo), "has destination has yield")
+        routeInstance.DestinationYields:SetHide(false);
+        SetDestinationRouteInstanceYields(routeInstance, routeInfo)
+    else
+        routeInstance.DestinationYields:SetHide(true);
     end
-
-    routeInstance.ResourceStack:CalculateSize();
 
     -- Update City State Quest Icon
     routeInstance.CityStateQuestIcon:SetHide(true);
@@ -750,7 +748,7 @@ function AddRouteInstanceFromRouteInfo( routeInfo:table )
             routeInstance.TourismBonusGrid:LocalizeAndSetToolTip("LOC_TRADE_OVERVIEW_TOOLTIP_TOURISM_BONUS");
 
             routeInstance.VisibilityBonusIcon:SetTexture("Diplomacy_VisibilityIcons");
-            routeInstance.VisibilityBonusIcon:SetVisState(math.min(math.max(visibilityIndex - 1, 0), 3));
+            routeInstance.VisibilityBonusIcon:SetVisState(Clamp(visibilityIndex - 1, 0, 3));
             routeInstance.VisibilityBonusGrid:LocalizeAndSetToolTip("LOC_TRADE_OVERVIEW_TOOLTIP_DIPLOMATIC_VIS_BONUS");
         else
             routeInstance.TourismBonusPercentage:SetColorByName("TradeOverviewTextDisabledCS");
@@ -758,7 +756,7 @@ function AddRouteInstanceFromRouteInfo( routeInfo:table )
             routeInstance.TourismBonusGrid:LocalizeAndSetToolTip("LOC_TRADE_OVERVIEW_TOOLTIP_NO_TOURISM_BONUS");
 
             routeInstance.VisibilityBonusIcon:SetTexture("Diplomacy_VisibilityIconsGrey");
-            routeInstance.VisibilityBonusIcon:SetVisState(math.min(math.max(visibilityIndex, 0), 3));
+            routeInstance.VisibilityBonusIcon:SetVisState(Clamp(visibilityIndex, 0, 3));
             routeInstance.VisibilityBonusGrid:LocalizeAndSetToolTip("LOC_TRADE_OVERVIEW_TOOLTIP_NO_DIPLOMATIC_VIS_BONUS");
         end
     end
@@ -820,7 +818,7 @@ function AddRouteInstanceFromRouteInfo( routeInfo:table )
     routeInstance.DestinationCivIconBacking:SetColor(destinationBackColor);
     routeInstance.DestinationCivIcon:LocalizeAndSetToolTip(destinationTooltip);
 
-    -- Hide the cancel automation button
+    -- Hide the cancel automation button by default
     routeInstance.CancelAutomation:SetHide(true);
 
     -- Should we display the cancel automation?
@@ -847,7 +845,7 @@ function AddRouteInstanceFromRouteInfo( routeInfo:table )
         );
     -- Add button hookups for only this tab
     elseif m_currentTab == TRADE_TABS.AVAILABLE_ROUTES and m_AvailableTraders ~= nil and tcount(m_AvailableTraders) > 0 then
-        -- Check if we have free traders
+        -- Check if we have free trader in that city
         if m_AvailableTraders[routeInfo.OriginCityID] ~= nil and tcount(m_AvailableTraders[routeInfo.OriginCityID]) > 0 then
             -- Get first trader
             local traderID = m_AvailableTraders[routeInfo.OriginCityID][1]
@@ -857,7 +855,7 @@ function AddRouteInstanceFromRouteInfo( routeInfo:table )
                     SelectFreeTrader(tradeUnit, routeInfo.DestinationCityPlayer, routeInfo.DestinationCityID);
                 end
             );
-        else -- Cycle through all traders
+        else -- Cycle through all free traders and open transfer-to screen for them
             local co = coroutine.create(
                 function()
                     while true do -- Infinitely cycle
@@ -887,22 +885,34 @@ end
 -- Route button helpers
 -- ---------------------------------------------------------------------------
 
-function SetRouteInstanceYields(yieldsInstance, yieldIndex, yieldValue)
-    local iconString, text = FormatYieldText(yieldIndex, yieldValue);
-
-    if (yieldIndex == FOOD_INDEX) then
-        yieldsInstance.YieldFoodLabel:SetText(text .. iconString);
-    elseif (yieldIndex == PRODUCTION_INDEX) then
-        yieldsInstance.YieldProductionLabel:SetText(text .. iconString);
-    elseif (yieldIndex == GOLD_INDEX) then
-        yieldsInstance.YieldGoldLabel:SetText(text .. iconString);
-    elseif (yieldIndex == SCIENCE_INDEX) then
-        yieldsInstance.YieldScienceLabel:SetText(text .. iconString);
-    elseif (yieldIndex == CULTURE_INDEX) then
-        yieldsInstance.YieldCultureLabel:SetText(text .. iconString);
-    elseif (yieldIndex == FAITH_INDEX) then
-        yieldsInstance.YieldFaithLabel:SetText(text .. iconString);
+function SetOriginRouteInstanceYields(routeInstance, routeInfo)
+    local yieldTexts = {}
+    for yieldIndex = START_INDEX, END_INDEX do
+        local yieldAmount = GetYieldForOriginCity(yieldIndex, routeInfo, true)
+        local iconString, text = FormatYieldText(yieldIndex, yieldAmount)
+        yieldTexts[yieldIndex] = text .. iconString
     end
+    routeInstance.OriginYieldFoodLabel:SetText(yieldTexts[FOOD_INDEX])
+    routeInstance.OriginYieldProductionLabel:SetText(yieldTexts[PRODUCTION_INDEX])
+    routeInstance.OriginYieldGoldLabel:SetText(yieldTexts[GOLD_INDEX])
+    routeInstance.OriginYieldScienceLabel:SetText(yieldTexts[SCIENCE_INDEX])
+    routeInstance.OriginYieldCultureLabel:SetText(yieldTexts[CULTURE_INDEX])
+    routeInstance.OriginYieldFaithLabel:SetText(yieldTexts[FAITH_INDEX])
+end
+
+function SetDestinationRouteInstanceYields(routeInstance, routeInfo)
+    local yieldTexts = {}
+    for yieldIndex = START_INDEX, END_INDEX do
+        local yieldAmount = GetYieldForDestinationCity(yieldIndex, routeInfo, true)
+        local iconString, text = FormatYieldText(yieldIndex, yieldAmount)
+        yieldTexts[yieldIndex] = text .. iconString
+    end
+    routeInstance.DestinationYieldFoodLabel:SetText(yieldTexts[FOOD_INDEX])
+    routeInstance.DestinationYieldProductionLabel:SetText(yieldTexts[PRODUCTION_INDEX])
+    routeInstance.DestinationYieldGoldLabel:SetText(yieldTexts[GOLD_INDEX])
+    routeInstance.DestinationYieldScienceLabel:SetText(yieldTexts[SCIENCE_INDEX])
+    routeInstance.DestinationYieldCultureLabel:SetText(yieldTexts[CULTURE_INDEX])
+    routeInstance.DestinationYieldFaithLabel:SetText(yieldTexts[FAITH_INDEX])
 end
 
 -- ===========================================================================

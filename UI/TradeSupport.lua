@@ -43,6 +43,14 @@ local SCIENCE_INDEX:number = GameInfo.Yields["YIELD_SCIENCE"].Index;
 local CULTURE_INDEX:number = GameInfo.Yields["YIELD_CULTURE"].Index;
 local FAITH_INDEX:number = GameInfo.Yields["YIELD_FAITH"].Index;
 
+local ICON_LOOKUP = {}
+ICON_LOOKUP[FOOD_INDEX] = "[ICON_Food]"
+ICON_LOOKUP[PRODUCTION_INDEX] = "[ICON_Production]"
+ICON_LOOKUP[GOLD_INDEX] = "[ICON_Gold]"
+ICON_LOOKUP[SCIENCE_INDEX] = "[ICON_Science]"
+ICON_LOOKUP[CULTURE_INDEX] = "[ICON_Culture]"
+ICON_LOOKUP[FAITH_INDEX] = "[ICON_Faith]"
+
 -- Build lookup table
 ScoreFunctionByID[SORT_BY_ID.FOOD]                = function(a) return GetYieldForOriginCity(FOOD_INDEX, a, true) end
 ScoreFunctionByID[SORT_BY_ID.PRODUCTION]          = function(a) return GetYieldForOriginCity(PRODUCTION_INDEX, a, true) end
@@ -503,6 +511,7 @@ function CacheRoute(routeInfo)
     -------------------------------------------------
     m_Cache[key].Yields = {}
     local netOriginYield:number = 0
+    local netDestinationYield:number = 0
     for yieldIndex = START_INDEX, END_INDEX do
         local originYield = GetYieldForOriginCity(yieldIndex, routeInfo)
         local destinationYield = GetYieldForDestinationCity(yieldIndex, routeInfo)
@@ -513,12 +522,14 @@ function CacheRoute(routeInfo)
         }
 
         netOriginYield = netOriginYield + originYield
+        netDestinationYield = netDestinationYield + destinationYield
     end
 
     -------------------------------------------------
-    -- Net Yield
+    -- Net Yields
     -------------------------------------------------
     m_Cache[key].NetOriginYield = netOriginYield
+    m_Cache[key].NetDestinationYield = netDestinationYield
 
     -------------------------------------------------
     -- Trading Post
@@ -992,6 +1003,27 @@ function GetNetYieldForOriginCity( routeInfo, checkCache )
     end
 end
 
+function GetNetYieldForDestinationCity( routeInfo, checkCache )
+    if checkCache then
+        local key:string = GetRouteKey(routeInfo)
+        if m_Cache[key] ~= nil then
+            -- print("CACHE HIT for " .. GetTradeRouteString(routeInfo))
+            return m_Cache[key].NetDestinationYield
+        else
+            print("CACHE MISS for " .. GetTradeRouteString(routeInfo))
+            CacheRoute(routeInfo);
+            return m_Cache[key].NetDestinationYield
+        end
+    else
+        local netYield:number = 0
+        for iI = START_INDEX, END_INDEX do
+            -- Dont check cache here
+            netYield = netYield + GetYieldForDestinationCity(iI, routeInfo)
+        end
+        return netYield
+    end
+end
+
 function GetTurnsToComplete(routeInfo, checkCache)
     if checkCache then
         local key = GetRouteKey(routeInfo)
@@ -1179,30 +1211,16 @@ function FormatYieldText(yieldIndex, yieldAmount)
         return "", ""
     end
 
-    local text:string = "";
+    local iconString:string = ICON_LOOKUP[yieldIndex]
 
-    local iconString:string = "";
-    if (yieldIndex == FOOD_INDEX) then
-        iconString = "[ICON_Food]";
-    elseif (yieldIndex == PRODUCTION_INDEX) then
-        iconString = "[ICON_Production]";
-    elseif (yieldIndex == GOLD_INDEX) then
-        iconString = "[ICON_Gold]";
-    elseif (yieldIndex == SCIENCE_INDEX) then
-        iconString = "[ICON_Science]";
-    elseif (yieldIndex == CULTURE_INDEX) then
-        iconString = "[ICON_Culture]";
-    elseif (yieldIndex == FAITH_INDEX) then
-        iconString = "[ICON_Faith]";
-    end
-
+    local text:string;
     if yieldAmount > 0 then
         text = "+";
     else
         text = "-";
     end
-
     text = text .. yieldAmount;
+
     return iconString, text;
 end
 
