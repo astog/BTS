@@ -1702,16 +1702,24 @@ end
 
 function SelectFreeTrader( unit:table, destinationCityOwnerID:number, destinationCityID:number )
     local localPlayer = Game.GetLocalPlayer();
-    if UI.GetHeadSelectedUnit() ~= unit and localPlayer ~= -1 and localPlayer == unit:GetOwner() then
+    if localPlayer == -1 or localPlayer ~= unit:GetOwner() then
+        return
+    end
+
+    local selectedUnit:table = UI.GetHeadSelectedUnit();
+    if selectedUnit == nil or selectedUnit:GetID() ~= unit:GetID() then
         UI.DeselectAllUnits();
         UI.DeselectAllCities();
+
+        -- Don't open screen on unit selection
+        LuaEvents.TradeRouteChooser_SkipOpen()
         UI.SelectUnit( unit );
+
+        -- Open screen after new destination info is passed
         LuaEvents.TradeOverview_SelectRouteFromOverview(destinationCityOwnerID, destinationCityID)
-    elseif localPlayer ~= -1 and localPlayer == unit:GetOwner() then
-        -- The unit is already selected, call open panel
+    else
         LuaEvents.TradeOverview_SelectRouteFromOverview(destinationCityOwnerID, destinationCityID)
     end
-    UI.LookAtPlotScreenPosition( unit:GetX(), unit:GetY(), 0.42, 0.5 );
 end
 
 function CycleTraders(co)
@@ -1723,7 +1731,10 @@ function CycleTraders(co)
 end
 
 function TransferTraderTo( unit:table, transferCity:table )
+    -- Don't open screen on unit selection
+    LuaEvents.TradeRouteChooser_SkipOpen()
     SelectUnit(unit)
+
     LuaEvents.TradeOverview_ChangeOriginCityFromOverview(transferCity)
 end
 
@@ -2010,6 +2021,12 @@ end
 -- ===========================================================================
 --  Game Event
 -- ===========================================================================
+--  City was selected so close route chooser
+function OnCitySelectionChanged(owner, ID, i, j, k, bSelected, bEditable)
+    if not ContextPtr:IsHidden() and owner == Game.GetLocalPlayer() then
+        OnClose();
+    end
+end
 
 function OnInterfaceModeChanged( eOldMode:number, eNewMode:number )
     if eNewMode == InterfaceModeTypes.VIEW_MODAL_LENS then
@@ -2234,6 +2251,7 @@ function Initialize()
     Controls.Title:SetText(L_Lookup("LOC_TRADE_OVERVIEW_TITLE"));
 
     -- Game Engine Events
+    Events.CitySelectionChanged.Add( OnCitySelectionChanged );
     Events.UnitOperationStarted.Add( OnUnitOperationStarted );
     Events.GovernmentPolicyChanged.Add( OnPolicyChanged );
     Events.GovernmentPolicyObsoleted.Add( OnPolicyChanged );

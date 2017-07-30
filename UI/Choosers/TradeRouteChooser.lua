@@ -78,6 +78,8 @@ local m_SortSettingsChanged:boolean = true;
 
 local m_FilterSettingsChanged:boolean = true;
 
+local m_SkipNextOpen:boolean = false;
+
 -- Default is ascending in turns to complete trade route
 m_SortBySettings[1] = {
     SortByID = SORT_BY_ID.TURNS_TO_COMPLETE,
@@ -107,6 +109,18 @@ function Refresh()
         m_RebuildAvailableRoutes = true
     else
         m_RebuildAvailableRoutes = false
+    end
+
+    -- Handle post open (ie TradeOverview) calls
+    if m_postOpenSelectPlayerID ~= -1 and m_postOpenSelectCityID ~= -1 then
+        print("Selecting", m_postOpenSelectCityID)
+        local pPlayer = Players[m_postOpenSelectPlayerID]
+        m_destinationCity = pPlayer:GetCities():FindID(m_postOpenSelectCityID)
+        RealizeLookAtDestinationCity();
+
+        -- Reset values
+        m_postOpenSelectPlayerID = -1;
+        m_postOpenSelectCityID = -1;
     end
 
     RefreshHeader();
@@ -1018,22 +1032,13 @@ function Open()
     -- Switch to TradeRoute Lens
     UILens.SetActive("TradeRoute");
 
-    if m_postOpenSelectPlayerID ~= -1 then
-        TradeRouteSelected( m_postOpenSelectPlayerID, m_postOpenSelectCityID );
-        RealizeLookAtDestinationCity();
-
-        -- Reset values
-        m_postOpenSelectPlayerID = -1;
-        m_postOpenSelectCityID = -1;
-    end
-
     LuaEvents.TradeRouteChooser_Open();
 
     local selectedUnit:table = UI.GetHeadSelectedUnit();
     local selectedUnitID:number = selectedUnit:GetID();
 
+    -- Select last route if one exists
     local lastRoute:table = GetLastRouteForTrader(selectedUnitID);
-
     if lastRoute ~= nil then
         print("Last route for trader " .. selectedUnitID .. ": " .. GetTradeRouteString(lastRoute));
         originCity = Cities.GetCityInPlot(selectedUnit:GetX(), selectedUnit:GetY());
@@ -1055,6 +1060,11 @@ function Open()
 end
 
 function CheckNeedsToOpen()
+    if m_SkipNextOpen then
+        m_SkipNextOpen = false
+        return
+    end
+
     local selectedUnit:table = UI.GetHeadSelectedUnit();
     if selectedUnit ~= nil then
         local selectedUnitInfo:table = GameInfo.Units[selectedUnit:GetUnitType()];
@@ -1078,6 +1088,10 @@ function CheckNeedsToOpen()
     if not ContextPtr:IsHidden() then
         Close();
     end
+end
+
+function OnSkipNextOpen()
+    m_SkipNextOpen = true
 end
 
 -- ===========================================================================
@@ -1135,19 +1149,19 @@ function OnUnitSelectionChanged( playerID:number, unitID:number, hexI:number, he
         return;
     end
 
+    -- Don't call open/close if TradeOverview is open (needed to make TradeOriginChooser open from TradeOverview)
+    -- local pContextControl:table = ContextPtr:LookUpControl("/InGame/TradeOverview");
+    -- if pContextControl == nil then
+    --     print("Cannot determine if partial screen \"/InGame/TradeOverview\" is visible because it wasn't found at that path.");
+    -- elseif not pContextControl:IsHidden() then
+    --     print("Trade Overview Panel is open. Not opening Make Trade Route screen.")
+    --     return
+    -- end
+
     -- If this is a de-selection event then close
     if not bSelected then
         OnClose();
         return;
-    end
-
-    -- Check if TradeOverview is open
-    local pContextControl:table = ContextPtr:LookUpControl("/InGame/TradeOverview");
-    if pContextControl == nil then
-        UI.DataError("Cannot determine if partial screen \"/InGame/TradeOverview\" is visible because it wasn't found at that path.");
-    elseif not pContextControl:IsHidden() then
-        -- print("Trade Overview Panel is open. Not opening Make Trade Route screen.")
-        return true;
     end
 
     CheckNeedsToOpen()
@@ -1223,17 +1237,10 @@ end
 
 -- ===========================================================================
 function OnSelectRouteFromOverview( destinationOwnerID:number, destinationCityID:number )
-    if not ContextPtr:IsHidden() then
-        -- If we're already open then select the route
-        TradeRouteSelected( destinationOwnerID, destinationCityID );
-    else
-        -- If we're not open then set the route to be selected after we open the panel
-        m_postOpenSelectPlayerID = destinationOwnerID;
-        m_postOpenSelectCityID = destinationCityID;
+    m_postOpenSelectPlayerID = destinationOwnerID;
+    m_postOpenSelectCityID = destinationCityID;
 
-        -- Check to see if we need to open
-        CheckNeedsToOpen();
-    end
+    CheckNeedsToOpen()
 end
 
 -- ===========================================================================
@@ -1262,6 +1269,7 @@ function Initialize()
     LuaEvents.GameDebug_Return.Add( OnGameDebugReturn );
 
     -- Context Events
+    LuaEvents.TradeRouteChooser_SkipOpen.Add( OnSkipNextOpen )
     LuaEvents.TradeOverview_SelectRouteFromOverview.Add( OnSelectRouteFromOverview );
     LuaEvents.TradeRouteChooser_Close.Add( OnClose )
 

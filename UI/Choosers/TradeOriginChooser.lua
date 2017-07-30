@@ -213,14 +213,14 @@ end
 -- ===========================================================================
 function OnUnitSelectionChanged( playerID : number, unitID : number, hexI : number, hexJ : number, hexK : number, bSelected : boolean, bEditable : boolean)
     -- Close if we select a unit
-    if m_AnimSupport:IsVisible() and owner == Game.GetLocalPlayer() and owner ~= -1 then
-        OnClose();
+    if m_AnimSupport:IsVisible() and playerID == Game.GetLocalPlayer() and playerID ~= -1 then
+        OnClose()
     end
 end
 
 ------------------------------------------------------------------------------------------------
 function OnLocalPlayerTurnEnd()
-    if(GameConfiguration.IsHotseat()) then
+    if GameConfiguration.IsHotseat() then
         OnClose();
     end
 end
@@ -235,11 +235,13 @@ end
 -- ===========================================================================
 function Close()
     LuaEvents.TradeOriginChooser_SetTradeUnitStatus("");
-
     m_AnimSupport:Hide();
 
+    m_originCity = nil
+    m_newOriginCity = nil
+
     -- Switch to default Lens
-    UILens.SetActive("Default");
+    -- UILens.SetActive("Default"); -- Done when lens is turned off
 end
 
 -- ===========================================================================
@@ -250,11 +252,49 @@ end
 
 -- ===========================================================================
 function OnClose()
-    Close();
-
     if UI.GetInterfaceMode() == InterfaceModeTypes.TELEPORT_TO_CITY then
         UI.SetInterfaceMode(InterfaceModeTypes.SELECTION);
+    elseif m_AnimSupport:IsVisible() then
+        Close()
     end
+end
+
+-- ===========================================================================
+--  Input
+--  UI Event Handler
+-- ===========================================================================
+function KeyDownHandler( key:number )
+    return false;
+end
+
+function KeyUpHandler( key:number )
+    if key == Keys.VK_RETURN then
+        OnChangeOriginCityButton()
+        -- Dont let it fall through
+        return true;
+    end
+    if key == Keys.VK_ESCAPE then
+        OnClose();
+        -- Dont let it fall through
+        return true;
+    end
+    return false;
+end
+
+function OnInputHandler( pInputStruct:table )
+    local uiMsg = pInputStruct:GetMessageType();
+    local catchEvent = false
+    if uiMsg == KeyEvents.KeyDown then
+        catchEvent = KeyDownHandler( pInputStruct:GetKey() )
+    end
+    if uiMsg == KeyEvents.KeyUp then
+        catchEvent = KeyUpHandler( pInputStruct:GetKey() )
+    end
+
+    if not catchEvent then
+        return m_AnimSupport.OnInputHandler(pInputStruct)
+    end
+    return catchEvent
 end
 
 -- ===========================================================================
@@ -300,7 +340,7 @@ function Initialize()
 
     -- Animation controller events
     Events.SystemUpdateUI.Add(m_AnimSupport.OnUpdateUI);
-    ContextPtr:SetInputHandler(m_AnimSupport.OnInputHandler, true);
+    ContextPtr:SetInputHandler( OnInputHandler, true );
 
     -- Control Events
     Controls.CloseButton:RegisterCallback(Mouse.eLClick, OnClose);
