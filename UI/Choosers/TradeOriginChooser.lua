@@ -43,17 +43,28 @@ function Refresh()
 
     -- Reset Instance Manager
     m_cityIM:ResetInstances();
+    local cityIDs:table = {}
 
     -- Add all other cities to city stack
     local localPlayer = Players[Game.GetLocalPlayer()];
     local playerCities:table = localPlayer:GetCities();
     for _, city in playerCities:Members() do
         if city ~= m_originCity and CanTeleportToCity(city) then
-            -- print( "Adding city: " .. Locale.Lookup(city:GetName()) )
-            AddCity(city);
-        -- else
-            -- print( "Cannot teleport to " .. Locale.Lookup(city:GetName()))
+            table.insert(cityIDs, city:GetID())
         end
+    end
+
+    -- Sort cities alphabetically
+    local function comp(a, b)
+        local playerCities = Players[Game.GetLocalPlayer()]:GetCities()
+        local city1 = playerCities:FindID(a)
+        local city2 = playerCities:FindID(b)
+        return Locale.Lookup(city1:GetName()):upper() < Locale.Lookup(city2:GetName()):upper()
+    end
+    table.sort(cityIDs, comp)
+
+    for _, cityID in ipairs(cityIDs) do
+        AddCity(cityID)
     end
 
     -- Calculate Control Size
@@ -100,7 +111,8 @@ function RefreshHeader()
 end
 
 -- ===========================================================================
-function AddCity(city:table)
+function AddCity(cityID:number)
+    local city = Players[Game.GetLocalPlayer()]:GetCities():FindID(cityID)
     local cityInstance:table = m_cityIM:GetInstance();
     cityInstance.CityButton:SetText(Locale.ToUpper(city:GetName()));
     cityInstance.CityButton:RegisterCallback(Mouse.eLClick,
