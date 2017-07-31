@@ -30,24 +30,6 @@ local M_Enter = Mouse.eMouseEnter
 local M_RClick = Mouse.eRClick
 
 -- ===========================================================================
---  CONSTANTS
--- ===========================================================================
-
-local SORT_BY_ID:table = GetSortByIdConstants();
-local SORT_ASCENDING = GetSortAscendingIdConstant();
-local SORT_DESCENDING = GetSortDescendingIdConstant();
-
-local START_INDEX:number = GameInfo.Yields["YIELD_FOOD"].Index;
-local END_INDEX:number = GameInfo.Yields["YIELD_FAITH"].Index;
-
-local FOOD_INDEX:number = GameInfo.Yields["YIELD_FOOD"].Index;
-local PRODUCTION_INDEX:number = GameInfo.Yields["YIELD_PRODUCTION"].Index;
-local GOLD_INDEX:number = GameInfo.Yields["YIELD_GOLD"].Index;
-local SCIENCE_INDEX:number = GameInfo.Yields["YIELD_SCIENCE"].Index;
-local CULTURE_INDEX:number = GameInfo.Yields["YIELD_CULTURE"].Index;
-local FAITH_INDEX:number = GameInfo.Yields["YIELD_FAITH"].Index;
-
--- ===========================================================================
 --  VARIABLES
 -- ===========================================================================
 

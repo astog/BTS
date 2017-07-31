@@ -57,16 +57,6 @@ local RELOAD_CACHE_ID:string = "TradeOverview"; -- Must be unique (usually the s
 local OUTSIDE_SUPPORT_CACHE_ID:string = "TradeOverviewSupport";
 local DATA_ICON_PREFIX:string = "ICON_";
 
-local START_INDEX:number = GameInfo.Yields["YIELD_FOOD"].Index;
-local END_INDEX:number = GameInfo.Yields["YIELD_FAITH"].Index;
-
-local FOOD_INDEX:number = GameInfo.Yields["YIELD_FOOD"].Index;
-local PRODUCTION_INDEX:number = GameInfo.Yields["YIELD_PRODUCTION"].Index;
-local GOLD_INDEX:number = GameInfo.Yields["YIELD_GOLD"].Index;
-local SCIENCE_INDEX:number = GameInfo.Yields["YIELD_SCIENCE"].Index;
-local CULTURE_INDEX:number = GameInfo.Yields["YIELD_CULTURE"].Index;
-local FAITH_INDEX:number = GameInfo.Yields["YIELD_FAITH"].Index;
-
 local TRADE_TABS:table = {
     MY_ROUTES           = 0;
     ROUTES_TO_CITIES    = 1;
@@ -84,10 +74,6 @@ local GROUP_BY_SETTINGS:table = {
     DESTINATION_AZ      = 6;
     DESTINATION_ZA      = 7;
 };
-
-local SORT_BY_ID:table = GetSortByIdConstants();
-local SORT_ASCENDING = GetSortAscendingIdConstant();
-local SORT_DESCENDING = GetSortDescendingIdConstant();
 
 local SEMI_EXPAND_SETTINGS:table = {};
 SEMI_EXPAND_SETTINGS[GROUP_BY_SETTINGS.ORIGIN] = 4;

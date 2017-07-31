@@ -16,34 +16,34 @@ local L_Lookup = Locale.Lookup
 --  Local Constants
 -- ===========================================================================
 
-local SORT_BY_ID:table = {
-    FOOD = 1;
-    PRODUCTION = 2;
-    GOLD = 3;
-    SCIENCE = 4;
-    CULTURE = 5;
-    FAITH = 6;
-    TURNS_TO_COMPLETE = 7;
-    ORIGIN_NAME = 8;
-    DESTINATION_NAME = 9;
+SORT_BY_ID = {
+    FOOD = 1,
+    PRODUCTION = 2,
+    GOLD = 3,
+    SCIENCE = 4,
+    CULTURE = 5,
+    FAITH = 6,
+    TURNS_TO_COMPLETE = 7,
+    ORIGIN_NAME = 8,
+    DESTINATION_NAME = 9
 }
 
-local SORT_ASCENDING = 1;
-local SORT_DESCENDING = 2;
+SORT_ASCENDING = 1;
+SORT_DESCENDING = 2;
 
-local ScoreFunctionByID = {}
+-- Yield constants
+FOOD_INDEX = GameInfo.Yields["YIELD_FOOD"].Index;
+PRODUCTION_INDEX = GameInfo.Yields["YIELD_PRODUCTION"].Index;
+GOLD_INDEX = GameInfo.Yields["YIELD_GOLD"].Index;
+SCIENCE_INDEX = GameInfo.Yields["YIELD_SCIENCE"].Index;
+CULTURE_INDEX = GameInfo.Yields["YIELD_CULTURE"].Index;
+FAITH_INDEX = GameInfo.Yields["YIELD_FAITH"].Index;
 
-local START_INDEX:number = GameInfo.Yields["YIELD_FOOD"].Index;
-local END_INDEX:number = GameInfo.Yields["YIELD_FAITH"].Index;
+START_INDEX = FOOD_INDEX;
+END_INDEX = FAITH_INDEX;
 
-local FOOD_INDEX:number = GameInfo.Yields["YIELD_FOOD"].Index;
-local PRODUCTION_INDEX:number = GameInfo.Yields["YIELD_PRODUCTION"].Index;
-local GOLD_INDEX:number = GameInfo.Yields["YIELD_GOLD"].Index;
-local SCIENCE_INDEX:number = GameInfo.Yields["YIELD_SCIENCE"].Index;
-local CULTURE_INDEX:number = GameInfo.Yields["YIELD_CULTURE"].Index;
-local FAITH_INDEX:number = GameInfo.Yields["YIELD_FAITH"].Index;
-
-local ICON_LOOKUP = {}
+-- Build lookup table for icons
+ICON_LOOKUP = {}
 ICON_LOOKUP[FOOD_INDEX] = "[ICON_Food]"
 ICON_LOOKUP[PRODUCTION_INDEX] = "[ICON_Production]"
 ICON_LOOKUP[GOLD_INDEX] = "[ICON_Gold]"
@@ -51,7 +51,8 @@ ICON_LOOKUP[SCIENCE_INDEX] = "[ICON_Science]"
 ICON_LOOKUP[CULTURE_INDEX] = "[ICON_Culture]"
 ICON_LOOKUP[FAITH_INDEX] = "[ICON_Faith]"
 
--- Build lookup table
+-- Build lookup table for score functions
+ScoreFunctionByID = {}
 ScoreFunctionByID[SORT_BY_ID.FOOD]                = function(a) return GetYieldForOriginCity(FOOD_INDEX, a, true) end
 ScoreFunctionByID[SORT_BY_ID.PRODUCTION]          = function(a) return GetYieldForOriginCity(PRODUCTION_INDEX, a, true) end
 ScoreFunctionByID[SORT_BY_ID.GOLD]                = function(a) return GetYieldForOriginCity(GOLD_INDEX, a, true) end
@@ -68,26 +69,10 @@ ScoreFunctionByID[SORT_BY_ID.DESTINATION_NAME]    = function(a) return GetDestin
 
 local m_LocalPlayerRunningRoutes    :table  = {};   -- Tracks local players active routes (turns remaining)
 local m_TradersAutomatedSettings    :table  = {};   -- Tracks traders, and if they are automated
-local m_Cache                       :table  = {};   -- Cache
+local m_Cache                       :table  = {};   -- Cache for all route info
 
 -- local debug_func_calls:number = 0;
 -- local debug_total_calls:number = 0;
-
--- ===========================================================================
---  Constants Getter Functions
--- ===========================================================================
-
-function GetSortByIdConstants()
-    return SORT_BY_ID;
-end
-
-function GetSortAscendingIdConstant()
-    return SORT_ASCENDING;
-end
-
-function GetSortDescendingIdConstant()
-    return SORT_DESCENDING;
-end
 
 -- ===========================================================================
 --  Trader Route tracker - Tracks active routes, turns remaining
