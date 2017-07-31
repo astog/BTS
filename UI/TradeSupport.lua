@@ -1215,9 +1215,10 @@ function FormatYieldText(yieldIndex, yieldAmount)
 end
 
 -- Finds and removes routeToDelete from routeTable
-function RemoveRouteFromTable( routeToDelete:table , routeTable:table, groupedRoutes:boolean )
+function RemoveRouteFromTable( routeToDelete:table , routeTable:table, isGrouped:boolean )
     -- If grouping by something, go one level deeper
-    if groupedRoutes then
+    if isGrouped then
+        print("Routes grouped")
         local targetIndex:number = -1;
         local targetGroupIndex:number = -1;
 
@@ -1233,25 +1234,26 @@ function RemoveRouteFromTable( routeToDelete:table , routeTable:table, groupedRo
 
         -- Remove route
         if targetIndex ~= -1 and targetGroupIndex ~= -1 then
+            print("REMOVING ROUTE")
             table.remove(routeTable[targetGroupIndex], targetIndex);
 
             -- If that group is empty, remove that group
             if table.count(routeTable[targetGroupIndex]) <= 0 then
                 table.remove(routeTable, targetGroupIndex);
             end
+        else
+            print("COULD NOT FIND ROUTE")
         end
     else
-        local targetIndex:number = -1;
+        print("Routes not grouped")
 
-        for i, route in ipairs(routeTable) do
-            if CheckRouteEquality( route, routeToDelete ) then
-                targetIndex = i;
-            end
-        end
-
-        -- Remove route
+        -- Find and remove route
+        local targetIndex:number = findIndex(routeTable, routeToDelete, CheckRouteEquality)
         if targetIndex ~= -1 then
+            print("REMOVING ROUTE")
             table.remove(routeTable, targetIndex);
+        else
+            print("COULD NOT FIND ROUTE")
         end
     end
 end

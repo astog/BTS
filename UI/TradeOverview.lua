@@ -2061,22 +2061,27 @@ function OnUnitOperationStarted( ownerID:number, unitID:number, operationID:numb
     if m_HasBuiltTradeRouteTable then
         -- Remove unit from available traders
         RemoveTrader(unitID)
+        local foundRoute:boolean = false
 
-        if ownerID == Game.GetLocalPlayer() and operationID == UnitOperationTypes.MAKE_TRADE_ROUTE then
+        if operationID == UnitOperationTypes.MAKE_TRADE_ROUTE then
             -- Unit was just started a trade route. Find the route, and update the tables
             local localPlayerCities:table = Players[ownerID]:GetCities();
             for _, city in localPlayerCities:Members() do
                 local outgoingRoutes = city:GetTrade():GetOutgoingRoutes();
                 for _, route in ipairs(outgoingRoutes) do
                     if route.TraderUnitID == unitID then
+                        print("Found route...")
                         -- Remove it from the available routes
-                        if m_groupByList[m_groupBySelected].groupByID ~= GROUP_BY_SETTINGS.NONE then
-                            RemoveRouteFromTable(route, m_AvailableGroupedRoutes, true);
-                        else
-                            RemoveRouteFromTable(route, m_AvailableTradeRoutes, false);
-                        end
+                        RemoveRouteFromTable(route, m_AvailableGroupedRoutes, not GroupSettingIsNone(m_groupBySelected));
+                        foundRoute = true
+                        break
                     end
                 end
+            end
+
+            if not foundRoute then
+                print("Route not found!!")
+                return
             end
 
             -- Dont refresh, if the window is hidden
