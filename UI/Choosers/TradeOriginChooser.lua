@@ -115,10 +115,17 @@ function AddCity(cityID:number)
     local city = Players[Game.GetLocalPlayer()]:GetCities():FindID(cityID)
     local cityInstance:table = m_cityIM:GetInstance();
     cityInstance.CityButton:SetText(Locale.ToUpper(city:GetName()));
+
+    if m_newOriginCity ~= nil and m_newOriginCity:GetID() == cityID then
+        cityInstance.CityButton:SetTextureOffsetVal(0, 32*1)
+    else
+        cityInstance.CityButton:SetTextureOffsetVal(0, 32*0)
+    end
+
     cityInstance.CityButton:RegisterCallback(Mouse.eLClick,
         function()
             m_newOriginCity = city;
-            RefreshHeader();
+            Refresh();
         end);
 end
 
@@ -183,6 +190,7 @@ function OnChangeOriginCityFromOverview( city:table )
         if (m_AnimSupport:IsVisible()) then
             Refresh();
         else
+            print("open sesame...")
             OnOpen();
         end
     end
@@ -223,8 +231,20 @@ function OnCitySelectionChanged(owner, ID, i, j, k, bSelected, bEditable)
 end
 
 -- ===========================================================================
-function OnUnitSelectionChanged( playerID : number, unitID : number, hexI : number, hexJ : number, hexK : number, bSelected : boolean, bEditable : boolean)
-    -- Close if we select a unit
+function OnUnitSelectionChanged( playerID:number, unitID:number, hexI:number, hexJ:number, hexK:number, bSelected:boolean, bEditable:boolean)
+    -- Check if the unit selected is a trader. Don't do anything if it is
+    local selectedUnit:table = Players[playerID]:GetUnits():FindID(unitID)
+    if selectedUnit ~= nil then
+        local selectedUnitInfo:table = GameInfo.Units[selectedUnit:GetUnitType()];
+        if selectedUnitInfo ~= nil and selectedUnitInfo.MakeTradeRoute == true then
+            local activityType:number = UnitManager.GetActivityType(selectedUnit);
+            if activityType == ActivityTypes.ACTIVITY_AWAKE and selectedUnit:GetMovesRemaining() > 0 then
+                return -- early return here so OnClose() is not called
+            end
+        end
+    end
+
+    -- Close if screen shown
     if m_AnimSupport:IsVisible() and playerID == Game.GetLocalPlayer() and playerID ~= -1 then
         OnClose()
     end

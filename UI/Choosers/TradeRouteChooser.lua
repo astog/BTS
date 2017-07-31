@@ -394,8 +394,10 @@ function AddRouteToDestinationStack(routeInfo:table)
     -- Update Selector Brace
     if m_destinationCity ~= nil and destinationCity:GetName() == m_destinationCity:GetName() then
         cityEntry.SelectorBrace:SetHide(false);
+        cityEntry.Button:SetTextureOffsetVal(0, 76*1)
     else
         cityEntry.SelectorBrace:SetHide(true);
+        cityEntry.Button:SetTextureOffsetVal(0, 76*0)
     end
 
     -- Setup city banner
@@ -1006,10 +1008,7 @@ end
 
 function Close()
     LuaEvents.TradeRouteChooser_SetTradeUnitStatus("");
-
     ContextPtr:SetHide(true);
-
-    LuaEvents.TradeRouteChooser_Close();
 
     if UILens.IsLensActive("TradeRoute") then
         -- Make sure to switch back to default lens

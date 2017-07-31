@@ -178,7 +178,7 @@
         <ScrollBar Anchor="R,C" AnchorSide="O,I"  Offset="0,0" Style="ScrollVerticalBar"/>
 
         <!-- Stack -->
-        <Stack ID="BodyStack" StackGrowth="Down"/>
+        <Stack ID="BodyStack" StackGrowth="Down" StackPadding="4"/>
       </ScrollPanel>
     </Container>
 
@@ -188,10 +188,20 @@
   <!--  Instances                                                         -->
   <!-- ================================================================== -->
 
+  <!-- Section Divider -->
+  <Instance Name="SectionDividerInstance">
+    <Container ID="Top" Size="parent,25" Anchor="C,C" Offset="8,0">
+      <Grid Style="DivHeader" Size="parent,parent" Color="255,255,255,255" Anchor="C,T" Offset="0,0">
+        <!-- <Grid Anchor="C,C" Offset="-9,0" Size="parent-60,8" Texture="Controls_Div2" SliceCorner="27,4" SliceTextureSize="54,8" Color="47,63,76,255" /> -->
+      </Grid>
+    </Container>
+  </Instance>
+
   <!-- Section Header -->
   <Instance Name="HeaderInstance">
-    <Container ID="Top" Size="485,42" Offset="10,4">
-      <GridButton ID="HeaderGrid" Texture="TradeOverview_Subheader" SliceCorner="12,11" SliceSize="2,2" Color="67,70,72,255" Size="parent,parent">
+    <Container ID="Top" Size="485,42" Offset="10,0">
+
+      <GridButton ID="HeaderGrid" Anchor="C,B" Texture="TradeOverview_Subheader" SliceCorner="12,11" SliceSize="2,2" Color="67,70,72,255" Size="parent,parent">
         <!-- <Grid           ID="CityBannerFill2"           Anchor="C,C"                  Size="Parent-7,Parent-6"  Offset="-1,-1" Texture="Banner_Darker"    SliceTextureSize="196,34" SliceCorner="98,17"/> -->
         <Grid           ID="CityBannerFill"           Anchor="C,C"                  Size="Parent-7,Parent-6"  Offset="-1,-1"  Texture="Banner_Base"     SliceTextureSize="196,34" SliceCorner="98,17"/>
 
@@ -230,9 +240,9 @@
 
   <!-- Route Entry -->
   <Instance Name="RouteInstance">
-    <Container ID="Top" Size="485,78" Offset="10,2">
+    <Container ID="Top" Size="485,78" Offset="10,0">
       <GridButton ID="GridButton" Size="parent,parent" Color="255,255,255,150">
-          <GridData Texture="Controls_ListButton" SliceCorner="209,29"  SliceTextureSize="417,51" StateOffsetIncrement="0,51"/>
+          <GridData Texture="Controls_ListButton" SliceCorner="209,29"  SliceTextureSize="417,51" StateOffsetIncrement="0,102"/>
 
           <!-- Vertical Divider Background -->
           <Stack Size="50,50"  Anchor="C,B" StackGrowth="Right" Offset="0,4">

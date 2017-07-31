@@ -101,6 +101,7 @@ local BASE_TOURISM_MODIFIER = GlobalParameters.TOURISM_TRADE_ROUTE_BONUS;
 local m_RouteInstanceIM:table           = InstanceManager:new("RouteInstance", "Top", Controls.BodyStack);
 local m_HeaderInstanceIM:table          = InstanceManager:new("HeaderInstance", "Top", Controls.BodyStack);
 local m_SimpleButtonInstanceIM:table    = InstanceManager:new("SimpleButtonInstance", "Top", Controls.BodyStack);
+local m_DividerInstanceIM:table         = InstanceManager:new("SectionDividerInstance", "Top", Controls.BodyStack);
 
 local m_AnimSupport:table; -- AnimSidePanelSupport
 
@@ -141,6 +142,8 @@ local m_FilterSettingsChanged:boolean = true;
 -- Stores the sort settings.
 local m_InGroupSortBySettings = {}; -- Stores the setting each group will have within it. Applicable when routes are grouped
 local m_GroupSortBySettings = {}; -- Stores the overall group sort setting. This is used, when routes are NOT grouped
+
+local m_dividerCount = 0
 
 -- ===========================================================================
 --  Refresh functions
@@ -249,6 +252,8 @@ function PreRefresh()
     m_RouteInstanceIM:ResetInstances();
     m_HeaderInstanceIM:ResetInstances();
     m_SimpleButtonInstanceIM:ResetInstances();
+    m_DividerInstanceIM:ResetInstances();
+    m_dividerCount = 0
 end
 
 function PostRefresh()
@@ -926,7 +931,16 @@ end
 --  Header Instance Creators
 -- ===========================================================================
 
+function CreateSectionDivider()
+    if m_dividerCount > 0 then
+        local dividerInstance:table = m_DividerInstanceIM:GetInstance();
+    end
+    m_dividerCount = m_dividerCount + 1
+end
+
 function CreatePlayerHeader( player:table )
+    CreateSectionDivider()
+
     local headerInstance:table = m_HeaderInstanceIM:GetInstance();
     local playerID = player:GetID()
     local pPlayerConfig:table = PlayerConfigurations[playerID];
@@ -995,6 +1009,8 @@ function CreatePlayerHeader( player:table )
 end
 
 function CreateCityStateHeader()
+    CreateSectionDivider()
+
     local headerInstance:table = m_HeaderInstanceIM:GetInstance();
 
     -- If the current tab is not available routes, hide the collapse button, and trading post
@@ -1016,6 +1032,8 @@ function CreateCityStateHeader()
 end
 
 function CreateUnusedRoutesHeader()
+    CreateSectionDivider()
+
     local headerInstance:table = m_HeaderInstanceIM:GetInstance();
 
     headerInstance.HeaderLabel:SetText(L_Upper("LOC_TRADE_OVERVIEW_UNUSED_ROUTES"));
@@ -1034,6 +1052,8 @@ function CreateUnusedRoutesHeader()
 end
 
 function CreateCityHeader( city:table , currentRouteShowCount:number, totalRoutes:number, tooltipString:string )
+    CreateSectionDivider()
+
     local headerInstance:table = m_HeaderInstanceIM:GetInstance();
     local playerID:number = city:GetOwner();
     local pPlayer = Players[playerID];
