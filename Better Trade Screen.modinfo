@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<Mod id="8d4fa23a-ef43-440c-8422-2bec11f8f5d7"  version="2.1">
+<Mod id="8d4fa23a-ef43-440c-8422-2bec11f8f5d7"  version="4.0.1">
   <Properties>
     <Name>LOC_BTS_NAME</Name>
     <Stability>LOC_BTS_STABILITY</Stability>
