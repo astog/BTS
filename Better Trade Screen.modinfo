@@ -67,9 +67,9 @@
     <File>Text/BTS_Text_ES.xml</File>
     <File>Text/BTS_Text_FR.xml</File>
     <File>Text/BTS_Text_Hans_CN.xml</File>
-    <File>Text/BTS_Text_Hans_IT.xml</File>
-    <File>Text/BTS_Text_Hans_KR.xml</File>
-    <File>Text/BTS_Text_Hans_PL.xml</File>
-    <File>Text/BTS_Text_Hans_RU.xml</File>
+    <File>Text/BTS_Text_IT.xml</File>
+    <File>Text/BTS_Text_KR.xml</File>
+    <File>Text/BTS_Text_PL.xml</File>
+    <File>Text/BTS_Text_RU.xml</File>
   </Files>
 </Mod>
