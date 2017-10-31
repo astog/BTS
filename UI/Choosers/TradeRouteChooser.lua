@@ -3,6 +3,8 @@
 -- ===========================================================================
 
 local showSortOrdersPermanently = false
+local RoutePanelBaseOffsetX = 8;
+local RoutePanelScrollPanelExtraOffset = 9;
 
 -- ===========================================================================
 --  INCLUDES and Local Functions
@@ -377,13 +379,11 @@ function RefreshStack()
     Controls.RouteChoiceStack:CalculateSize();
     Controls.RouteChoiceScrollPanel:CalculateSize();
 
-    -- Adjust offset to center destination scrollpanel/stack
+    -- Adjust offset based on scroll bar
     if Controls.RouteChoiceScrollPanel:GetScrollBar():IsHidden() then
-        Controls.RouteChoiceScrollPanel:SetOffsetX(11);
-        Controls.SortBarStack:SetOffsetX(2);
+        Controls.RouteContainer:SetOffsetX(RoutePanelBaseOffsetX);
     else
-        Controls.RouteChoiceScrollPanel:SetOffsetX(19);
-        Controls.SortBarStack:SetOffsetX(8);
+        Controls.RouteContainer:SetOffsetX(RoutePanelBaseOffsetX + RoutePanelScrollPanelExtraOffset);
     end
 
     -- Show No Available Trade Routes message if nothing to select
