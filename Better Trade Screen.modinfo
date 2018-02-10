@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
-<Mod id="8d4fa23a-ef43-440c-8422-2bec11f8f5d7"  version="4.0.1">
+<Mod id="8d4fa23a-ef43-440c-8422-2bec11f8f5d7"  version="4.1">
   <Properties>
-    <Name>LOC_BTS_NAME</Name>
-    <Stability>LOC_BTS_STABILITY</Stability>
-    <Teaser>LOC_BTS_TEASER</Teaser>
-    <Description>LOC_BTS_DESCRIPTION</Description>
-    <Authors>LOC_BTS_AUTHORS</Authors>
+    <Name>Better Trade Screen</Name>
+    <Stability>Beta</Stability>
+    <Teaser>Adds sort options, filters and generally improves the trade screen.</Teaser>
+    <Description>Adds sort options, filters and generally improves the trade screen.</Description>
+    <Authors>astog</Authors>
   </Properties>
 
   <Components>
@@ -35,24 +35,6 @@
       </Items>
     </LocalizedText>
   </Components>
-
-  <LocalizedText>
-    <Text id="LOC_BTS_NAME">
-      <en_US>Better Trade Screen</en_US>
-    </Text>
-    <Text id="LOC_BTS_STABILITY">
-      <en_US>Beta</en_US>
-    </Text>
-    <Text id="LOC_BTS_TEASER">
-      <en_US>Adds sort options, filters and generally improves the trade screen.</en_US>
-    </Text>
-    <Text id="LOC_BTS_DESCRIPTION">
-      <en_US>Go through the README file for the full list of changes.</en_US>
-    </Text>
-    <Text id="LOC_BTS_AUTHORS">
-      <en_US>astog</en_US>
-    </Text>
-  </LocalizedText>
 
   <Files>
     <File>UI/TradeOverview.xml</File>
