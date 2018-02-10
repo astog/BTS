@@ -21,6 +21,9 @@ local tintRouteEntry = false
 local tintColorOffset = 80
 local tintColorOpacity = 205
 
+-- Set to false to hide all debug prints from this file.
+local dbug_print = true
+
 -- ===========================================================================
 --  INCLUDES and Local Optimizations
 -- ===========================================================================
@@ -137,7 +140,7 @@ local m_dividerCount = 0
 
 -- Finds and adds all possible trade routes
 function RebuildAvailableTradeRoutesTable()
-    print ("Rebuilding Trade Routes table");
+    if dbug_print then print("Rebuilding Trade Routes table"); end
     m_AvailableTradeRoutes = {};
 
     local sourcePlayerID = Game.GetLocalPlayer();
@@ -170,14 +173,14 @@ function RebuildAvailableTradeRoutesTable()
         end
     end
 
-    print("Total routes = " .. tcount(m_AvailableTradeRoutes))
+    if dbug_print then print("Total routes = " .. tcount(m_AvailableTradeRoutes)) end
 
     m_HasBuiltTradeRouteTable = true;
     m_LastTurnBuiltTradeRouteTable = Game.GetCurrentGameTurn();
 end
 
 function RebuildAvailableTraders()
-    print("Building available traders")
+    if dbug_print then print("Building available traders") end
     local playerID = Game.GetLocalPlayer()
     local pPlayer = Players[playerID]
     local pPlayerUnits = pPlayer:GetUnits()
@@ -207,7 +210,7 @@ end
 
 function Refresh()
     local time1 = Automation.GetTime();
-    print("Refresh start")
+    if dbug_print then print("Refresh start") end
     PreRefresh();
 
     RefreshGroupByPulldown();
@@ -230,7 +233,7 @@ function Refresh()
 
     PostRefresh();
     local time2 = Automation.GetTime()
-    print(string.format("Time taken to refresh: %.4f sec(s)", time2-time1))
+    if dbug_print then print(string.format("Time taken to refresh: %.4f sec(s)", time2-time1)) end
 end
 
 function PreRefresh()
@@ -251,7 +254,7 @@ function PostRefresh()
     Controls.BodyScrollPanel:ReprocessAnchoring();
     Controls.BodyScrollPanel:CalculateInternalSize();
     local time2 = Automation.GetTime()
-    print(string.format("Time to calculate stack sizes: %.4f sec(s)", time2-time1))
+    if dbug_print then print(string.format("Time to calculate stack sizes: %.4f sec(s)", time2-time1)) end
 end
 
 -- ===========================================================================
@@ -437,14 +440,14 @@ function ViewAvailableRoutes()
         time1 = Automation.GetTime()
         RebuildAvailableTradeRoutesTable();
         time2 = Automation.GetTime()
-        print(string.format("Time taken to build routes: %.4f sec(s)", time2-time1))
+        if dbug_print then print(string.format("Time taken to build routes: %.4f sec(s)", time2-time1)) end
 
         -- Cache routes info.
         time1 = Automation.GetTime()
         CacheEmpty();
         if CacheRoutesInfo(m_AvailableTradeRoutes) then
             time2 = Automation.GetTime()
-            print(string.format("Time taken to cache: %.4f sec(s)", time2-time1))
+            if dbug_print then print(string.format("Time taken to cache: %.4f sec(s)", time2-time1)) end
         end
 
         -- Just rebuilt base routes table. need to do everything again
@@ -452,8 +455,8 @@ function ViewAvailableRoutes()
         m_FilterSettingsChanged = true;
         m_GroupSettingsChanged = true;
     else
-        print("Trade Route table last built on: " .. m_LastTurnBuiltTradeRouteTable .. ". Current game turn: " .. Game.GetCurrentGameTurn());
-        print("OPT: Not Rebuilding or recaching routes table")
+        if dbug_print then print("Trade Route table last built on: " .. m_LastTurnBuiltTradeRouteTable .. ". Current game turn: " .. Game.GetCurrentGameTurn()); end
+        if dbug_print then print("OPT: Not Rebuilding or recaching routes table") end
     end
 
     -- Filter the routes here. This allows for max improvement in speed if a filter is selected
@@ -461,12 +464,12 @@ function ViewAvailableRoutes()
         time1 = Automation.GetTime()
         m_FinalTradeRoutes = FilterTradeRoutes(m_AvailableTradeRoutes);
         time2 = Automation.GetTime()
-        print(string.format("Time taken to filter: %.4f sec(s)", time2-time1))
+        if dbug_print then print(string.format("Time taken to filter: %.4f sec(s)", time2-time1)) end
 
         -- Need to regroup routes (some groups could dissapear because of filter)
         m_GroupSettingsChanged = true
     else
-        print("OPT: Not refiltering routes")
+        if dbug_print then print("OPT: Not refiltering routes") end
     end
 
     -- Sort and display the routes
@@ -476,12 +479,12 @@ function ViewAvailableRoutes()
             time1 = Automation.GetTime()
             m_AvailableGroupedRoutes = GroupRoutes(m_FinalTradeRoutes, m_groupByList[m_groupBySelected].groupByID)
             time2 = Automation.GetTime()
-            print(string.format("Time taken to group: %.4f sec(s)", time2-time1))
+            if dbug_print then print(string.format("Time taken to group: %.4f sec(s)", time2-time1)) end
 
             -- Need to resort to show correct order
             m_SortSettingsChanged = true
         else
-            print("OPT: Not regrouping routes")
+            if dbug_print then print("OPT: Not regrouping routes") end
         end
 
         -- Sort within each group, and then sort groups
@@ -492,15 +495,15 @@ function ViewAvailableRoutes()
                 m_AvailableGroupedRoutes[i] = SortTradeRoutes(m_AvailableGroupedRoutes[i], m_InGroupSortBySettings)
             end
             time2 = Automation.GetTime()
-            print(string.format("Time taken to within group sort: %.4f sec(s)", time2-time1))
+            if dbug_print then print(string.format("Time taken to within group sort: %.4f sec(s)", time2-time1)) end
 
             -- Sort the order of groups. You need to do this AFTER each group has been sorted
             time1 = Automation.GetTime()
             m_AvailableGroupedRoutes = SortGroupedRoutes(m_AvailableGroupedRoutes, m_GroupSortBySettings);
             time2 = Automation.GetTime()
-            print(string.format("Time taken to group sort: %.4f sec(s)", time2-time1))
+            if dbug_print then print(string.format("Time taken to group sort: %.4f sec(s)", time2-time1)) end
         else
-            print("OPT: Not resorting within and of groups")
+            if dbug_print then print("OPT: Not resorting within and of groups") end
         end
 
         -- Show the groups
@@ -523,9 +526,9 @@ function ViewAvailableRoutes()
                 time1 = Automation.GetTime()
                 m_FinalTradeRoutes = SortTradeRoutes(m_FinalTradeRoutes, m_GroupSortBySettings);
                 time2 = Automation.GetTime()
-                print(string.format("Time taken to sort: %.4f sec(s)", time2-time1))
+                if dbug_print then print(string.format("Time taken to sort: %.4f sec(s)", time2-time1)) end
             else
-                print("OPT: Not resorting routes")
+                if dbug_print then print("OPT: Not resorting routes") end
             end
             AddRouteInstancesFromTable(m_FinalTradeRoutes);
         end
@@ -551,7 +554,7 @@ function DisplayGroup(routesTable:table, city:table)
         local groupExpandIndex = findIndex(m_GroupsFullyExpanded, cityEntry, CompareCityEntries);
         local groupCollapseIndex = findIndex(m_GroupsFullyCollapsed, cityEntry, CompareCityEntries);
 
-        -- print(L_Lookup(city:GetName()) .. ": " .. groupExpandIndex .. " " .. groupCollapseIndex )
+        if dbug_print then -- print(L_Lookup(city:GetName()) .. ": " .. groupExpandIndex .. " " .. groupCollapseIndex ) end
         if (groupExpandIndex > 0) then
             CreateCityHeader(city, routeCount, routeCount, "");
             AddRouteInstancesFromTable(routesTable);
@@ -616,6 +619,7 @@ end
 function AddChooseRouteButtonInstance( tradeUnit:table )
     local simpleButtonInstance:table = m_SimpleButtonInstanceIM:GetInstance();
     simpleButtonInstance.GridButton:SetText(L_Lookup("LOC_TRADE_OVERVIEW_CHOOSE_ROUTE"));
+    simpleButtonInstance.GridButton:SetDisabled(false);
     simpleButtonInstance.GridButton:RegisterCallback( M_LCick,
         function()
             SelectUnit( tradeUnit );
@@ -639,7 +643,7 @@ function AddRouteInstancesFromTable( tradeRoutes:table, showCount:number )
         local tTime = Automation.GetTime();
         for i=1, #tradeRoutes do
             if (tTime + 1 < Automation.GetTime()) then
-                print("+1 sec ... " .. i)
+                if dbug_print then print("+1 sec ... " .. i) end
                 tTime = Automation.GetTime()
             end
             AddRouteInstanceFromRouteInfo(tradeRoutes[i]);
@@ -681,7 +685,7 @@ function AddRouteInstanceFromRouteInfo( routeInfo:table )
 
     SetOriginRouteInstanceYields(routeInstance, routeInfo)
     if GetNetYieldForDestinationCity(routeInfo, true) > 0 then
-        print(GetTradeRouteString(routeInfo), "has destination has yield")
+        if dbug_print then print(GetTradeRouteString(routeInfo), "has destination has yield") end
         routeInstance.DestinationYields:SetHide(false);
         SetDestinationRouteInstanceYields(routeInstance, routeInfo)
     else
@@ -854,13 +858,13 @@ function AddRouteInstanceFromRouteInfo( routeInfo:table )
                                 for i in pairs(m_AvailableTraders[cityID]) do
                                     local traderID = m_AvailableTraders[cityID][i]
                                     local tradeUnit:table = originPlayer:GetUnits():FindID(traderID);
-                                    print("Calling transfer from " .. cityID)
+                                    if dbug_print then print("Calling transfer from " .. cityID) end
                                     TransferTraderTo(tradeUnit, originCity)
                                     coroutine.yield()
                                 end
                             end
                         else
-                            print("Backup 2 yield")
+                            if dbug_print then print("Backup 2 yield") end
                             coroutine.yield() -- gauranteed yield to prevent infinite cycle bug
                         end
                     end
@@ -985,7 +989,7 @@ function CreatePlayerHeader( player:table )
             headerInstance.VisibilityBonusGrid:LocalizeAndSetToolTip("LOC_TRADE_OVERVIEW_TOOLTIP_NO_DIPLOMATIC_VIS_BONUS");
         end
     else
-        -- print("Not displaying vis bonuses")
+        if dbug_print then -- print("Not displaying vis bonuses") end
         headerInstance.TourismBonusGrid:SetHide(true);
         headerInstance.VisibilityBonusGrid:SetHide(true);
     end
@@ -1169,10 +1173,10 @@ function OnExpandRoutes( checkbox, cityOwnerID:number, cityID:number )
 
         -- Only add entry if it isn't already in the list
         if findIndex(m_GroupsFullyExpanded, cityEntry, CompareCityEntries) == -1 then
-            print("Adding " .. GetCityEntryString(cityEntry) .. " to the exclusion list");
+            if dbug_print then print("Adding " .. GetCityEntryString(cityEntry) .. " to the exclusion list"); end
             tinsert(m_GroupsFullyExpanded, cityEntry);
         else
-            print("City already exists in exclusion list");
+            if dbug_print then print("City already exists in exclusion list"); end
         end
     else
         if m_GroupExpandAll then
@@ -1190,10 +1194,10 @@ function OnExpandRoutes( checkbox, cityOwnerID:number, cityID:number )
         local cityIndex = findIndex(m_GroupsFullyExpanded, cityEntry, CompareCityEntries)
 
         if findIndex(m_GroupsFullyExpanded, cityEntry, CompareCityEntries) > 0 then
-            print("Removing " .. GetCityEntryString(cityEntry) .. " to the exclusion list");
+            if dbug_print then print("Removing " .. GetCityEntryString(cityEntry) .. " to the exclusion list"); end
             tremove(m_GroupsFullyExpanded, cityIndex);
         else
-            print("City does not exist in exclusion list");
+            if dbug_print then print("City does not exist in exclusion list"); end
         end
     end
 
@@ -1256,10 +1260,10 @@ end
 -- ---------------------------------------------------------------------------
 function UpdateRouteHistoryForTrader(routeInfo:table, routesTable:table)
     if routeInfo.TraderUnitID ~= nil then
-        print("Updating trader " .. routeInfo.TraderUnitID .. " with route history: " .. GetTradeRouteString(routeInfo));
+        if dbug_print then print("Updating trader " .. routeInfo.TraderUnitID .. " with route history: " .. GetTradeRouteString(routeInfo)); end
         routesTable[routeInfo.TraderUnitID] = routeInfo;
     else
-        print("Could not find the trader unit")
+        if dbug_print then print("Could not find the trader unit") end
     end
 end
 
@@ -1336,7 +1340,7 @@ end
 -- ===========================================================================
 
 function FilterTradeRoutes ( tradeRoutes:table )
-    -- print("Current filter: " .. m_filterList[m_filterSelected].FilterText);
+    if dbug_print then -- print("Current filter: " .. m_filterList[m_filterSelected].FilterText); end
     if m_filterSelected == 1 then
         return tradeRoutes;
     end
@@ -1448,7 +1452,7 @@ end
 -- ===========================================================================
 -- Returns the grouped routes version based on the passed group setting
 function GroupRoutes( routesTable, groupSetting )
-    print("Group setting: " .. m_groupByList[m_groupBySelected].groupByString);
+    if dbug_print then print("Group setting: " .. m_groupByList[m_groupBySelected].groupByString); end
 
     if GroupSettingIsNone(groupSetting) then
         return routesTable
@@ -1466,7 +1470,7 @@ function GroupRoutes( routesTable, groupSetting )
         elseif groupSetting == GROUP_BY_SETTINGS.DESTINATION then
             key = tostring(routesTable[i].DestinationCityPlayer) .. "_" .. tostring(routesTable[i].DestinationCityID)
         else
-            print("Error: Unknown group setting.")
+            if dbug_print then print("Error: Unknown group setting.") end
             return routesTable;
         end
 
@@ -1482,7 +1486,7 @@ function GroupRoutes( routesTable, groupSetting )
             returnRoutesTable[index] = {}
         end
 
-        -- print("Inserting " .. GetTradeRouteString(route) .. " in " .. index)
+        if dbug_print then -- print("Inserting " .. GetTradeRouteString(route) .. " in " .. index) end
         returnRoutesTable[index][#(returnRoutesTable[index]) + 1] = routesTable[i]
     end
     return returnRoutesTable;
@@ -1491,7 +1495,7 @@ end
 -- Gets top route from each group and sorts them based on that
 function SortGroupedRoutes( groupedRoutes:table, sortSettings:table, sortSettingsChanged:boolean )
     if (sortSettingsChanged ~= nil and (not sortSettingsChanged)) then
-        print("OPT: Not sorting groups")
+        if dbug_print then print("OPT: Not sorting groups") end
         return groupedRoutes
     end
 
@@ -1729,7 +1733,7 @@ function CycleTraders(co)
     if CountTraders(m_AvailableTraders) > 0 then
         coroutine.resume(co)
     else
-        print("No Trader available")
+        if dbug_print then print("No Trader available") end
     end
 end
 
@@ -1763,12 +1767,12 @@ function RemoveTrader( traderID )
         for i in pairs(m_AvailableTraders[cityID]) do
             -- Remove trader
             if m_AvailableTraders[cityID][i] == traderID then
-                print("Removing trader " .. traderID .. " from available traders.")
+                if dbug_print then print("Removing trader " .. traderID .. " from available traders.") end
                 tremove(m_AvailableTraders[cityID], i)
 
                 -- Check if for that city has no traders. Remove the city entry if it does
                 if table_nnill_count(m_AvailableTraders[cityID]) <= 0 then
-                    print("Removing city " .. cityID)
+                    if dbug_print then print("Removing city " .. cityID) end
                     tremove(m_AvailableTraders, cityID)
                 end
 
@@ -1777,7 +1781,7 @@ function RemoveTrader( traderID )
         end
     end
 
-    print("Could not find trader " .. traderID)
+    if dbug_print then print("Could not find trader " .. traderID) end
 end
 
 -- ===========================================================================
@@ -2067,7 +2071,7 @@ function OnUnitOperationStarted( ownerID:number, unitID:number, operationID:numb
                 local outgoingRoutes = city:GetTrade():GetOutgoingRoutes();
                 for _, route in ipairs(outgoingRoutes) do
                     if route.TraderUnitID == unitID then
-                        print("Found route...")
+                        if dbug_print then print("Found route...") end
                         -- Remove it from the available routes
                         RemoveRouteFromTable(route, m_AvailableGroupedRoutes, not GroupSettingIsNone(m_groupBySelected));
                         foundRoute = true
@@ -2077,7 +2081,7 @@ function OnUnitOperationStarted( ownerID:number, unitID:number, operationID:numb
             end
 
             if not foundRoute then
-                print("Route not found!!")
+                if dbug_print then print("Route not found!!") end
                 return
             end
 
@@ -2211,7 +2215,7 @@ function InitButton(control, callbackLClick, callbackRClick)
 end
 
 function Initialize()
-    print("Initializing BTS Trade Overview");
+    if dbug_print then print("Initializing BTS Trade Overview"); end
 
     -- Initialize tracker
     TradeSupportTracker_Initialize();
