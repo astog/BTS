@@ -6,9 +6,10 @@
     <Teaser>Adds sort options, filters and generally improves the trade screen.</Teaser>
     <Description>Adds sort options, filters and generally improves the trade screen.</Description>
     <Authors>astog</Authors>
+    <AffectsSavedGames>0</AffectsSavedGames>
   </Properties>
 
-  <Components>
+  <InGameActions>
     <ImportFiles id="BTS_IMPORT_FILES">
       <Items>
         <File>UI/TradeOverview.xml</File>
@@ -28,13 +29,13 @@
         <File>Text/BTS_Text_ES.xml</File>
         <File>Text/BTS_Text_FR.xml</File>
         <File>Text/BTS_Text_Hans_CN.xml</File>
-        <File>Text/BTS_Text_Hans_IT.xml</File>
-        <File>Text/BTS_Text_Hans_KR.xml</File>
-        <File>Text/BTS_Text_Hans_PL.xml</File>
-        <File>Text/BTS_Text_Hans_RU.xml</File>
+        <File>Text/BTS_Text_IT.xml</File>
+        <File>Text/BTS_Text_KR.xml</File>
+        <File>Text/BTS_Text_PL.xml</File>
+        <File>Text/BTS_Text_RU.xml</File>
       </Items>
     </LocalizedText>
-  </Components>
+  </InGameActions>
 
   <Files>
     <File>UI/TradeOverview.xml</File>
