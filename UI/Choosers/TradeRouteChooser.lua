@@ -243,9 +243,11 @@ function RefreshTopPanel()
         Controls.OriginResourceList:ReprocessAnchoring();
         Controls.DestinationResourceList:CalculateSize();
         Controls.DestinationResourceList:ReprocessAnchoring();
+        Controls.TopGrid:DoAutoSize();
 
         -- Show Panel
         Controls.CurrentSelectionContainer:SetHide(false);
+        Controls.CurrentSelectionContainer:DoAutoSize();
 
         -- Hide Status Message
         Controls.StatusMessage:SetHide(true);
@@ -255,6 +257,7 @@ function RefreshTopPanel()
 
         -- Show Status Message
         Controls.StatusMessage:SetHide(false);
+        Controls.StatusMessage:DoAutoSize();
     end
 end
 

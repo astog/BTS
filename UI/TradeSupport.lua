@@ -1080,7 +1080,7 @@ function GetHasActiveRoute(playerID, checkCache)
         local pPlayer:table = Players[playerID];
         local playerCities:table = pPlayer:GetCities();
         for _, city in playerCities:Members() do
-            if city:GetTrade():HasActiveTradingPost(Game.GetLocalPlayer()) then
+            if city:GetTrade():HasTradeRouteFrom(localPlayer) then
                 return true
             end
         end
