@@ -1,19 +1,20 @@
+include( "Colors" );
+
+-- ===========================================================================
+--  Local Constants
+-- ===========================================================================
+
 local BACKDROP_DARKER_OFFSET = -85
 local BACKDROP_DARKER_OPACITY = 238
 local BACKDROP_BRIGHTER_OFFSET = 90
 local BACKDROP_BRIGHTER_OPACITY = 250
 
-local Game = Game
-local Players = Players
-local Events = Events
-
-local ipairs = ipairs
-local pairs = pairs
-
-local L_Lookup = Locale.Lookup
+-- set to true for faster time for UI to load, but the trader time trade route to complete will be incorrect
+-- speeds it upto 40% speedup depending upon how many long, winding routes you have
+local USE_EUCLEDIAN_DISTANCE:boolean = false
 
 -- ===========================================================================
---  Local Constants
+--  Global Constants
 -- ===========================================================================
 
 SORT_BY_ID = {
@@ -402,7 +403,7 @@ function RenewTradeRoutes()
                     operationParams[UnitOperationTypes.PARAM_Y1] = originCity:GetY();
 
                     if (UnitManager.CanStartOperation(pUnit, UnitOperationTypes.MAKE_TRADE_ROUTE, nil, operationParams)) then
-                        print("Trader " .. unitID .. " renewed its trade route to " .. L_Lookup(destinationCity:GetName()));
+                        print("Trader " .. unitID .. " renewed its trade route to " .. Locale.Lookup(destinationCity:GetName()));
                         -- TODO: Send notification for renewing routes
                         UnitManager.RequestOperation(pUnit, UnitOperationTypes.MAKE_TRADE_ROUTE, operationParams);
                         renewedRoute = true
@@ -497,9 +498,13 @@ function CacheRoute(routeInfo)
     m_Cache[key].Yields = {}
     local netOriginYield:number = 0
     local netDestinationYield:number = 0
+
+    local originRouteYields = GetYieldForOriginCity(nil, routeInfo, false)
+    local destinationRouteYields = GetYieldForDestinationCity(nil, routeInfo, false)
+
     for yieldIndex = START_INDEX, END_INDEX do
-        local originYield = GetYieldForOriginCity(yieldIndex, routeInfo)
-        local destinationYield = GetYieldForDestinationCity(yieldIndex, routeInfo)
+        local originYield = originRouteYields[yieldIndex + 1]
+        local destinationYield = destinationRouteYields[yieldIndex + 1]
 
         m_Cache[key].Yields[yieldIndex] = {
             Origin = originYield,
@@ -822,7 +827,7 @@ function GetTradeRouteString( routeInfo:table )
     if originPlayer ~= nil then
         local originCity:table = originPlayer:GetCities():FindID(routeInfo.OriginCityID);
         if originCity ~= nil then
-            originCityName = L_Lookup(originCity:GetName());
+            originCityName = Locale.Lookup(originCity:GetName());
         else
             print("CITY", routeInfo.OriginCityID, "NOT FOUND")
         end
@@ -834,7 +839,7 @@ function GetTradeRouteString( routeInfo:table )
     if destinationPlayer ~= nil then
         local destinationCity:table = destinationPlayer:GetCities():FindID(routeInfo.DestinationCityID);
         if destinationCity ~= nil then
-            destinationCityName = L_Lookup(destinationCity:GetName());
+            destinationCityName = Locale.Lookup(destinationCity:GetName());
         else
             print("CITY", routeInfo.DestinationCityID, "NOT FOUND")
         end
@@ -881,33 +886,35 @@ end
 
 -- Returns length of trade path, number of trips to destination, turns to complete route
 function GetAdvancedRouteInfo(routeInfo)
+    local iSpeedCostMultiplier = GameInfo.GameSpeeds[1].CostMultiplier;
     local eSpeed = GameConfiguration.GetGameSpeedType();
-
-    if GameInfo.GameSpeeds[eSpeed] ~= nil then
-        local iSpeedCostMultiplier = GameInfo.GameSpeeds[eSpeed].CostMultiplier;
-        local tradeManager = Game.GetTradeManager();
-        local pathPlots = tradeManager:GetTradeRoutePath(routeInfo.OriginCityPlayer, routeInfo.OriginCityID, routeInfo.DestinationCityPlayer, routeInfo.DestinationCityID);
-        local tradePathLength:number = table.count(pathPlots) - 1;
-        local multiplierConstant:number = 0.1;
-
-        local tripsToDestination = 1 + math.floor(iSpeedCostMultiplier/tradePathLength * multiplierConstant);
-
-        --print("Error: Playing on an unrecognized speed. Defaulting to standard for route turns calculation");
-        local turnsToCompleteRoute = (tradePathLength * 2 * tripsToDestination);
-        return tradePathLength, tripsToDestination, turnsToCompleteRoute;
-    else
+    if GameInfo.GameSpeeds[eSpeed] == nil then
         print("Speed type index " .. eSpeed);
         print("Error: Could not find game speed type. Defaulting to first entry in table");
-        local iSpeedCostMultiplier =  GameInfo.GameSpeeds[1].CostMultiplier;
+        iSpeedCostMultiplier = GameInfo.GameSpeeds[eSpeed].CostMultiplier;
+    end
+
+    local tradePathLength:number = 0;
+    if USE_EUCLEDIAN_DISTANCE then
+        local pOriginPlayer = Players[routeInfo.OriginCityPlayer]
+        local pOriginCity = pOriginPlayer:GetCities():FindID(routeInfo.OriginCityID)
+        local pDestinationPlayer = Players[routeInfo.DestinationCityPlayer]
+        local pDestinationCity = pDestinationPlayer:GetCities():FindID(routeInfo.DestinationCityID)
+
+        -- Estimate path to city using Euclidean distance
+        tradePathLength = Map.GetPlotDistance(pOriginCity:GetX(), pOriginCity:GetY(), pDestinationCity:GetX(), pDestinationCity:GetY());
+    else
+        -- Get exact path the trader will take
         local tradeManager = Game.GetTradeManager();
         local pathPlots = tradeManager:GetTradeRoutePath(routeInfo.OriginCityPlayer, routeInfo.OriginCityID, routeInfo.DestinationCityPlayer, routeInfo.DestinationCityID);
-        local tradePathLength:number = table.count(pathPlots) - 1;
-        local multiplierConstant:number = 0.1;
-
-        local tripsToDestination = 1 + math.floor(iSpeedCostMultiplier/tradePathLength * multiplierConstant);
-        local turnsToCompleteRoute = (tradePathLength * 2 * tripsToDestination);
-        return tradePathLength, tripsToDestination, turnsToCompleteRoute;
+        tradePathLength = table.count(pathPlots) - 1;
     end
+
+    local multiplierConstant:number = 0.1;
+    local tripsToDestination = 1 + math.floor(iSpeedCostMultiplier/tradePathLength * multiplierConstant);
+    local turnsToCompleteRoute = (tradePathLength * 2 * tripsToDestination);
+
+    return tradePathLength, tripsToDestination, turnsToCompleteRoute;
 end
 
 -- ---------------------------------------------------------------------------
@@ -918,57 +925,88 @@ function GetOriginCityName( routeInfo:table )
     -- TODO - Maybe implement cache for this?
     local pPlayer = Players[routeInfo.OriginCityPlayer]
     local pCity = pPlayer:GetCities():FindID(routeInfo.OriginCityID)
-    return L_Lookup(pCity:GetName()) -- How does lua compare localized text?
+    return Locale.Lookup(pCity:GetName()) -- How does lua compare localized text?
 end
 
 function GetDestinationCityName( routeInfo:table )
     -- TODO - Maybe implement cache for this?
     local pPlayer = Players[routeInfo.DestinationCityPlayer]
     local pCity = pPlayer:GetCities():FindID(routeInfo.DestinationCityID)
-    return L_Lookup(pCity:GetName()) -- How does lua compare localized text?
+    return Locale.Lookup(pCity:GetName()) -- How does lua compare localized text?
 end
 
 -- Returns yield for the origin city
-function GetYieldForOriginCity( yieldIndex:number, routeInfo:table, checkCache)
+function GetYieldForOriginCity( yieldIndex:number, routeInfo:table, checkCache:boolean )
     if checkCache then
         local key:string = GetRouteKey(routeInfo)
         return Cached_GetYieldForOriginCity(yieldIndex, key)
     else
         local tradeManager = Game.GetTradeManager();
 
-        -- From route
-        local yieldValue = tradeManager:CalculateOriginYieldFromPotentialRoute(routeInfo.OriginCityPlayer, routeInfo.OriginCityID, routeInfo.DestinationCityPlayer, routeInfo.DestinationCityID, yieldIndex);
+        -- Want all the yields in a table
+        if yieldIndex == nil then
+            local routeYields = tradeManager:CalculateOriginYieldsFromPotentialRoute(routeInfo.OriginCityPlayer, routeInfo.OriginCityID, routeInfo.DestinationCityPlayer, routeInfo.DestinationCityID);
+            local pathYields = tradeManager:CalculateOriginYieldsFromPath(routeInfo.OriginCityPlayer, routeInfo.OriginCityID, routeInfo.DestinationCityPlayer, routeInfo.DestinationCityID);
+            local modifierYields = tradeManager:CalculateOriginYieldsFromModifiers(routeInfo.OriginCityPlayer, routeInfo.OriginCityID, routeInfo.DestinationCityPlayer, routeInfo.DestinationCityID);
 
-        -- From path only if yield is gold. Trading posts add only gold.
-        if yieldIndex == GameInfo.Yields["YIELD_GOLD"].Index then
-            yieldValue = yieldValue + tradeManager:CalculateOriginYieldFromPath(routeInfo.OriginCityPlayer, routeInfo.OriginCityID, routeInfo.DestinationCityPlayer, routeInfo.DestinationCityID, yieldIndex);
+            -- Add the yields together and return the result
+            local i;
+            local yieldCount = #routeYields;
+
+            for i=1, yieldCount, 1 do
+                routeYields[i] = routeYields[i] + pathYields[i] + modifierYields[i];
+            end
+            return routeYields
+        else
+            -- From route
+            local yieldValue = tradeManager:CalculateOriginYieldFromPotentialRoute(routeInfo.OriginCityPlayer, routeInfo.OriginCityID, routeInfo.DestinationCityPlayer, routeInfo.DestinationCityID, yieldIndex);
+
+            -- From path only if yield is gold. Trading posts add only gold.
+            if yieldIndex == GameInfo.Yields["YIELD_GOLD"].Index then
+                yieldValue = yieldValue + tradeManager:CalculateOriginYieldFromPath(routeInfo.OriginCityPlayer, routeInfo.OriginCityID, routeInfo.DestinationCityPlayer, routeInfo.DestinationCityID, yieldIndex);
+            end
+
+            -- From modifiers
+            local resourceID = -1;
+            yieldValue = yieldValue + tradeManager:CalculateOriginYieldFromModifiers(routeInfo.OriginCityPlayer, routeInfo.OriginCityID, routeInfo.DestinationCityPlayer, routeInfo.DestinationCityID, yieldIndex, resourceID);
+
+            return yieldValue;
         end
-
-        -- From modifiers
-        local resourceID = -1;
-        yieldValue = yieldValue + tradeManager:CalculateOriginYieldFromModifiers(routeInfo.OriginCityPlayer, routeInfo.OriginCityID, routeInfo.DestinationCityPlayer, routeInfo.DestinationCityID, yieldIndex, resourceID);
-
-        return yieldValue;
     end
 end
 
 -- Returns yield for the destination city
-function GetYieldForDestinationCity( yieldIndex:number, routeInfo:table, checkCache )
+function GetYieldForDestinationCity( yieldIndex:number, routeInfo:table, checkCache:boolean )
     if checkCache then
         local key:string = GetRouteKey(routeInfo)
         return Cached_GetYieldForDestinationCity(yieldIndex, key)
     else
         local tradeManager = Game.GetTradeManager();
 
-        -- From route
-        local yieldValue = tradeManager:CalculateDestinationYieldFromPotentialRoute(routeInfo.OriginCityPlayer, routeInfo.OriginCityID, routeInfo.DestinationCityPlayer, routeInfo.DestinationCityID, yieldIndex);
-        -- From path
-        yieldValue = yieldValue + tradeManager:CalculateDestinationYieldFromPath(routeInfo.OriginCityPlayer, routeInfo.OriginCityID, routeInfo.DestinationCityPlayer, routeInfo.DestinationCityID, yieldIndex);
-        -- From modifiers
-        local resourceID = -1;
-        yieldValue = yieldValue + tradeManager:CalculateDestinationYieldFromModifiers(routeInfo.OriginCityPlayer, routeInfo.OriginCityID, routeInfo.DestinationCityPlayer, routeInfo.DestinationCityID, yieldIndex, resourceID);
+        if yieldIndex == nil then
+            local routeYields = tradeManager:CalculateDestinationYieldsFromPotentialRoute(routeInfo.OriginCityPlayer, routeInfo.OriginCityID, routeInfo.DestinationCityPlayer, routeInfo.DestinationCityID);
+            local pathYields = tradeManager:CalculateDestinationYieldsFromPath(routeInfo.OriginCityPlayer, routeInfo.OriginCityID, routeInfo.DestinationCityPlayer, routeInfo.DestinationCityID);
+            local modifierYields = tradeManager:CalculateDestinationYieldsFromModifiers(routeInfo.OriginCityPlayer, routeInfo.OriginCityID, routeInfo.DestinationCityPlayer, routeInfo.DestinationCityID);
 
-        return yieldValue;
+            -- Add the yields together and return the result
+            local i;
+            local yieldCount = #routeYields;
+
+            for i=1, yieldCount, 1 do
+                routeYields[i] = routeYields[i] + pathYields[i] + modifierYields[i];
+            end
+            return routeYields
+        else
+            -- From route
+            local yieldValue = tradeManager:CalculateDestinationYieldFromPotentialRoute(routeInfo.OriginCityPlayer, routeInfo.OriginCityID, routeInfo.DestinationCityPlayer, routeInfo.DestinationCityID, yieldIndex);
+            -- From path
+            yieldValue = yieldValue + tradeManager:CalculateDestinationYieldFromPath(routeInfo.OriginCityPlayer, routeInfo.OriginCityID, routeInfo.DestinationCityPlayer, routeInfo.DestinationCityID, yieldIndex);
+            -- From modifiers
+            local resourceID = -1;
+            yieldValue = yieldValue + tradeManager:CalculateDestinationYieldFromModifiers(routeInfo.OriginCityPlayer, routeInfo.OriginCityID, routeInfo.DestinationCityPlayer, routeInfo.DestinationCityID, yieldIndex, resourceID);
+
+            return yieldValue;
+        end
     end
 end
 
@@ -1209,7 +1247,7 @@ function FormatYieldText(yieldIndex, yieldAmount)
     else
         text = "-";
     end
-    text = text .. yieldAmount;
+    text = text .. Round(yieldAmount, 1);
 
     return iconString, text;
 end
