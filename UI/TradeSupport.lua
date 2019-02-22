@@ -1154,17 +1154,19 @@ function GetPlayerIconInfo(playerID, checkCache)
     else
         local pPlayer = Players[playerID];
         local playerConfig:table = PlayerConfigurations[playerID];
-        local playerInfluence:table = pPlayer:GetInfluence();
-        local playerIconString:string;
         if playerConfig ~= nil then
-            if not playerInfluence:CanReceiveInfluence() then
+            local civType:string = playerConfig:GetCivilizationTypeName();
+            local playerIconString:string = "ICON_" .. civType
+
+            --[[
+            if pPlayer:IsMajor() then
                 -- Civilizations
                 playerIconString = "ICON_" .. playerConfig:GetCivilizationTypeName();
             else
                 -- City States
                 local leader:string = playerConfig:GetLeaderTypeName();
-                local leaderInfo:table  = GameInfo.Leaders[leader];
 
+                local leaderInfo:table  = GameInfo.Leaders[leader];
                 if (leader == "LEADER_MINOR_CIV_SCIENTIFIC" or leaderInfo.InheritFrom == "LEADER_MINOR_CIV_SCIENTIFIC") then
                     playerIconString = "ICON_CITYSTATE_SCIENCE";
                 elseif (leader == "LEADER_MINOR_CIV_RELIGIOUS" or leaderInfo.InheritFrom == "LEADER_MINOR_CIV_RELIGIOUS") then
@@ -1179,6 +1181,7 @@ function GetPlayerIconInfo(playerID, checkCache)
                     playerIconString = "ICON_CITYSTATE_INDUSTRIAL";
                 end
             end
+            ]]
 
             local playerDescription:string = playerConfig:GetCivilizationDescription();
             local textureOffsetX, textureOffsetY, textureSheet = IconManager:FindIconAtlas(playerIconString, 30)
