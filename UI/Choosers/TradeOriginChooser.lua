@@ -6,6 +6,7 @@
 include("InstanceManager");
 include("SupportFunctions");
 include("AnimSidePanelSupport");
+include("Colors")
 
 -- ===========================================================================
 --  CONSTANTS
@@ -69,8 +70,7 @@ function Refresh()
 
     -- Calculate Control Size
     Controls.CityStack:CalculateSize();
-    Controls.CityStack:ReprocessAnchoring();
-    Controls.CityScrollPanel:CalculateInternalSize();
+    Controls.CityScrollPanel:CalculateSize();
 end
 
 -- ===========================================================================
