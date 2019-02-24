@@ -888,10 +888,11 @@ end
 function GetAdvancedRouteInfo(routeInfo)
     local iSpeedCostMultiplier = GameInfo.GameSpeeds[1].CostMultiplier;
     local eSpeed = GameConfiguration.GetGameSpeedType();
-    if GameInfo.GameSpeeds[eSpeed] == nil then
+    if GameInfo.GameSpeeds[eSpeed] ~= nil then
+        iSpeedCostMultiplier = GameInfo.GameSpeeds[eSpeed].CostMultiplier;
+    else
         print("Speed type index " .. eSpeed);
         print("Error: Could not find game speed type. Defaulting to first entry in table");
-        iSpeedCostMultiplier = GameInfo.GameSpeeds[eSpeed].CostMultiplier;
     end
 
     local tradePathLength:number = 0;
