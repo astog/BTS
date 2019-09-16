@@ -1382,7 +1382,7 @@ function Initialize()
     InitButton(Controls.Header_CloseButton, OnClose )
 
     -- Filter
-    Controls.FilterButton:RegisterCallback( eLClick, UpdateFilterArrow );
+    Controls.FilterButton:RegisterCallback( Mouse.eLClick, UpdateFilterArrow );
     Controls.DestinationFilterPulldown:RegisterSelectionCallback( OnFilterSelected );
 
     -- Control events - checkboxes
