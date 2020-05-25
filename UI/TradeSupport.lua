@@ -12,6 +12,7 @@ local BACKDROP_BRIGHTER_OPACITY = 250
 -- set to true for faster time for UI to load, but the trader time trade route to complete will be incorrect
 -- speeds it upto 40% speedup depending upon how many long, winding routes you have
 local USE_EUCLEDIAN_DISTANCE:boolean = false
+local USING_ERA_BASED_TRADE_ROUTE_LENGTH:boolean = GameInfo.Eras_XP2 ~= nil
 
 -- ===========================================================================
 --  Global Constants
@@ -71,6 +72,7 @@ ScoreFunctionByID[SORT_BY_ID.DESTINATION_NAME]    = function(a) return GetDestin
 local m_LocalPlayerRunningRoutes    :table  = {};   -- Tracks local players active routes (turns remaining)
 local m_TradersAutomatedSettings    :table  = {};   -- Tracks traders, and if they are automated
 local m_Cache                       :table  = {};   -- Cache for all route info
+local m_lastEraKnown                :number = -1;   -- Saves the last known era to detect an era change
 
 -- local debug_func_calls:number = 0;
 -- local debug_total_calls:number = 0;
@@ -131,6 +133,8 @@ function AddRouteWithTurnsRemaining( routeInfo:table, routesTable:table)
             DestinationCityPlayer   = routeInfo.DestinationCityPlayer;
             DestinationCityID       = routeInfo.DestinationCityID;
             TraderUnitID            = routeInfo.TraderUnitID;
+            TradePathLength         = tradePathLength;
+            OriginalTurnsRemaining  = turnsToCompleteRoute;
             TurnsRemaining          = turnsToCompleteRoute;
         };
 
@@ -146,12 +150,44 @@ end
 function UpdateRoutesWithTurnsRemaining( routesTable:table )
     for i=1, #routesTable do
         if routesTable[i].TurnsRemaining ~= nil then
+            if USING_ERA_BASED_TRADE_ROUTE_LENGTH and IsEraChange() then
+                if routesTable[i].OriginalTurnsRemaining ~= nil and routesTable[i].TradePathLength ~= nil then
+                    -- Get updated turns remaining and
+                    -- add the extra turns required because of era change
+                    local newTurnsRemaining = routesTable[i].TradePathLength * 2 * GetTripsRequiredFromTradePathLength(routesTable[i].TradePathLength)
+                    routesTable[i].TurnsRemaining = routesTable[i].TurnsRemaining + (newTurnsRemaining - routesTable[i].OriginalTurnsRemaining)
+                    print("Updated route " .. GetTradeRouteString(routesTable[i]) .. " with added turns. New turns remaining " .. routesTable[i].TurnsRemaining)
+                end
+            end
+
             routesTable[i].TurnsRemaining = routesTable[i].TurnsRemaining - 1;
             print("Updated route " .. GetTradeRouteString(routesTable[i]) .. " with turns remaining " .. routesTable[i].TurnsRemaining)
         end
     end
 
     SaveRunningRoutesInfo();
+end
+
+function IsEraChange()
+    -- Handle detecting era change
+    local localPlayer   :number = Game.GetLocalPlayer();
+    local currentEra    :number = Game.GetEras():GetCurrentEra();
+    local currentTurn   :number = Game.GetCurrentGameTurn();
+    local gameStartTurn :number = GameConfiguration.GetStartTurn();
+
+    -- Check all the reasons why this shouldn't occur and bail if any are true.
+    local isInvalidLocalPlayer  :boolean = localPlayer == PlayerTypes.NONE;
+    local isSameEra             :boolean = currentEra == m_lastEraKnown;
+    local isFirstTurnOfGame     :boolean = currentTurn == gameStartTurn;
+
+    -- Always update this
+    m_lastEraKnown = currentEra;
+    -- But return if we don't have a change
+    if isInvalidLocalPlayer or isSameEra or isFirstTurnOfGame then
+        return false;
+    end
+
+    return true;
 end
 
 -- Checks if routes running in game and the routesTable are consistent with each other
@@ -886,15 +922,6 @@ end
 
 -- Returns length of trade path, number of trips to destination, turns to complete route
 function GetAdvancedRouteInfo(routeInfo)
-    local iSpeedCostMultiplier = GameInfo.GameSpeeds[1].CostMultiplier;
-    local eSpeed = GameConfiguration.GetGameSpeedType();
-    if GameInfo.GameSpeeds[eSpeed] ~= nil then
-        iSpeedCostMultiplier = GameInfo.GameSpeeds[eSpeed].CostMultiplier;
-    else
-        print("Speed type index " .. eSpeed);
-        print("Error: Could not find game speed type. Defaulting to first entry in table");
-    end
-
     local tradePathLength:number = 0;
     if USE_EUCLEDIAN_DISTANCE then
         local pOriginPlayer = Players[routeInfo.OriginCityPlayer]
@@ -911,11 +938,46 @@ function GetAdvancedRouteInfo(routeInfo)
         tradePathLength = table.count(pathPlots) - 1;
     end
 
-    local multiplierConstant:number = 0.1;
-    local tripsToDestination = 1 + math.floor(iSpeedCostMultiplier/tradePathLength * multiplierConstant);
+    local tripsToDestination = GetTripsRequiredFromTradePathLength(tradePathLength)
     local turnsToCompleteRoute = (tradePathLength * 2 * tripsToDestination);
-
     return tradePathLength, tripsToDestination, turnsToCompleteRoute;
+end
+
+-- Gets the number of trips a trader takes based on trader length, game speed and era
+function GetTripsRequiredFromTradePathLength( tradePathLength:number )
+    local iSpeedCostMultiplier = GameInfo.GameSpeeds[1].CostMultiplier;
+    local eSpeed = GameConfiguration.GetGameSpeedType();
+    if GameInfo.GameSpeeds[eSpeed] ~= nil then
+        iSpeedCostMultiplier = GameInfo.GameSpeeds[eSpeed].CostMultiplier;
+    else
+        print("Speed type index " .. eSpeed);
+        print("Error: Could not find game speed type. Defaulting to first entry in table");
+    end
+
+    -- Previous formula that is semi correct
+    -- local tripsToDestination = 1 + math.floor(iSpeedCostMultiplier/tradePathLength * 0.1);
+    -- TODO: Not 100% sure of this formula. Ran a few experiments and it seems to be this one
+    local iMinTurnsRequired = (math.floor(iSpeedCostMultiplier * 0.1) * 2.0) + 2
+
+    -- Expansion 2 added a modifier called TradeRouteMinimumEndTurnChange that changes required turns based on Era
+    if GameInfo.Eras_XP2 ~= nil then
+        local iGameEra = Game.GetEras():GetCurrentEra()
+        local kEraTable = GameInfo.Eras_XP2[iGameEra]
+        if kEraTable ~= nil then
+            local iMinEndTurnChange = kEraTable.TradeRouteMinimumEndTurnChange
+            if iMinEndTurnChange ~= nil then
+                -- print("Era TradeRouteMinimumEndTurnChange for " .. kEraTable.EraType .. " : " .. iMinEndTurnChange)
+                iMinTurnsRequired = iMinTurnsRequired + iMinEndTurnChange
+            else
+                print("Error: Could not find TradeRouteMinimumEndTurnChange for Era index: " .. iGameEra)
+            end
+        else
+            print("Error: Could not find Era Info for Era index: " .. iGameEra)
+        end
+    end
+
+    -- number of trips to atleast attain this amount of turns
+    return math.ceil(iMinTurnsRequired / (tradePathLength * 2.0));
 end
 
 -- ---------------------------------------------------------------------------
@@ -1204,8 +1266,8 @@ function GetPlayerColorInfo(playerID, checkCache)
         end
     else
         local backColor, frontColor = UI.GetPlayerColors(playerID)
-        local darkerBackColor = DarkenLightenColor(backColor, BACKDROP_DARKER_OFFSET, BACKDROP_DARKER_OPACITY);
-        local brighterBackColor = DarkenLightenColor(backColor, BACKDROP_BRIGHTER_OFFSET, BACKDROP_BRIGHTER_OPACITY);
+        local darkerBackColor = UI.DarkenLightenColor(backColor, BACKDROP_DARKER_OFFSET, BACKDROP_DARKER_OPACITY);
+        local brighterBackColor = UI.DarkenLightenColor(backColor, BACKDROP_BRIGHTER_OFFSET, BACKDROP_BRIGHTER_OPACITY);
 
         return backColor, frontColor, darkerBackColor, brighterBackColor
     end
@@ -1639,6 +1701,8 @@ end
 
 function TradeSupportTracker_Initialize()
     print("Initializing BTS Trade Support Tracker");
+
+    m_lastEraKnown = Game.GetEras():GetCurrentEra()
 
     -- Load Previous Routes
     LoadRunningRoutesInfo();
