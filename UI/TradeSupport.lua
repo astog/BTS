@@ -148,15 +148,19 @@ end
 
 -- Decrements routes present. Removes those that completed
 function UpdateRoutesWithTurnsRemaining( routesTable:table )
+    local bEraChanged:boolean = IsEraChange()
     for i=1, #routesTable do
         if routesTable[i].TurnsRemaining ~= nil then
-            if USING_ERA_BASED_TRADE_ROUTE_LENGTH and IsEraChange() then
+            if USING_ERA_BASED_TRADE_ROUTE_LENGTH and bEraChanged then
                 if routesTable[i].OriginalTurnsRemaining ~= nil and routesTable[i].TradePathLength ~= nil then
                     -- Get updated turns remaining and
                     -- add the extra turns required because of era change
                     local newTurnsRemaining = routesTable[i].TradePathLength * 2 * GetTripsRequiredFromTradePathLength(routesTable[i].TradePathLength)
                     routesTable[i].TurnsRemaining = routesTable[i].TurnsRemaining + (newTurnsRemaining - routesTable[i].OriginalTurnsRemaining)
                     print("Updated route " .. GetTradeRouteString(routesTable[i]) .. " with added turns. New turns remaining " .. routesTable[i].TurnsRemaining)
+
+                    -- Update the original turns remaining so if a route extends beyond one era, the turns is calculated properly
+                    routesTable[i].OriginalTurnsRemaining = newTurnsRemaining
                 end
             end
 
@@ -956,17 +960,18 @@ function GetTripsRequiredFromTradePathLength( tradePathLength:number )
 
     -- Previous formula that is semi correct
     -- local tripsToDestination = 1 + math.floor(iSpeedCostMultiplier/tradePathLength * 0.1);
-    -- TODO: Not 100% sure of this formula. Ran a few experiments and it seems to be this one
-    local iMinTurnsRequired = (math.floor(iSpeedCostMultiplier * 0.1) * 2.0) + 2
+    -- NOTE: Not 100% sure of this formula. Ran a few experiments and it seems to be this one
+    local iMinTurnsRequired = (math.floor(iSpeedCostMultiplier * 0.1) * 2.0) + 1
 
     -- Expansion 2 added a modifier called TradeRouteMinimumEndTurnChange that changes required turns based on Era
     if GameInfo.Eras_XP2 ~= nil then
         local iGameEra = Game.GetEras():GetCurrentEra()
         local kEraTable = GameInfo.Eras_XP2[iGameEra]
         if kEraTable ~= nil then
-            local iMinEndTurnChange = kEraTable.TradeRouteMinimumEndTurnChange
-            if iMinEndTurnChange ~= nil then
+            if kEraTable.TradeRouteMinimumEndTurnChange ~= nil then
                 -- print("Era TradeRouteMinimumEndTurnChange for " .. kEraTable.EraType .. " : " .. iMinEndTurnChange)
+                -- NOTE: Took some trial and error to get this. Could be wrong, and will need more testing
+                local iMinEndTurnChange = math.ceil(kEraTable.TradeRouteMinimumEndTurnChange * (iSpeedCostMultiplier / 100.0))
                 iMinTurnsRequired = iMinTurnsRequired + iMinEndTurnChange
             else
                 print("Error: Could not find TradeRouteMinimumEndTurnChange for Era index: " .. iGameEra)
