@@ -208,7 +208,7 @@
        <!--  <Grid           ID="CityBannerFill3"          Anchor="C,C"                  Size="Parent-7,Parent-6"  Offset="-1,-1"  Texture="Banner_Lighter"  SliceTextureSize="196,34" SliceCorner="98,17"/> -->
 
 
-        <Label ID="HeaderLabel" Anchor="L,C" Offset="36,0" Style="FontFlair16" SmallCaps="20" SmallCapsType="EveryWord" Color="Beige"/>
+        <Label ID="HeaderLabel" Anchor="L,C" Offset="36,0" Style="FontFlair16" SmallCaps="20" SmallCapsType="EveryWord" Color="Beige" TruncateWidth="350"/>
 
         <!-- Expand routes button -->
         <CheckBox ID="RoutesExpand" ButtonSize="41,26" CheckTexture="Controls_ExpandButton" CheckSize="22,22" CheckTextureOffset="0,0" UnCheckTexture="Controls_ExpandButton" UnCheckSize="22,22" UnCheckTextureOffset="0,22" UseSelectedTextures="1" Anchor="R,T" Offset="-7,9" />
@@ -280,22 +280,22 @@
           </Grid>
 
           <!-- Route Label -->
-          <Label ID="RouteLabel" Anchor="L,T" Offset="33,10" Style="FontFlair16" SmallCaps="20" SmallCapsType="EveryWord" Color="Beige"/>
+          <Label ID="RouteLabel" Anchor="L,T" Offset="33,10" Style="FontFlair16" SmallCaps="20" SmallCapsType="EveryWord" Color="Beige" TruncateWidth="370"/>
 
           <!-- Info Stack -->
-          <Stack StackGrowth="Left" Anchor="R,T" Offset="70,0" StackPadding="5">
+          <Stack StackGrowth="Left" Anchor="R,T" Offset="70,0" StackPadding="2">
             <!-- Trading Post Indicator -->
-            <Grid ID="TradingPostIndicator" Size="22,22" Anchor="R,T" Offset="0,4" Color="25,33,35,0">
+            <Grid ID="TradingPostIndicator" Size="22,22" Anchor="R,T" Offset="0,5" Color="25,33,35,0">
               <Label ID="TradingPostIcon" String="[Icon_TradingPost]" Anchor="C,C"/>
             </Grid>
 
             <!-- Visibility Bonus -->
-            <Grid ID="VisibilityBonusGrid" Size="22,22" Anchor="R,T" Offset="0,4" Color="25,33,35,0">
+            <Grid ID="VisibilityBonusGrid" Size="22,22" Anchor="R,T" Offset="0,5" Color="25,33,35,0">
               <Button ID="VisibilityBonusIcon" Anchor="L,T" Size="22,22" Offset="0,0" Texture="Diplomacy_VisibilityIcons" StateOffsetIncrement="22,0" Disabled="1"/>
             </Grid>
 
             <!-- Tourism Bonus -->
-            <Grid ID="TourismBonusGrid" Anchor="R,T" Size="66,20" Offset="0,5" Color="25,33,35,0">
+            <Grid ID="TourismBonusGrid" Anchor="R,T" Size="66,20" Offset="0,6" Color="25,33,35,0">
               <Image ID="TourismBonusIcon" Anchor="C,C" Size="24,20" Offset="18,0" Texture="Tourism_VisitingSmallGrey"/>
               <Label ID="TourismBonusPercentage" Anchor="C,C" Align="R,C" Size="40,24" Offset="-18,1" Style="FontNormal14" String="LOC_TRADE_OVERVIEW_TOURISM_BONUS" Color="Beige"/>
             </Grid>
@@ -305,7 +305,7 @@
           <Label ID="CityStateQuestIcon" Anchor="R,B" Offset="40,28" Style="FontNormal16" FontStyle="Shadow" String="[ICON_CityStateQuest]" Color="255,0,0,255" EffectColor="255,0,0,255" GradientColor="255,0,0,255" />
 
           <!-- Route Distance -->
-          <Stack ID="RouteDistanceStack" Anchor="R,T" Offset="12,4" StackGrowth="Right" StackPadding="2">
+          <Stack ID="RouteDistanceStack" Anchor="R,T" Offset="12,5" StackGrowth="Right" StackPadding="2">
             <Label ID="TurnsToCompleteIcon"  String="[ICON_Turn]" Anchor="C,C" Offset="0,0"  Style="FontFlair16" FontStyle="Stroke" EffectColor="0,0,0,25" />
             <Label ID="TurnsToComplete" Offset="0,4" Style="FontNormal16" String="00" ToolTip="LOC_TRADE_OVERVIEW_TOOLTIP_TOTAL_ROUTE_TURNS"/>
           </Stack>

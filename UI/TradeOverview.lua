@@ -743,13 +743,19 @@ function AddRouteInstanceFromRouteInfo( routeInfo:table )
         routeInstance.VisibilityBonusGrid:SetHide(true);
         routeInstance.TourismBonusGrid:SetHide(true);
 
+        routeInstance.RouteLabel:SetTruncateWidth(360)
+
         -- Also hide the trading post if grouping by destination (will be shown in the header)
         if m_groupByList[m_groupBySelected].groupByID == GROUP_BY_SETTINGS.DESTINATION then
             routeInstance.TradingPostIndicator:SetHide(true);
+            routeInstance.RouteLabel:SetTruncateWidth(375)
         elseif not hideTradingPostIcon then
             routeInstance.TradingPostIndicator:SetHide(false);
         end
     else
+        -- We are showing more icons so need to truncate a bit more of the label
+        routeInstance.RouteLabel:SetTruncateWidth(260)
+
         -- Determine are diplomatic visibility status
         local visibilityIndex:number = GetVisibilityIndex(routeInfo.DestinationCityPlayer, true)
 

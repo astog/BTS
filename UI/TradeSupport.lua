@@ -690,7 +690,7 @@ function SortTradeRoutes( tradeRoutes:table, sortSettings:table)
     if table.count(sortSettings) > 0 then
         -- Score all routes based on sort settings, sort them
         local routeScores = ScoreRoutes(tradeRoutes, sortSettings)
-        table.sort(routeScores, function(a, b) return ScoreComp(a, b, sortSettings) end )
+        table.sort(routeScores, function(a, b) return ScoreComp(a, b) end )
 
         -- Build new table based on these sorted scores
         local routes = {}
@@ -712,7 +712,7 @@ end
 function GetTopRouteFromSortSettings( tradeRoutes:table, sortSettings:table )
     if sortSettings ~= nil and table.count(sortSettings) > 0 then
         local routeScores = ScoreRoutes(tradeRoutes, sortSettings)
-        local minScoreInfo = GetMinEntry(routeScores, function(a, b) return ScoreComp(a, b, sortSettings) end )
+        local minScoreInfo = GetMinEntry(routeScores, function(a, b) return ScoreComp(a, b) end )
 
         return tradeRoutes[minScoreInfo.id]
     end
@@ -756,7 +756,7 @@ function ScoreRoute( routeInfo:table, sortSettings:table )
     return score
 end
 
-function ScoreComp( scoreInfo1, scoreInfo2, sortSettings )
+function ScoreComp( scoreInfo1, scoreInfo2 )
     local score1 = scoreInfo1.score
     local score2 = scoreInfo2.score
     if #score1 ~= #score2 then
@@ -1121,7 +1121,9 @@ function GetNetYieldForDestinationCity( routeInfo, checkCache )
 end
 
 function GetTurnsToComplete(routeInfo, checkCache)
-    if checkCache then
+    if routeInfo.TurnsRemaining ~= nil then
+        return routeInfo.TurnsRemaining
+    elseif checkCache then
         local key = GetRouteKey(routeInfo)
         if m_Cache[key] ~= nil then
             -- print("CACHE HIT for " .. GetTradeRouteString(routeInfo))
