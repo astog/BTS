@@ -13,6 +13,7 @@ local BACKDROP_BRIGHTER_OPACITY = 250
 -- speeds it upto 40% speedup depending upon how many long, winding routes you have
 local USE_EUCLEDIAN_DISTANCE:boolean = false
 local USING_ERA_BASED_TRADE_ROUTE_LENGTH:boolean = GameInfo.Eras_XP2 ~= nil
+local SHOW_TRADER_PATH_ON_SELECTION:boolean = true
 
 -- ===========================================================================
 --  Global Constants
@@ -73,6 +74,8 @@ local m_LocalPlayerRunningRoutes    :table  = {};   -- Tracks local players acti
 local m_TradersAutomatedSettings    :table  = {};   -- Tracks traders, and if they are automated
 local m_Cache                       :table  = {};   -- Cache for all route info
 local m_lastEraKnown                :number = -1;   -- Saves the last known era to detect an era change
+
+local m_TradeRouteLens:number = UILens.CreateLensLayerHash("TradeRoutes");
 
 -- local debug_func_calls:number = 0;
 -- local debug_total_calls:number = 0;
@@ -260,6 +263,52 @@ function LoadRunningRoutesInfo()
     CheckConsistencyWithMyRunningRoutes(m_LocalPlayerRunningRoutes);
 end
 
+function GetUnitTypeFromID( playerID: number, unitID : number )
+    if( playerID == Game.GetLocalPlayer() ) then
+        local pPlayer   :table = Players[playerID];
+        local pUnit     :table = pPlayer:GetUnits():FindID(unitID);
+        if pUnit ~= nil then
+            return GameInfo.Units[pUnit:GetUnitType()].UnitType;
+        end
+    end
+end
+
+function ClearTraderLens()
+    UILens.ClearLayerHexes(m_TradeRouteLens);
+    if UILens.IsLensActive(m_TradeRouteLens) then
+        -- Make sure to switch back to default lens
+        UILens.SetActive("Default");
+    end
+end
+
+function ShowTraderPath( playerID:number, unitID:number )
+    UILens.SetActive(m_TradeRouteLens);
+    UILens.ClearLayerHexes(m_TradeRouteLens);
+
+    local DEFAULT_TINT = UI.GetColorValue(1, 1, 1, 1);
+    local originPlayer:table = Players[playerID];
+    local originCities:table = originPlayer:GetCities();
+    local tradeManager:table = Game.GetTradeManager();
+
+    for _, originCity in originCities:Members() do
+        local outgoingRoutes:table = originCity:GetTrade():GetOutgoingRoutes();
+        for _, routeInfo in ipairs(outgoingRoutes) do
+            if unitID == routeInfo.TraderUnitID then
+                local destinationPlayer:table = Players[routeInfo.DestinationCityPlayer];
+                local destinationCity:table = destinationPlayer:GetCities():FindID(routeInfo.DestinationCityID);
+
+                pathPlots = tradeManager:GetTradeRoutePath(originCity:GetOwner(), originCity:GetID(), destinationCity:GetOwner(), destinationCity:GetID());
+                local kVariations:table = {};
+                local lastElement:number = table.count(pathPlots);
+                table.insert(kVariations, {"TradeRoute_Destination", pathPlots[lastElement]} );
+                table.insert(kVariations, {"TradeRoute_Destination", pathPlots[1]} );
+
+                UILens.SetLayerHexesPath(m_TradeRouteLens, Game.GetLocalPlayer(), pathPlots, kVariations, DEFAULT_TINT);
+            end
+        end
+    end
+end
+
 -- ---------------------------------------------------------------------------
 -- Game event hookups (Local to this file)
 -- ---------------------------------------------------------------------------
@@ -322,6 +371,24 @@ end
 local function TradeSupportTracker_OnPlayerTurnActivated( playerID:number, isFirstTime:boolean )
     if playerID == Game.GetLocalPlayer() and isFirstTime then
         UpdateRoutesWithTurnsRemaining(m_LocalPlayerRunningRoutes);
+    end
+end
+
+local function TradeSupportTracker_OnUnitSelectionChanged( playerID:number, unitID:number, hexI:number, hexJ:number, hexK:number, bSelected:boolean, bEditable:boolean )
+    if SHOW_TRADER_PATH_ON_SELECTION and playerID == Game.GetLocalPlayer() then
+        local unitType = GetUnitTypeFromID(playerID, unitID);
+        if unitType then
+            if bSelected then
+                if unitType == "UNIT_TRADER" then
+                    ShowTraderPath(playerID, unitID);
+                end
+            -- Deselection
+            else
+                if unitType == "UNIT_TRADER" then
+                    ClearTraderLens();
+                end
+            end
+        end
     end
 end
 
@@ -1717,6 +1784,7 @@ function TradeSupportTracker_Initialize()
     Events.UnitOperationStarted.Add( TradeSupportTracker_OnUnitOperationStarted );
     Events.UnitOperationsCleared.Add( TradeSupportTracker_OnUnitOperationsCleared );
     Events.PlayerTurnActivated.Add( TradeSupportTracker_OnPlayerTurnActivated );
+    Events.UnitSelectionChanged.Add( TradeSupportTracker_OnUnitSelectionChanged );
 end
 
 function TradeSupportAutomater_Initialize()
