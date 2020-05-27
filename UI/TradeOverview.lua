@@ -111,7 +111,6 @@ local m_SortSettingsChanged:boolean = true;
 local m_GroupSettingsChanged:boolean = true;
 local m_FilterSettingsChanged:boolean = true;
 
--- Stores the sort settings.
 local m_InGroupSortBySettings = {}; -- Stores the setting each group will have within it. Applicable when routes are grouped
 local m_GroupSortBySettings = {}; -- Stores the overall group sort setting. This is used, when routes are NOT grouped
 
@@ -304,7 +303,7 @@ function ViewMyRoutes()
     if routesSortedByPlayer[localPlayerID] ~= nil then
         CreatePlayerHeader(Players[localPlayerID]);
 
-        routesSortedByPlayer[localPlayerID] = SortTradeRoutes(routesSortedByPlayer[localPlayerID], m_GroupSortBySettings);
+        routesSortedByPlayer[localPlayerID] = SortTradeRoutes(routesSortedByPlayer[localPlayerID], m_GroupSortBySettings[m_currentTab]);
 
         for _, route in ipairs(routesSortedByPlayer[localPlayerID]) do
             AddRouteInstanceFromRouteInfo(route);
@@ -315,7 +314,7 @@ function ViewMyRoutes()
     local haveAddedCityStateHeader:boolean = false;
     for playerID, routes in pairs(routesSortedByPlayer) do
         if playerID ~= localPlayerID then
-            routes = SortTradeRoutes(routes, m_GroupSortBySettings);
+            routes = SortTradeRoutes(routes, m_GroupSortBySettings[m_currentTab]);
 
             -- Skip City States as these are added below
             local playerInfluence:table = Players[playerID]:GetInfluence();
@@ -402,7 +401,7 @@ function ViewRoutesToCities()
         CreatePlayerHeader(Players[playerID]);
 
         -- Sort the routes
-        routes = SortTradeRoutes(routes, m_GroupSortBySettings);
+        routes = SortTradeRoutes(routes, m_GroupSortBySettings[m_currentTab]);
 
         for _, route in ipairs(routes) do
             AddRouteInstanceFromRouteInfo(route);
@@ -503,7 +502,7 @@ function ViewAvailableRoutes()
             -- Sort within each group
             time1 = Automation.GetTime()
             for i=1, #m_AvailableGroupedRoutes do
-                m_AvailableGroupedRoutes[i] = SortTradeRoutes(m_AvailableGroupedRoutes[i], m_InGroupSortBySettings)
+                m_AvailableGroupedRoutes[i] = SortTradeRoutes(m_AvailableGroupedRoutes[i], m_InGroupSortBySettings[m_currentTab])
             end
             time2 = Automation.GetTime()
             if dbug_print then
@@ -512,7 +511,7 @@ function ViewAvailableRoutes()
 
             -- Sort the order of groups. You need to do this AFTER each group has been sorted
             time1 = Automation.GetTime()
-            m_AvailableGroupedRoutes = SortGroupedRoutes(m_AvailableGroupedRoutes, m_GroupSortBySettings);
+            m_AvailableGroupedRoutes = SortGroupedRoutes(m_AvailableGroupedRoutes, m_GroupSortBySettings[m_currentTab]);
             time2 = Automation.GetTime()
             if dbug_print then
                 print(string.format("Time taken to group sort: %.4f sec(s)", time2-time1))
@@ -541,7 +540,7 @@ function ViewAvailableRoutes()
         if m_FinalTradeRoutes ~= nil then
             if m_SortSettingsChanged or m_GroupSettingsChanged then
                 time1 = Automation.GetTime()
-                m_FinalTradeRoutes = SortTradeRoutes(m_FinalTradeRoutes, m_GroupSortBySettings);
+                m_FinalTradeRoutes = SortTradeRoutes(m_FinalTradeRoutes, m_GroupSortBySettings[m_currentTab]);
                 time2 = Automation.GetTime()
                 if dbug_print then
                     print(string.format("Time taken to sort: %.4f sec(s)", time2-time1))
@@ -1606,9 +1605,9 @@ end
 
 function RefreshSortBar()
     if m_ctrlDown then
-        RefreshSortButtons( m_InGroupSortBySettings );
+        RefreshSortButtons( m_InGroupSortBySettings[m_currentTab] );
     else
-        RefreshSortButtons( m_GroupSortBySettings );
+        RefreshSortButtons( m_GroupSortBySettings[m_currentTab] );
     end
 
     if showSortOrdersPermanently or m_shiftDown then
@@ -1622,9 +1621,9 @@ end
 function ShowSortOrderLabels()
     -- Refresh and show sort orders
     if m_ctrlDown then
-        RefreshSortOrderLabels( m_InGroupSortBySettings );
+        RefreshSortOrderLabels( m_InGroupSortBySettings[m_currentTab] );
     else
-        RefreshSortOrderLabels( m_GroupSortBySettings );
+        RefreshSortOrderLabels( m_GroupSortBySettings[m_currentTab] );
     end
 end
 
@@ -1735,6 +1734,19 @@ function Open()
 
     m_AnimSupport.Show();
     UI.PlaySound("CityStates_Panel_Open");
+
+    -- Clear all sort settings for all tabs
+    m_GroupSortBySettings[TRADE_TABS.MY_ROUTES] = {}
+    m_GroupSortBySettings[TRADE_TABS.ROUTES_TO_CITIES] = {}
+    m_GroupSortBySettings[TRADE_TABS.AVAILABLE_ROUTES] = {}
+    m_InGroupSortBySettings[TRADE_TABS.MY_ROUTES] = {}
+    m_InGroupSortBySettings[TRADE_TABS.ROUTES_TO_CITIES] = {}
+    m_InGroupSortBySettings[TRADE_TABS.AVAILABLE_ROUTES] = {}
+
+    -- By default have "My Routes" tab sorted by turns to complete
+    InsertSortEntry(SORT_BY_ID.TURNS_TO_COMPLETE, SORT_ASCENDING, m_GroupSortBySettings[TRADE_TABS.MY_ROUTES]);
+    -- NOTE: Don't have any default sort setting for Available Routes since it slows the opening of the tab
+
     Refresh();
 end
 
@@ -1746,8 +1758,8 @@ function Close()
     m_AnimSupport.Hide();
 
     -- Reset sort settings
-    m_InGroupSortBySettings = {};
-    m_GroupSortBySettings = {};
+    m_InGroupSortBySettings[m_currentTab] = {};
+    m_GroupSortBySettings[m_currentTab] = {};
 
     -- Reset tab
     m_currentTab = TRADE_TABS.MY_ROUTES;
@@ -1899,17 +1911,17 @@ end
 function OnGroupBySelected( index:number, groupByIndex:number )
     -- Insert sort entry specific to the group setting
     if GROUP_BY_SETTINGS.ORIGIN_AZ == groupByIndex then
-        m_GroupSortBySettings = {}
-        InsertSortEntry(SORT_BY_ID.ORIGIN_NAME, SORT_ASCENDING, m_GroupSortBySettings)
+        m_GroupSortBySettings[m_currentTab] = {}
+        InsertSortEntry(SORT_BY_ID.ORIGIN_NAME, SORT_ASCENDING, m_GroupSortBySettings[m_currentTab])
     elseif GROUP_BY_SETTINGS.ORIGIN_ZA == groupByIndex then
-        m_GroupSortBySettings = {}
-        InsertSortEntry(SORT_BY_ID.ORIGIN_NAME, SORT_DESCENDING, m_GroupSortBySettings)
+        m_GroupSortBySettings[m_currentTab] = {}
+        InsertSortEntry(SORT_BY_ID.ORIGIN_NAME, SORT_DESCENDING, m_GroupSortBySettings[m_currentTab])
     elseif GROUP_BY_SETTINGS.DESTINATION_AZ == groupByIndex then
-        m_GroupSortBySettings = {}
-        InsertSortEntry(SORT_BY_ID.DESTINATION_NAME, SORT_ASCENDING, m_GroupSortBySettings)
+        m_GroupSortBySettings[m_currentTab] = {}
+        InsertSortEntry(SORT_BY_ID.DESTINATION_NAME, SORT_ASCENDING, m_GroupSortBySettings[m_currentTab])
     elseif GROUP_BY_SETTINGS.DESTINATION_ZA == groupByIndex then
-        m_GroupSortBySettings = {}
-        InsertSortEntry(SORT_BY_ID.DESTINATION_NAME, SORT_DESCENDING, m_GroupSortBySettings)
+        m_GroupSortBySettings[m_currentTab] = {}
+        InsertSortEntry(SORT_BY_ID.DESTINATION_NAME, SORT_DESCENDING, m_GroupSortBySettings[m_currentTab])
     end
 
     m_groupBySelected = groupByIndex;
@@ -1967,36 +1979,36 @@ end
 
 -- General method to handle a sort button. Kind of a mess, especially with handling of different features with key presses. In short:
 -- SHIFT    = Clear previous valuse
--- CTRL     = Add to m_InGroupSortBySettings
--- No CTRL  = Add to m_GroupSortBySettings and m_InGroupSortBySettings
+-- CTRL     = Add to m_InGroupSortBySettings[m_currentTab]
+-- No CTRL  = Add to m_GroupSortBySettings[m_currentTab] and m_InGroupSortBySettings[m_currentTab]
 -- By default the ascending sort by turns is always added (since these routes could be hidden in groups)
 function OnGeneralSortBy(sortDescArrow, sortByID)
     m_SortSettingsChanged = true;
     -- If shift is not being pressed, reset sort settings
     if not m_shiftDown then
         if not m_ctrlDown then
-            m_GroupSortBySettings = {};
+            m_GroupSortBySettings[m_currentTab] = {};
         end
-        m_InGroupSortBySettings = {};
+        m_InGroupSortBySettings[m_currentTab] = {};
     end
 
     -- Remove sort by turns ascending to be added later
-    RemoveSortEntry(SORT_BY_ID.TURNS_TO_COMPLETE, m_InGroupSortBySettings);
+    RemoveSortEntry(SORT_BY_ID.TURNS_TO_COMPLETE, m_InGroupSortBySettings[m_currentTab]);
 
     -- Sort based on currently showing icon toggled
     if sortDescArrow:IsHidden() then
         if not m_ctrlDown then
-            InsertSortEntry(sortByID, SORT_DESCENDING, m_GroupSortBySettings);
+            InsertSortEntry(sortByID, SORT_DESCENDING, m_GroupSortBySettings[m_currentTab]);
         end
-        InsertSortEntry(sortByID, SORT_DESCENDING, m_InGroupSortBySettings);
+        InsertSortEntry(sortByID, SORT_DESCENDING, m_InGroupSortBySettings[m_currentTab]);
     else
         if not m_ctrlDown then
-            InsertSortEntry(sortByID, SORT_ASCENDING, m_GroupSortBySettings);
+            InsertSortEntry(sortByID, SORT_ASCENDING, m_GroupSortBySettings[m_currentTab]);
         end
-        InsertSortEntry(sortByID, SORT_ASCENDING, m_InGroupSortBySettings);
+        InsertSortEntry(sortByID, SORT_ASCENDING, m_InGroupSortBySettings[m_currentTab]);
     end
 
-    InsertSortEntry(SORT_BY_ID.TURNS_TO_COMPLETE, SORT_ASCENDING, m_InGroupSortBySettings);
+    InsertSortEntry(SORT_BY_ID.TURNS_TO_COMPLETE, SORT_ASCENDING, m_InGroupSortBySettings[m_currentTab]);
 
     RefreshSortBar();
     -- OPT: Dont call refresh while shift is held
@@ -2040,14 +2052,14 @@ end
 -- ---------------------------------------------------------------------------
 
 -- General method to remove sort button.
--- CTRL     = Remove from m_InGroupSortBySettings
--- No CTRL  = Remove from m_GroupSortBySettings and m_InGroupSortBySettings
+-- CTRL     = Remove from m_InGroupSortBySettings[m_currentTab]
+-- No CTRL  = Remove from m_GroupSortBySettings[m_currentTab] and m_InGroupSortBySettings[m_currentTab]
 function OnGeneralNotSortBy(sortByID)
     m_SortSettingsChanged = true;
     if not m_ctrlDown then
-        RemoveSortEntry( sortByID, m_GroupSortBySettings);
+        RemoveSortEntry( sortByID, m_GroupSortBySettings[m_currentTab]);
     end
-    RemoveSortEntry( sortByID, m_InGroupSortBySettings);
+    RemoveSortEntry( sortByID, m_InGroupSortBySettings[m_currentTab]);
 
     RefreshSortBar();
     -- OPT: Dont call refresh while shift is held
