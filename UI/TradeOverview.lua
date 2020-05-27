@@ -2,8 +2,6 @@
 --  SETTINGS
 -- ===========================================================================
 
-local alignTradeYields = true
-local showNoBenefitsString = false
 local showSortOrdersPermanently = false
 local hideTradingPostIcon = false
 
@@ -1689,7 +1687,7 @@ function RefreshSortButtons( sortSettings:table )
 end
 
 function RefreshSortOrderLabels( sortSettings:table )
-    for _, sortEntry in ipairs(sortSettings) do
+    for index, sortEntry in ipairs(sortSettings) do
         if sortEntry.SortByID == SORT_BY_ID.FOOD then
             Controls.FoodSortOrder:SetHide(false);
             Controls.FoodSortOrder:SetText(index);
