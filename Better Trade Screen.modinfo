@@ -13,7 +13,6 @@
   <InGameActions>
     <UpdateDatabase id="BTS_SETTINGS_DB">
       <Properties>
-        <Name>BTS Settings</Name>
         <LoadOrder>8</LoadOrder>
       </Properties>
       <Items>
@@ -24,7 +23,6 @@
 
     <UpdateDatabase id="BTS_SETTINGS">
       <Properties>
-        <Name>BTS Settings</Name>
         <LoadOrder>9</LoadOrder>
       </Properties>
       <Items>
@@ -45,6 +43,9 @@
     </AddUserInterfaces>
 
     <ImportFiles id="BTS_IMPORT_FILES">
+      <Properties>
+        <LoadOrder>11</LoadOrder>
+      </Properties>
       <Items>
         <File>UI/TradeOverview.xml</File>
         <File>UI/TradeOverview.lua</File>
@@ -57,6 +58,9 @@
     </ImportFiles>
 
     <LocalizedText id="BTS_TEXT">
+      <Properties>
+        <LoadOrder>12</LoadOrder>
+      </Properties>
       <Items>
         <File>Text/BTS_Text_DE.xml</File>
         <File>Text/BTS_Text_EN.xml</File>

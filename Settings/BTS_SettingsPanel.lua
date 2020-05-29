@@ -93,6 +93,9 @@ local function Initialize()
     PopulateCheckBox(Controls.ShowAllRoutePathsCheckbox, "BTS_ShowAllRoutePaths")
     PopulateCheckBox(Controls.ShowTraderPathOnSelectionCheckbox, "BTS_ShowTraderPathOnSelection")
 
+    -- Call this once to ensure all files have updated settings
+    LuaEvents.BTS_SettingsUpdate();
+
     InitButton(Controls.ConfirmButton, OnClose)
 
     LuaEvents.BTS_ShowSettingsMenu.Add( OnOpen )

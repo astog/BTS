@@ -312,18 +312,21 @@ function RefreshChooserPanel()
     local kUnselectedColor = DEFAULT_TINT;
     if (m_destinationCity ~= nil) then kUnselectedColor = FADED_TINT; end
 
-    -- Show all paths that aren't selected
     local pathPlots:table = {};
-    for _, routeInfo in ipairs(m_TradeRoutes) do
-        local destinationPlayer:table = Players[routeInfo.DestinationCityPlayer];
-        local destinationCity:table = destinationPlayer:GetCities():FindID(routeInfo.DestinationCityID);
 
-        pathPlots = tradeManager:GetTradeRoutePath(m_originCity:GetOwner(), m_originCity:GetID(), destinationCity:GetOwner(), destinationCity:GetID() );
-        local kVariations:table = {};
-        local lastElement:number = table.count(pathPlots);
-        table.insert(kVariations, {"TradeRoute_Destination", pathPlots[lastElement]} );
-        if (destinationCity ~= m_destinationCity) then
-            UILens.SetLayerHexesPath( m_TradeRouteLens, Game.GetLocalPlayer(), pathPlots, kVariations, kUnselectedColor );
+    -- Show all paths that aren't selected
+    if showAllRoutePaths then
+        for _, routeInfo in ipairs(m_TradeRoutes) do
+            local destinationPlayer:table = Players[routeInfo.DestinationCityPlayer];
+            local destinationCity:table = destinationPlayer:GetCities():FindID(routeInfo.DestinationCityID);
+
+            pathPlots = tradeManager:GetTradeRoutePath(m_originCity:GetOwner(), m_originCity:GetID(), destinationCity:GetOwner(), destinationCity:GetID() );
+            local kVariations:table = {};
+            local lastElement:number = table.count(pathPlots);
+            table.insert(kVariations, {"TradeRoute_Destination", pathPlots[lastElement]} );
+            if (destinationCity ~= m_destinationCity) then
+                UILens.SetLayerHexesPath( m_TradeRouteLens, Game.GetLocalPlayer(), pathPlots, kVariations, kUnselectedColor );
+            end
         end
     end
 
