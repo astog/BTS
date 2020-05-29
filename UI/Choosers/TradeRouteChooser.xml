@@ -176,6 +176,7 @@
       <Grid ID="HeaderBannerGrid" Size="400,60" Offset="3,-25" Style="HeaderBannerLeft" ConsumeAllMouse="1">
         <Label ID="Header_OriginText" Size="200, 50" Offset="0,7" Anchor="C,T" Style="FontFlair16" Color0="0,59,77,255" SmallCaps="20" SmallCapsType="FirstOnly" String="$Origin To...$"/>
         <Button ID="Header_CloseButton" Size="32,32" Offset="10,-2" Anchor="R,T" Texture="Controls_CloseButtonAlt"/>
+        <Button ID="SettingsButton" Size="29,29" Texture="TopBar_MenuButton" ToolTip="LOC_BTS_SETTINGS_PANEL_HEADER"/>
       </Grid>
 
     <Tutorial  ID="TutTradePanel" Style="TutorialContainer" AnchorSide="O,I" Offset="-280,190" TriggerBy="TutorialTradePanel" >

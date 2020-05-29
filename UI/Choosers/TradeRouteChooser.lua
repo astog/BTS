@@ -1,18 +1,19 @@
 -- ===========================================================================
---  Settings
--- ===========================================================================
-
-local showSortOrdersPermanently = false
-local RoutePanelBaseOffsetX = 8;
-local RoutePanelScrollPanelExtraOffset = 9;
-
--- ===========================================================================
 --  INCLUDES
 -- ===========================================================================
 
 include("InstanceManager");
 include("SupportFunctions");
 include("TradeSupport");
+
+-- ===========================================================================
+--  Settings
+-- ===========================================================================
+
+local showSortPriorities = GameConfiguration.GetValue("BTS_ShowSortPriorities");
+local showAllRoutePaths = GameConfiguration.GetValue("BTS_ShowAllRoutePaths");
+local RoutePanelBaseOffsetX = 8;
+local RoutePanelScrollPanelExtraOffset = 9;
 
 -- ===========================================================================
 --  VARIABLES
@@ -22,6 +23,7 @@ local m_RouteChoiceIM           : table = InstanceManager:new("RouteChoiceInstan
 local m_originCity              : table = nil;  -- City where the trade route will begin
 local m_destinationCity         : table = nil;  -- City where the trade route will end, nil if none selected
 
+local m_isOpen:boolean = false;
 local m_TradeRouteLens:number = UILens.CreateLensLayerHash("TradeRoutes");
 
 -- These can be set by other contexts to have a route selected automatically after the chooser opens
@@ -737,7 +739,7 @@ end
 function RefreshSortBar()
     RefreshSortButtons( m_SortBySettings );
 
-    if showSortOrdersPermanently or m_shiftDown then
+    if showSortPriorities or m_shiftDown then
         -- Hide the order texts
         HideSortOrderLabels();
         -- Show them based on current settings
@@ -1105,6 +1107,7 @@ end
 function Close()
     LuaEvents.TradeRouteChooser_SetTradeUnitStatus("");
     ContextPtr:SetHide(true);
+    m_isOpen = false;
 
     if UILens.IsLensActive(m_TradeRouteLens) then
         -- Make sure to switch back to default lens
@@ -1116,6 +1119,7 @@ function Open()
     LuaEvents.TradeRouteChooser_SetTradeUnitStatus("LOC_HUD_UNIT_PANEL_CHOOSING_TRADE_ROUTE");
 
     ContextPtr:SetHide(false);
+    m_isOpen = true;
     m_destinationCity = nil;
     Controls.RepeatRouteCheckbox:SetCheck(false);
     Controls.FromTopSortEntryCheckbox:SetCheck(false);
@@ -1189,6 +1193,10 @@ function OnSkipNextOpen()
     m_SkipNextOpen = true
 end
 
+function OnSettingsButton()
+    LuaEvents.BTS_ShowSettingsMenu()
+end
+
 -- ===========================================================================
 --  UI Events
 -- ===========================================================================
@@ -1206,7 +1214,6 @@ end
 
 -- ===========================================================================
 --  LUA Event
---  Set cached values back after a hotload.
 -- ===========================================================================s
 function OnGameDebugReturn( context:string, contextTable:table )
     if context ~= "TradeRouteChooser" then
@@ -1223,20 +1230,29 @@ function OnGameDebugReturn( context:string, contextTable:table )
     Refresh();
 end
 
+function OnSettingsChange()
+    print("Trade Route Chooser: BTS settings changed")
+    showSortPriorities = GameConfiguration.GetValue("BTS_ShowSortPriorities")
+    showAllRoutePaths = GameConfiguration.GetValue("BTS_ShowAllRoutePaths")
+    CacheEmpty()
+
+    if m_isOpen then
+        Refresh()
+    end
+end
+
 -- ===========================================================================
 --  GAME Event
---  City was selected so close route chooser
 -- ===========================================================================
+
+--  City was selected so close route chooser
 function OnCitySelectionChanged(owner, ID, i, j, k, bSelected, bEditable)
     if not ContextPtr:IsHidden() and owner == Game.GetLocalPlayer() then
         OnClose();
     end
 end
 
--- ===========================================================================
---  GAME Event
 --  Unit was selected so close route chooser
--- ===========================================================================
 function OnUnitSelectionChanged( playerID:number, unitID:number, hexI:number, hexJ:number, hexK:number, bSelected:boolean, bEditable:boolean )
 
     -- Make sure we're the local player and not observing
@@ -1293,7 +1309,7 @@ end
 function KeyDownHandler( key:number )
     if key == Keys.VK_SHIFT then
         m_shiftDown = true;
-        if not showSortOrdersPermanently then
+        if not showSortPriorities then
             ShowSortOrderLabels();
         end
         -- let it fall through
@@ -1304,7 +1320,7 @@ end
 function KeyUpHandler( key:number )
     if key == Keys.VK_SHIFT then
         m_shiftDown = false;
-        if not showSortOrdersPermanently then
+        if not showSortPriorities then
             HideSortOrderLabels();
         end
         -- let it fall through
@@ -1377,9 +1393,13 @@ function Initialize()
     Events.GovernmentPolicyChanged.Add( OnPolicyChanged );
     Events.GovernmentPolicyObsoleted.Add( OnPolicyChanged );
 
+    -- Setting change update
+    LuaEvents.BTS_SettingsUpdate.Add( OnSettingsChange )
+
     -- Control Events
     InitButton(Controls.BeginRouteButton, RequestTradeRoute)
     InitButton(Controls.Header_CloseButton, OnClose )
+    InitButton(Controls.SettingsButton, OnSettingsButton )
 
     -- Filter
     Controls.FilterButton:RegisterCallback( Mouse.eLClick, UpdateFilterArrow );

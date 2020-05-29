@@ -143,5 +143,42 @@
       <Text>CONFIRM</Text>
     </Row>
 
+    <!-- Settings Panel -->
+    <Row Tag="LOC_BTS_SETTINGS_PANEL_HEADER">
+      <Text>Better Trade Screen - Settings</Text>
+    </Row>
+
+    <Row Tag="LOC_BTS_SETTING_APPROXIMATE_TRADER_PATH">
+      <Text>Approximate trader path</Text>
+    </Row>
+
+    <Row Tag="LOC_BTS_SETTING_APPROXIMATE_TRADER_PATH_TOOLTIP">
+      <Text>Use absolute distance to approximate the trader path rather than the actual path the trader takes. Can make the trade panels open faster when you have a lot of cities, but makes the trade route duration (in turns) be extremely inaccurate in specific cases.</Text>
+    </Row>
+
+    <Row Tag="LOC_BTS_SETTING_SHOW_SORT_PRIORITIES">
+      <Text>Show sort priorities</Text>
+    </Row>
+
+    <Row Tag="LOC_BTS_SETTING_SHOW_SORT_PRIORITIES_TOOLTIP">
+      <Text>Will show priorities of yields for sorting in their respective buttons. Useful if you sort by multiple yields like food + production.</Text>
+    </Row>
+
+    <Row Tag="LOC_BTS_SETTING_SHOW_ALL_ROUTE_PATHS">
+      <Text>Show all route paths</Text>
+    </Row>
+
+    <Row Tag="LOC_BTS_SETTING_SHOW_ALL_ROUTE_PATHS_TOOLTIP">
+      <Text>In the route chooser panel, this option will show all route paths, rather than just the selected one. Disabling this can help speed up the panel opening.</Text>
+    </Row>
+
+    <Row Tag="LOC_BTS_SHOW_TRADER_PATH_ON_SELECTION">
+      <Text>Show trader's path on selection</Text>
+    </Row>
+
+    <Row Tag="LOC_BTS_SHOW_TRADER_PATH_ON_SELECTION_TOOLTIP">
+      <Text>Enabling this will show trader's path and the origin and destination city when selecting it. Will only show paths for your trader.</Text>
+    </Row>
+
   </BaseGameText>
 </GameData>

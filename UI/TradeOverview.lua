@@ -1,9 +1,18 @@
 -- ===========================================================================
+--  INCLUDES
+-- ===========================================================================
+
+include("AnimSidePanelSupport");
+include("PopupDialogSupport");
+include("InstanceManager");
+include("SupportFunctions");
+include("TradeSupport");
+
+-- ===========================================================================
 --  SETTINGS
 -- ===========================================================================
 
-local showSortOrdersPermanently = false
-local hideTradingPostIcon = false
+local showSortPriorities = GameConfiguration.GetValue("BTS_ShowSortPriorities")
 
 -- Color Settings for Headers
 local colorCityPlayerHeader = true
@@ -22,16 +31,6 @@ local tintColorOpacity = 205
 -- Set to false to hide all debug prints from this file.
 local dbug_print = true
 local opt_print = false
-
--- ===========================================================================
---  INCLUDES
--- ===========================================================================
-
-include("AnimSidePanelSupport");
-include("PopupDialogSupport");
-include("InstanceManager");
-include("SupportFunctions");
-include("TradeSupport");
 
 -- ===========================================================================
 --  CONSTANTS
@@ -75,6 +74,7 @@ local m_DividerInstanceIM:table         = InstanceManager:new("SectionDividerIns
 
 local m_AnimSupport:table; -- AnimSidePanelSupport
 
+local m_isOpen:boolean = false;
 local m_currentTab:number = TRADE_TABS.MY_ROUTES;
 
 local m_shiftDown:boolean = false;
@@ -746,8 +746,6 @@ function AddRouteInstanceFromRouteInfo( routeInfo:table )
         if m_groupByList[m_groupBySelected].groupByID == GROUP_BY_SETTINGS.DESTINATION then
             routeInstance.TradingPostIndicator:SetHide(true);
             routeInstance.RouteLabel:SetTruncateWidth(375)
-        elseif not hideTradingPostIcon then
-            routeInstance.TradingPostIndicator:SetHide(false);
         end
     else
         -- We are showing more icons so need to truncate a bit more of the label
@@ -1608,7 +1606,7 @@ function RefreshSortBar()
         RefreshSortButtons( m_GroupSortBySettings[m_currentTab] );
     end
 
-    if showSortOrdersPermanently or m_shiftDown then
+    if showSortPriorities or m_shiftDown then
         -- Hide the order texts
         HideSortOrderLabels();
         -- Show them based on current settings
@@ -1745,6 +1743,8 @@ function Open()
     InsertSortEntry(SORT_BY_ID.TURNS_TO_COMPLETE, SORT_ASCENDING, m_GroupSortBySettings[TRADE_TABS.MY_ROUTES]);
     -- NOTE: Don't have any default sort setting for Available Routes since it slows the opening of the tab
 
+    m_isOpen = true
+
     Refresh();
 end
 
@@ -1754,6 +1754,7 @@ function Close()
     end
 
     m_AnimSupport.Hide();
+    m_isOpen = false
 
     -- Reset sort settings
     m_InGroupSortBySettings[m_currentTab] = {};
@@ -1875,6 +1876,10 @@ end
 
 function OnClose()
     Close();
+end
+
+function OnSettingsButton()
+    LuaEvents.BTS_ShowSettingsMenu()
 end
 
 -- ---------------------------------------------------------------------------
@@ -2098,17 +2103,28 @@ end
 
 -- ===========================================================================
 --  LUA Event
---  Explicit close (from partial screen hooks), part of closing everything,
 -- ===========================================================================
 
+--  Explicit close (from partial screen hooks), part of closing everything,
 function OnCloseAllExcept( contextToStayOpen:string )
     if contextToStayOpen == ContextPtr:GetID() then return; end
     Close();
 end
 
+function OnSettingsChange()
+    print("Trade Overview: BTS settings changed")
+    showSortPriorities = GameConfiguration.GetValue("BTS_ShowSortPriorities")
+    CacheEmpty()
+
+    if m_isOpen then
+        Refresh()
+    end
+end
+
 -- ===========================================================================
 --  Game Event
 -- ===========================================================================
+
 --  City was selected so close route chooser
 function OnCitySelectionChanged(owner, ID, i, j, k, bSelected, bEditable)
     if not ContextPtr:IsHidden() and owner == Game.GetLocalPlayer() then
@@ -2201,7 +2217,7 @@ end
 function KeyDownHandler( key:number )
     if key == Keys.VK_SHIFT then
         m_shiftDown = true;
-        if not showSortOrdersPermanently then
+        if not showSortPriorities then
             ShowSortOrderLabels();
         end
         -- let it fall through
@@ -2222,7 +2238,7 @@ function KeyUpHandler( key:number )
             m_sortCallRefresh = false;
         end
 
-        if not showSortOrdersPermanently then
+        if not showSortPriorities then
             HideSortOrderLabels();
         end
         -- let it fall through
@@ -2315,6 +2331,7 @@ function Initialize()
     InitButton(Controls.MyRoutesButton, OnMyRoutesButton)
     InitButton(Controls.RoutesToCitiesButton, OnRoutesToCitiesButton)
     InitButton(Controls.AvailableRoutesButton, OnAvailableRoutesButton)
+    InitButton(Controls.SettingsButton, OnSettingsButton )
 
     -- Control events - sort bar
     InitButton(Controls.FoodSortButton, OnSortByFood, OnNotSortByFood)
@@ -2356,6 +2373,9 @@ function Initialize()
     Events.GovernmentPolicyObsoleted.Add( OnPolicyChanged );
     Events.LocalPlayerTurnEnd.Add( OnLocalPlayerTurnEnd );
     Events.InterfaceModeChanged.Add( OnInterfaceModeChanged );
+
+    -- Setting change update
+    LuaEvents.BTS_SettingsUpdate.Add( OnSettingsChange )
 
     -- Hot-Reload Events
     ContextPtr:SetInitHandler(OnInit);

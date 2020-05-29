@@ -11,6 +11,39 @@
   </Properties>
 
   <InGameActions>
+    <UpdateDatabase id="BTS_SETTINGS_DB">
+      <Properties>
+        <Name>BTS Settings</Name>
+        <LoadOrder>8</LoadOrder>
+      </Properties>
+      <Items>
+        <File>Settings/BTS_SettingsSchema.sql</File>
+        <!-- <File>Settings/BTS_Settings.sql</File> -->
+      </Items>
+    </UpdateDatabase>
+
+    <UpdateDatabase id="BTS_SETTINGS">
+      <Properties>
+        <Name>BTS Settings</Name>
+        <LoadOrder>9</LoadOrder>
+      </Properties>
+      <Items>
+        <!-- <File>Settings/BTS_SettingsSchema.sql</File> -->
+        <File>Settings/BTS_Settings.sql</File>
+      </Items>
+    </UpdateDatabase>
+
+    <AddUserInterfaces id="BTS_SETTINGS_PANEL">
+      <Properties>
+        <Context>InGame</Context>
+        <LoadOrder>10</LoadOrder>
+      </Properties>
+      <Items>
+        <File>Settings/BTS_SettingsPanel.xml</File>
+        <!-- Settings/BTS_SettingsPanel.lua implied -->
+      </Items>
+    </AddUserInterfaces>
+
     <ImportFiles id="BTS_IMPORT_FILES">
       <Items>
         <File>UI/TradeOverview.xml</File>
@@ -46,6 +79,10 @@
     <File>UI/Choosers/TradeRouteChooser.lua</File>
     <File>UI/Choosers/TradeOriginChooser.xml</File>
     <File>UI/Choosers/TradeOriginChooser.lua</File>
+    <File>Settings/BTS_SettingsPanel.xml</File>
+    <File>Settings/BTS_SettingsPanel.lua</File>
+    <File>Settings/BTS_SettingsSchema.sql</File>
+    <File>Settings/BTS_Settings.sql</File>
     <File>Text/BTS_Text_DE.xml</File>
     <File>Text/BTS_Text_EN.xml</File>
     <File>Text/BTS_Text_ES.xml</File>

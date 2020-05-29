@@ -49,60 +49,63 @@
       <!--  Sub Header - Contains Column Names, Filter Pulldown, Sort Bar     -->
       <!-- ================================================================== -->
 
-      <!-- Group by Pulldown -->
-      <PullDown ID="OverviewGroupByPulldown" ConsumeMouse="0" Anchor="L,B" Offset="18,5" Size="155,26" AutoSizePopUp="1" AutoFlip="1" ScrollThreshold="400">
-        <ButtonData>
-          <GridButton ID="OverviewGroupByButton" ToolTip="LOC_TRADE_GROUP_SETTINGS" TextAnchor="C,C" TextOffset="8,0" Style="FontNormal12" FontStyle="Shadow" EffectColor="0,0,0,255" Offset="0,-25" Size="parnet,parnet" Texture="Controls_ButtonControl.dds" SliceCorner="10,10" SliceSize="1,1" SliceTextureSize="24,24" />
-        </ButtonData>
+      <Stack StackGrowth="Right" Anchor="L,B" Offset="0,-7">
+        <Button ID="SettingsButton" Size="29,29" Anchor="L,T" Offset="3,-15" Texture="TopBar_MenuButton" ToolTip="LOC_BTS_SETTINGS_PANEL_HEADER"/>
 
-        <GridData InnerPadding="15,15" Offset="0,0" Anchor="L,T" Style="Drawer"/>
+        <!-- Group by Pulldown -->
+        <PullDown ID="OverviewGroupByPulldown" Anchor="L,C" ConsumeMouse="0" Size="135,26" AutoSizePopUp="1" AutoFlip="1" ScrollThreshold="400">
+          <ButtonData>
+            <GridButton ID="OverviewGroupByButton" ToolTip="LOC_TRADE_GROUP_SETTINGS" TextAnchor="C,C" TextOffset="8,0" Style="FontNormal12" FontStyle="Shadow" EffectColor="0,0,0,255" Offset="0,-25" Size="parnet,parnet" Texture="Controls_ButtonControl.dds" SliceCorner="10,10" SliceSize="1,1" SliceTextureSize="24,24" />
+          </ButtonData>
 
-        <ScrollPanelData Anchor="L,C"  Vertical="1" Size="11,14"  Offset="0,0" AutoScrollBar="1">
-          <ScrollBar Style="ScrollVerticalBacking" Anchor="L,T" AnchorSide="I,I" Color="28,60,90,255" Offset="-2,2">
-            <Thumb Style="ScrollThumbAlt" Color="28,60,90,255" />
-          </ScrollBar>
-        </ScrollPanelData>
+          <GridData InnerPadding="15,15" Offset="0,0" Anchor="L,T" Style="Drawer"/>
 
-        <StackData StackGrowth="Bottom" Offset="0,0" Size="200,400" Anchor="L,T" />
+          <ScrollPanelData Anchor="L,C"  Vertical="1" Size="11,14"  Offset="0,0" AutoScrollBar="1">
+            <ScrollBar Style="ScrollVerticalBacking" Anchor="L,T" AnchorSide="I,I" Color="28,60,90,255" Offset="-2,2">
+              <Thumb Style="ScrollThumbAlt" Color="28,60,90,255" />
+            </ScrollBar>
+          </ScrollPanelData>
 
-        <InstanceData Name="OverviewGroupByEntry">
-          <GridButton Anchor="L,T" TextOffset="8,0" ID="Button" Size="265,26" Offset="1,0" Style="FontNormal12" FontStyle="Shadow" EffectColor="0,0,0,255" Texture="Controls_ButtonControl.dds" SliceCorner="10,10" SliceSize="1,1" SliceTextureSize="24,24" StateOffsetIncrement="0,24"/>
-        </InstanceData>
+          <StackData StackGrowth="Bottom" Offset="0,0" Size="200,400" Anchor="L,T" />
 
-        <!-- Show Route Text -->
-        <Image ID="OverviewGroupByPulldownOpenedArrow" Texture="Controls_ButtonExtendSmall2" TextureOffset="0,0" Size="20,16" Anchor="L,T" Offset="6,-20"/>
-        <Image ID="OverviewGroupByPulldownClosedArrow" Texture="Controls_ButtonExtendSmall2" TextureOffset="0,60" Size="20,16" Anchor="L,T" Offset="6,-25"/>
-      </PullDown>
+          <InstanceData Name="OverviewGroupByEntry">
+            <GridButton Anchor="L,T" TextOffset="8,0" ID="Button" Size="265,26" Offset="1,0" Style="FontNormal12" FontStyle="Shadow" EffectColor="0,0,0,255" Texture="Controls_ButtonControl.dds" SliceCorner="10,10" SliceSize="1,1" SliceTextureSize="24,24" StateOffsetIncrement="0,24"/>
+          </InstanceData>
 
-      <!-- Filter Pulldown -->
-      <PullDown ID="OverviewDestinationFilterPulldown" ConsumeMouse="0" Anchor="C,B" Offset="30,5" Size="220,26" AutoSizePopUp="1" AutoFlip="1" ScrollThreshold="400">
-        <ButtonData>
-          <GridButton ID="OverviewFilterButton" ToolTip="LOC_TRADE_FILTER_SETTINGS" TextAnchor="C,C" TextOffset="8,0" Style="FontNormal12" FontStyle="Shadow" EffectColor="0,0,0,255" Offset="0,-25" Size="parnet,parnet" Texture="Controls_ButtonControl.dds" SliceCorner="10,10" SliceSize="1,1" SliceTextureSize="24,24" />
-        </ButtonData>
+          <!-- Show Route Text -->
+          <Image ID="OverviewGroupByPulldownOpenedArrow" Texture="Controls_ButtonExtendSmall2" TextureOffset="0,0" Size="20,16" Anchor="L,T" Offset="6,-20"/>
+          <Image ID="OverviewGroupByPulldownClosedArrow" Texture="Controls_ButtonExtendSmall2" TextureOffset="0,60" Size="20,16" Anchor="L,T" Offset="6,-25"/>
+        </PullDown>
 
-        <GridData InnerPadding="15,15" Offset="0,0" Anchor="L,T" Style="Drawer"/>
+        <!-- Filter Pulldown -->
+        <PullDown ID="OverviewDestinationFilterPulldown" Anchor="L,C" ConsumeMouse="0" Size="220,26" AutoSizePopUp="1" AutoFlip="1" ScrollThreshold="400">
+          <ButtonData>
+            <GridButton ID="OverviewFilterButton" ToolTip="LOC_TRADE_FILTER_SETTINGS" TextAnchor="C,C" TextOffset="8,0" Style="FontNormal12" FontStyle="Shadow" EffectColor="0,0,0,255" Offset="0,-25" Size="parnet,parnet" Texture="Controls_ButtonControl.dds" SliceCorner="10,10" SliceSize="1,1" SliceTextureSize="24,24" />
+          </ButtonData>
 
-        <ScrollPanelData Anchor="L,C"  Vertical="1" Size="11,14"  Offset="0,0" AutoScrollBar="1">
-          <ScrollBar Style="ScrollVerticalBacking" Anchor="L,T" AnchorSide="I,I" Color="28,60,90,255" Offset="-2,2">
-            <Thumb Style="ScrollThumbAlt" Color="28,60,90,255" />
-          </ScrollBar>
-        </ScrollPanelData>
+          <GridData InnerPadding="15,15" Offset="0,0" Anchor="L,T" Style="Drawer"/>
 
-        <StackData StackGrowth="Bottom" Offset="0,0" Size="200,400" Anchor="L,T" />
+          <ScrollPanelData Anchor="L,C"  Vertical="1" Size="11,14"  Offset="0,0" AutoScrollBar="1">
+            <ScrollBar Style="ScrollVerticalBacking" Anchor="L,T" AnchorSide="I,I" Color="28,60,90,255" Offset="-2,2">
+              <Thumb Style="ScrollThumbAlt" Color="28,60,90,255" />
+            </ScrollBar>
+          </ScrollPanelData>
 
-        <InstanceData Name="OverviewFilterEntry">
-          <GridButton Anchor="L,T" TextOffset="8,0" ID="Button" Size="265,26" Offset="1,0" Style="FontNormal12" FontStyle="Shadow" EffectColor="0,0,0,255" Texture="Controls_ButtonControl.dds" SliceCorner="10,10" SliceSize="1,1" SliceTextureSize="24,24" StateOffsetIncrement="0,24"/>
-        </InstanceData>
+          <StackData StackGrowth="Bottom" Offset="0,0" Size="200,400" Anchor="L,T" />
 
-        <!-- Show Route Text -->
-        <Image ID="OverviewFilterPulldownOpenedArrow" Texture="Controls_ButtonExtendSmall2" TextureOffset="0,0" Size="20,16" Anchor="L,T" Offset="6,-20"/>
-        <Image ID="OverviewFilterPulldownClosedArrow" Texture="Controls_ButtonExtendSmall2" TextureOffset="0,60" Size="20,16" Anchor="L,T" Offset="6,-25"/>
-      </PullDown>
+          <InstanceData Name="OverviewFilterEntry">
+            <GridButton Anchor="L,T" TextOffset="8,0" ID="Button" Size="265,26" Offset="1,0" Style="FontNormal12" FontStyle="Shadow" EffectColor="0,0,0,255" Texture="Controls_ButtonControl.dds" SliceCorner="10,10" SliceSize="1,1" SliceTextureSize="24,24" StateOffsetIncrement="0,24"/>
+          </InstanceData>
 
-      <!-- Checkbox -->
-      <Stack StackGrowth="Left" Anchor="R,B" Offset="-17,24" StackPadding="-8">
-        <CheckBox ID="GroupExpandAllCheckBox" String="LOC_TRADE_EXPAND_ALL_BUTTON_TEXT" TextOffset="53,-2" Style="CityPanelCBFaith" IsChecked="0" />
-        <CheckBox ID="GroupCollapseAllCheckBox" String="LOC_TRADE_COLLAPSE_ALL_BUTTON_TEXT" TextOffset="53,-2" Style="CityPanelCBFaith" IsChecked="0" />
+          <!-- Show Route Text -->
+          <Image ID="OverviewFilterPulldownOpenedArrow" Texture="Controls_ButtonExtendSmall2" TextureOffset="0,0" Size="20,16" Anchor="L,T" Offset="6,-20"/>
+          <Image ID="OverviewFilterPulldownClosedArrow" Texture="Controls_ButtonExtendSmall2" TextureOffset="0,60" Size="20,16" Anchor="L,T" Offset="6,-25"/>
+        </PullDown>
+
+        <!-- Group overall controls checkboxes -->
+        <CheckBox ID="GroupExpandAllCheckBox" Anchor="L,T" Offset="28,-15" String="LOC_TRADE_EXPAND_ALL_BUTTON_TEXT" TextOffset="53,-2" Style="CityPanelCBFaith" IsChecked="0" />
+        <CheckBox ID="GroupCollapseAllCheckBox" Anchor="L,T" Offset="-2,-15" String="LOC_TRADE_COLLAPSE_ALL_BUTTON_TEXT" TextOffset="53,-2" Style="CityPanelCBFaith" IsChecked="0" />
+
       </Stack>
 
       <Container Anchor="C,T" Size="parent-40, 35" Offset="0,88">
@@ -201,20 +204,20 @@
   <Instance Name="HeaderInstance">
     <Container ID="Top" Size="485,42" Offset="10,0">
 
-      <GridButton ID="HeaderGrid" Anchor="C,B" Texture="TradeOverview_Subheader" SliceCorner="12,11" SliceSize="2,2" Color="67,70,72,255" Size="parent,parent">
+      <GridButton ID="HeaderGrid" Anchor="C,B" Texture="TradeOverview_Subheader" SliceCorner="13,14" SliceSize="1,1" Color="67,70,72,255" Size="parent,parent">
         <!-- <Grid           ID="CityBannerFill2"           Anchor="C,C"                  Size="Parent-7,Parent-6"  Offset="-1,-1" Texture="Banner_Darker"    SliceTextureSize="196,34" SliceCorner="98,17"/> -->
-        <Grid           ID="CityBannerFill"           Anchor="C,C"                  Size="Parent-7,Parent-6"  Offset="-1,-1"  Texture="Banner_Base"     SliceTextureSize="196,34" SliceCorner="98,17"/>
+        <Grid           ID="CityBannerFill"           Anchor="C,C"                  Size="Parent-7,Parent-6"  Offset="0,0"  Texture="Banner_Base"     SliceTextureSize="196,34" SliceCorner="98,17"/>
 
        <!--  <Grid           ID="CityBannerFill3"          Anchor="C,C"                  Size="Parent-7,Parent-6"  Offset="-1,-1"  Texture="Banner_Lighter"  SliceTextureSize="196,34" SliceCorner="98,17"/> -->
 
 
-        <Label ID="HeaderLabel" Anchor="L,C" Offset="36,0" Style="FontFlair16" SmallCaps="20" SmallCapsType="EveryWord" Color="Beige" TruncateWidth="350"/>
+        <Label ID="HeaderLabel" Anchor="L,C" Offset="36,1" Style="FontFlair16" SmallCaps="20" SmallCapsType="EveryWord" Color="Beige" TruncateWidth="350"/>
 
         <!-- Expand routes button -->
-        <CheckBox ID="RoutesExpand" ButtonSize="41,26" CheckTexture="Controls_ExpandButton" CheckSize="22,22" CheckTextureOffset="0,0" UnCheckTexture="Controls_ExpandButton" UnCheckSize="22,22" UnCheckTextureOffset="0,22" UseSelectedTextures="1" Anchor="R,T" Offset="-7,9" />
+        <CheckBox ID="RoutesExpand" ButtonSize="41,26" CheckTexture="Controls_ExpandButton" CheckSize="22,22" CheckTextureOffset="0,0" UnCheckTexture="Controls_ExpandButton" UnCheckSize="22,22" UnCheckTextureOffset="0,22" UseSelectedTextures="1" Anchor="R,C" Offset="-7,2" />
 
         <!-- Info Stack -->
-        <Stack StackGrowth="Left" Anchor="R,T" Offset="43,4" StackPadding="5">
+        <Stack StackGrowth="Left" Anchor="R,C" Offset="43,-3" StackPadding="5">
           <!-- Number of Routes Info Label -->
           <Label ID="RouteCountLabel" String="99 / 99" Anchor="R,T" Offset="5,8" Style="FontFlair16" FontStyle="shadow" Color="Beige"/>
 
@@ -234,7 +237,7 @@
             <Label ID="TourismBonusPercentage" Anchor="C,C" Align="R,C" Size="40,24" Offset="-18,1" Style="FontNormal14" String="LOC_TRADE_OVERVIEW_TOURISM_BONUS" Color="Beige"/>
           </Grid>
         </Stack>
-      </Grid>
+      </GridButton>
     </Container>
   </Instance>
 

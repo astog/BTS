@@ -1,6 +1,13 @@
 include( "Colors" );
 
 -- ===========================================================================
+--  Settings
+-- ===========================================================================
+
+local approximateTraderPath:boolean = GameConfiguration.GetValue("BTS_ApproximateTraderPath");
+local showTraderPathOnSelection:boolean = GameConfiguration.GetValue("BTS_ShowTraderPathOnSelection");
+
+-- ===========================================================================
 --  Local Constants
 -- ===========================================================================
 
@@ -8,12 +15,7 @@ local BACKDROP_DARKER_OFFSET = -85
 local BACKDROP_DARKER_OPACITY = 238
 local BACKDROP_BRIGHTER_OFFSET = 90
 local BACKDROP_BRIGHTER_OPACITY = 250
-
--- set to true for faster time for UI to load, but the trader time trade route to complete will be incorrect
--- speeds it upto 40% speedup depending upon how many long, winding routes you have
-local USE_EUCLEDIAN_DISTANCE:boolean = false
 local USING_ERA_BASED_TRADE_ROUTE_LENGTH:boolean = GameInfo.Eras_XP2 ~= nil
-local SHOW_TRADER_PATH_ON_SELECTION:boolean = true
 
 -- ===========================================================================
 --  Global Constants
@@ -375,7 +377,7 @@ local function TradeSupportTracker_OnPlayerTurnActivated( playerID:number, isFir
 end
 
 local function TradeSupportTracker_OnUnitSelectionChanged( playerID:number, unitID:number, hexI:number, hexJ:number, hexK:number, bSelected:boolean, bEditable:boolean )
-    if SHOW_TRADER_PATH_ON_SELECTION and playerID == Game.GetLocalPlayer() then
+    if showTraderPathOnSelection and playerID == Game.GetLocalPlayer() then
         local unitType = GetUnitTypeFromID(playerID, unitID);
         if unitType then
             if bSelected then
@@ -994,7 +996,7 @@ end
 -- Returns length of trade path, number of trips to destination, turns to complete route
 function GetAdvancedRouteInfo(routeInfo)
     local tradePathLength:number = 0;
-    if USE_EUCLEDIAN_DISTANCE then
+    if approximateTraderPath then
         local pOriginPlayer = Players[routeInfo.OriginCityPlayer]
         local pOriginCity = pOriginPlayer:GetCities():FindID(routeInfo.OriginCityID)
         local pDestinationPlayer = Players[routeInfo.DestinationCityPlayer]
@@ -1773,6 +1775,12 @@ end
 --  Event handlers
 -- ===========================================================================
 
+local function OnSettingsChange()
+    print ("Trade Support: BTS settings changed")
+    approximateTraderPath = GameConfiguration.GetValue("BTS_ApproximateTraderPath");
+    showTraderPathOnSelection = GameConfiguration.GetValue("BTS_ShowTraderPathOnSelection");
+end
+
 function TradeSupportTracker_Initialize()
     print("Initializing BTS Trade Support Tracker");
 
@@ -1785,6 +1793,11 @@ function TradeSupportTracker_Initialize()
     Events.UnitOperationsCleared.Add( TradeSupportTracker_OnUnitOperationsCleared );
     Events.PlayerTurnActivated.Add( TradeSupportTracker_OnPlayerTurnActivated );
     Events.UnitSelectionChanged.Add( TradeSupportTracker_OnUnitSelectionChanged );
+
+    -- Since this is a support UI file, it does not get loaded with UI, but imported
+    -- This means settings change event for this file will be actually called by another file
+    -- For example our: Setting change update
+    LuaEvents.BTS_SettingsUpdate.Add( OnSettingsChange )
 end
 
 function TradeSupportAutomater_Initialize()

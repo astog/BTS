@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Context>
+  <Container ID="SettingsPanel" Size="380,512" Anchor="C,C" ConsumeMouse="1">
+    <Grid Size="parent,parent" Texture="Controls_ContainerBlue" SliceStart="0,0" SliceCorner="3,3" SliceSize="9,9" SliceTextureSize="16,16">
+      <Container ID="Header" Size="parent,54" Anchor="C,T" Style="ShellHeaderContainer">
+        <Grid Style="ShellHeaderButtonGrid">
+          <Label Style="FontFlair24" FontStyle="glow" ColorSet="ShellHeader" Anchor="C,C" String="LOC_BTS_SETTINGS_PANEL_HEADER"/>
+        </Grid>
+      </Container>
+
+      <Container ID="GeneralOptions" Size="parent,parent-54" Offset="0,20" Hidden="0" Anchor="C,T">
+        <Stack Anchor="C,T" StackGrowth="Down" Padding="5" Offset="0,50">
+          <GridButton ID="ApproximateTraderPathCheckbox" Anchor="L,C" Offset="0,0" Size="300,24" Style="CheckBoxControl" String="LOC_BTS_SETTING_APPROXIMATE_TRADER_PATH" ToolTip="LOC_BTS_SETTING_APPROXIMATE_TRADER_PATH_TOOLTIP"/>
+          <GridButton ID="ShowSortPrioritiesCheckbox" Anchor="L,C" Offset="0,0" Size="300,24" Style="CheckBoxControl" String="LOC_BTS_SETTING_SHOW_SORT_PRIORITIES" ToolTip="LOC_BTS_SETTING_SHOW_SORT_PRIORITIES_TOOLTIP"/>
+          <GridButton ID="ShowAllRoutePathsCheckbox" Anchor="L,C" Offset="0,0" Size="300,24" Style="CheckBoxControl" String="LOC_BTS_SETTING_SHOW_ALL_ROUTE_PATHS" ToolTip="LOC_BTS_SETTING_SHOW_ALL_ROUTE_PATHS_TOOLTIP"/>
+          <GridButton ID="ShowTraderPathOnSelectionCheckbox" Anchor="L,C" Offset="0,0" Size="300,24" Style="CheckBoxControl" String="LOC_BTS_SHOW_TRADER_PATH_ON_SELECTION" ToolTip="LOC_BTS_SHOW_TRADER_PATH_ON_SELECTION_TOOLTIP"/>
+        </Stack>
+      </Container>
+
+      <Container ID="Header" Size="parent,60" Anchor="C,B" Offset="0,-5" Style="ShellHeaderContainer">
+        <GridButton ID="ConfirmButton" Style="ButtonConfirm" Anchor="C,C" Offset="0,-1" String="LOC_AUTONARRATE_BUTTON_DONE" Size="300,41"/>
+      </Container>
+    </Grid>
+  </Container>
+</Context>
