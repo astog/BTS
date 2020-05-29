@@ -1,0 +1,147 @@
+<?xml version="1.0" encoding="utf-8"?>
+<GameData>
+  <LocalizedText>
+    <!-- BRAZILIAN PORTUGUESE -->
+
+    <!-- Common Text -->
+    <Replace Tag="LOC_TRADE_GROUP_SETTINGS" Language="pt_BR">
+        <Text>Agrupar por...</Text>
+    </Replace>
+    
+    <Replace Tag="LOC_TRADE_FILTER_SETTINGS" Language="pt_BR">
+        <Text>Filtrar por...</Text>
+    </Replace>
+
+    <Replace Tag="LOC_TRADE_SORT_BY_FOOD_TOOLTIP" Language="pt_BR">
+      <Text>Ordenar por [ICON_Food]Alimento.</Text>
+    </Replace>
+
+    <Replace Tag="LOC_TRADE_SORT_BY_PRODUCTION_TOOLTIP" Language="pt_BR">
+      <Text>Ordenar por [ICON_Production]Produção.</Text>
+    </Replace>
+
+    <Replace Tag="LOC_TRADE_SORT_BY_GOLD_TOOLTIP" Language="pt_BR">
+      <Text>Ordenar por [ICON_Gold]Ouro.</Text>
+    </Replace>
+
+    <Replace Tag="LOC_TRADE_SORT_BY_SCIENCE_TOOLTIP" Language="pt_BR">
+      <Text>Ordenar por [ICON_Science]Ciência.</Text>
+    </Replace>
+
+    <Replace Tag="LOC_TRADE_SORT_BY_CULTURE_TOOLTIP" Language="pt_BR">
+      <Text>Ordenar por [ICON_Culture]Cultura.</Text>
+    </Replace>
+
+    <Replace Tag="LOC_TRADE_SORT_BY_FAITH_TOOLTIP" Language="pt_BR">
+      <Text>Ordenar por [ICON_Faith]Fé.</Text>
+    </Replace>
+
+    <Replace Tag="LOC_TRADE_SORT_BY_TURNS_REMAINING_TOOLTIP" Language="pt_BR">
+      <Text>Ordenar por [ICON_Turn]Turnos para completar a rota.</Text>
+    </Replace>
+
+    <Replace Tag="LOC_TRADE_FILTER_INTERNATIONAL_ROUTES_TEXT" Language="pt_BR">
+      <Text>Rotas Internacionais</Text>
+    </Replace>
+
+    <Replace Tag="LOC_TRADE_FILTER_CS_WITH_QUEST_TOOLTIP" Language="pt_BR">
+      <Text>Cidades-Estados com Missões</Text>
+    </Replace>
+
+    <!-- Trade Overview -->
+    <Replace Tag="LOC_TRADE_NO_BENEFIT_TEXT" Language="pt_BR">
+      <Text>nenhum benefícios nesta Rota.</Text>
+    </Replace>
+
+    <Replace Tag="LOC_TRADE_SORT_BY_TEXT" Language="pt_BR">
+      <Text>Ordenar por:</Text>
+    </Replace>
+
+    <Replace Tag="LOC_TRADE_OVERVIEW_ORIGIN_AZ" Language="pt_BR">
+      <Text>Origem A-Z</Text>
+    </Replace>
+
+    <Replace Tag="LOC_TRADE_OVERVIEW_ORIGIN_ZA" Language="pt_BR">
+      <Text>Origem Z-A</Text>
+    </Replace>
+
+    <Replace Tag="LOC_TRADE_OVERVIEW_DESTINATION_AZ" Language="pt_BR">
+      <Text>Destino A-Z</Text>
+    </Replace>
+
+    <Replace Tag="LOC_TRADE_OVERVIEW_DESTINATION_ZA" Language="pt_BR">
+      <Text>Destino Z-A</Text>
+    </Replace>
+
+    <Replace Tag="LOC_TRADE_EXPAND_ALL_BUTTON_TEXT" Language="pt_BR">
+      <Text>Max:</Text>
+    </Replace>
+
+    <Replace Tag="LOC_TRADE_COLLAPSE_ALL_BUTTON_TEXT" Language="pt_BR">
+      <Text>Min:</Text>
+    </Replace>
+
+    <Replace Tag="LOC_TRADE_TURNS_REMAINING_HELP_TOOLTIP" Language="pt_BR">
+      <Text>Total de [ICON_Turn]para completar esta rota</Text>
+    </Replace>
+
+    <Replace Tag="LOC_TRADE_TURNS_REMAINING_ALT_HELP_TOOLTIP" Language="pt_BR">
+      <Text>Esta rota levará {1_TurnsRemaining}[Icon_Turn] para completar.</Text>
+    </Replace>
+
+    <Replace Tag="LOC_TRADE_TURNS_REMAINING_TOOLTIP_BREAKER" Language="pt_BR">
+      <Text>----------------------------</Text>
+    </Replace>
+
+    <Replace Tag="LOC_TRADE_TURNS_REMAINING_ROUTE_LENGTH_TOOLTIP" Language="pt_BR">
+      <Text>Distância[ICON_Movement]: {1_TripsToDestination}</Text>
+    </Replace>
+
+    <Replace Tag="LOC_TRADE_TURNS_REMAINING_TRIPS_COUNT_TOOLTIP" Language="pt_BR">
+      <Text>Viagens ao destino: {1_TripsToDestination}</Text>
+    </Replace>
+
+    <Replace Tag="LOC_TRADE_TURNS_REMAINING_TURN_COMPLETION_TOOLTIP" Language="pt_BR">
+      <Text>A Rota encerrará no turno [ICON_Turn]{1_TurnWhenCompleted}</Text>
+    </Replace>
+
+    <Replace Tag="LOC_TRADE_TURNS_REMAINING_TURN_COMPLETION_ALT_TOOLTIP" Language="pt_BR">
+      <Text>Se iniciada, a rota completará em {1_TurnsToComplete} turnos e encerrará no turno {2_TurnWhenCompleted}</Text>
+    </Replace>
+
+    <Replace Tag="LOC_TRADE_CANCEL_AUTOMATION_TOOLTIP" Language="pt_BR">
+      <Text>Cancela a automatização desta rota comercial. O comerciante estará disponível assim que a rota encerrar.</Text>
+    </Replace>
+
+    <!-- Make Trade Route -->
+    <Replace Tag="LOC_TRADE_REPEAT_ROUTE_CHECKBOX_LABEL" Language="pt_BR">
+      <Text>Repetir Rota:</Text>
+    </Replace>
+
+    <Replace Tag="LOC_TRADE_REPEAT_ROUTE_CHECKBOX_TOOLTIP" Language="pt_BR">
+      <Text>Habilite para repetir a rota. Por padrão, o comerciante irá repetir a última rota comercial que fez.</Text>
+    </Replace>
+
+    <Replace Tag="LOC_TRADE_FROM_TOP_SORT_ENTRY_CHECKBOX_LABEL" Language="pt_BR">
+      <Text>Melhor Rota:</Text>
+    </Replace>
+
+    <Replace Tag="LOC_TRADE_FROM_TOP_SORT_ENTRY_CHECKBOX_TOOLTIP" Language="pt_BR">
+      <Text>Habilite para o comerciante iniciar automaticamente uma nova rota comercial na rota mais bem avaliada pela ordenação atual.</Text>
+    </Replace>
+
+    <!-- Trade Origin Chooser -->
+    <Replace Tag="LOC_ORIGIN_CHOOSER_HEADER_BACKGROUND_TEXT" Language="pt_BR">
+      <Text>Escolha uma Cidade</Text>
+    </Replace>
+
+    <Replace Tag="LOC_TRADE_ORIGIN_CHOOSER_HEADER_LABEL_TEXT" Language="pt_BR">
+      <Text>TRANSFERIR COMERCIANTE PARA...</Text>
+    </Replace>
+
+    <Replace Tag="LOC_ORIGIN_CHOOSER_CHANGE_DESTINATION_BUTTON" Language="pt_BR">
+      <Text>CONFIRMAR</Text>
+    </Replace>
+
+  </LocalizedText>
+</GameData>
