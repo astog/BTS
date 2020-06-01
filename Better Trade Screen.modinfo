@@ -71,6 +71,7 @@
         <File>Text/BTS_Text_KR.xml</File>
         <File>Text/BTS_Text_PL.xml</File>
         <File>Text/BTS_Text_RU.xml</File>
+        <File>Text/BTS_Text_BR.xml</File>
       </Items>
     </LocalizedText>
   </InGameActions>
@@ -96,5 +97,6 @@
     <File>Text/BTS_Text_KR.xml</File>
     <File>Text/BTS_Text_PL.xml</File>
     <File>Text/BTS_Text_RU.xml</File>
+    <File>Text/BTS_Text_BR.xml</File>
   </Files>
 </Mod>
