@@ -15,7 +15,7 @@ local BACKDROP_DARKER_OFFSET = -85
 local BACKDROP_DARKER_OPACITY = 238
 local BACKDROP_BRIGHTER_OFFSET = 90
 local BACKDROP_BRIGHTER_OPACITY = 250
-local USING_ERA_BASED_TRADE_ROUTE_LENGTH:boolean = GameInfo.Eras_XP2 ~= nil
+local USING_ERA_BASED_TRADE_ROUTE_LENGTH:boolean = (GameInfo.Eras_XP2 ~= nil) and (Game.GetEras ~= nil)
 
 -- ===========================================================================
 --  Global Constants
@@ -178,6 +178,11 @@ function UpdateRoutesWithTurnsRemaining( routesTable:table )
 end
 
 function IsEraChange()
+    -- If we don't have R&F expansion (EXP2) just return false
+    if not USING_ERA_BASED_TRADE_ROUTE_LENGTH then
+        return false
+    end
+
     -- Handle detecting era change
     local localPlayer   :number = Game.GetLocalPlayer();
     local currentEra    :number = Game.GetEras():GetCurrentEra();
@@ -1784,7 +1789,9 @@ end
 function TradeSupportTracker_Initialize()
     print("Initializing BTS Trade Support Tracker");
 
-    m_lastEraKnown = Game.GetEras():GetCurrentEra()
+    if USING_ERA_BASED_TRADE_ROUTE_LENGTH then
+        m_lastEraKnown = Game.GetEras():GetCurrentEra()
+    end
 
     -- Load Previous Routes
     LoadRunningRoutesInfo();
