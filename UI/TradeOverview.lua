@@ -139,7 +139,7 @@ function RebuildAvailableTradeRoutesTable()
             if CanPossiblyTradeWithPlayer(sourcePlayerID, destinationPlayerID) then
                 for _, destinationCity in destinationPlayer:GetCities():Members() do
                     local destinationCityID:number = destinationCity:GetID();
-                    if tradeManager:CanStartRoute(sourcePlayerID, sourceCityID, destinationPlayerID, destinationCityID) then
+                    if tradeManager:CanStartRoute(sourcePlayerID, sourceCityID, destinationPlayerID, destinationCityID, true) then
                         -- Create the trade route entry
                         local tradeRoute = {
                             OriginCityPlayer        = sourcePlayerID,
