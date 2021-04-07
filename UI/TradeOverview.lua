@@ -147,7 +147,7 @@ function RebuildAvailableTradeRoutesTable()
                             DestinationCityPlayer   = destinationPlayerID,
                             DestinationCityID       = destinationCityID
                         };
-
+                        tradeRoute.CacheKey = GetRouteKey(tradeRoute, true)
                         table.insert(m_AvailableTradeRoutes, tradeRoute);
                     end
                 end
@@ -385,7 +385,7 @@ function ViewRoutesToCities()
                             if routesSortedByPlayer[route.OriginCityPlayer] == nil then
                                 routesSortedByPlayer[route.OriginCityPlayer] = {};
                             end
-
+                            route.CacheKey = GetRouteKey(route, true)
                             table.insert(routesSortedByPlayer[route.OriginCityPlayer], route);
                         end
                     end
@@ -682,8 +682,8 @@ function AddRouteInstanceFromRouteInfo( routeInfo:table )
 
     local routeInstance:table = m_RouteInstanceIM:GetInstance();
 
-    local destinationBackColor, destinationFrontColor, darkerBackColor, brighterBackColor = GetPlayerColorInfo(routeInfo.DestinationCityPlayer, true);
-    local originBackColor, originFrontColor = GetPlayerColorInfo(routeInfo.OriginCityPlayer, true);
+    local destinationBackColor, destinationFrontColor, darkerBackColor, brighterBackColor = GetPlayerColorInfo(routeInfo.DestinationCityPlayer);
+    local originBackColor, originFrontColor = GetPlayerColorInfo(routeInfo.OriginCityPlayer);
     local tintBackColor = UI.DarkenLightenColor(destinationBackColor, tintColorOffset, tintColorOpacity);
 
     -- Update colors
@@ -706,7 +706,7 @@ function AddRouteInstanceFromRouteInfo( routeInfo:table )
 
 
     SetOriginRouteInstanceYields(routeInstance, routeInfo)
-    if GetNetYieldForDestinationCity(routeInfo, true) > 0 then
+    if GetNetYieldForDestinationCity(routeInfo) > 0 then
         if dbug_print then
             print(GetTradeRouteString(routeInfo), "has destination has yield")
         end
@@ -752,10 +752,10 @@ function AddRouteInstanceFromRouteInfo( routeInfo:table )
         routeInstance.RouteLabel:SetTruncateWidth(260)
 
         -- Determine are diplomatic visibility status
-        local visibilityIndex:number = GetVisibilityIndex(routeInfo.DestinationCityPlayer, true)
+        local visibilityIndex:number = GetVisibilityIndex(routeInfo.DestinationCityPlayer)
 
         -- Determine this player has a trade route with the local player
-        local hasTradeRoute:boolean = GetHasActiveRoute(routeInfo.DestinationCityPlayer, true)
+        local hasTradeRoute:boolean = GetHasActiveRoute(routeInfo.DestinationCityPlayer)
 
         -- Display trade route tourism modifier
         local extraTourismModifier = originPlayer:GetCulture():GetExtraTradeRouteTourismModifier();
@@ -789,7 +789,7 @@ function AddRouteInstanceFromRouteInfo( routeInfo:table )
         routeInstance.TradingPostIndicator:SetHide(true);
     end
 
-    if GetRouteHasTradingPost(routeInfo, true) then
+    if GetRouteHasTradingPost(routeInfo) then
         routeInstance.TradingPostIndicator:SetAlpha(1.0);
         routeInstance.TradingPostIndicator:LocalizeAndSetToolTip("LOC_TRADE_OVERVIEW_TOOLTIP_TRADE_POST_ESTABLISHED");
     else
@@ -799,7 +799,7 @@ function AddRouteInstanceFromRouteInfo( routeInfo:table )
 
     -- Update turns to complete route
     local tooltipString:string;
-    local tradePathLength, tripsToDestination, turnsToCompleteRoute = GetRouteInfo(routeInfo, true);
+    local tradePathLength, tripsToDestination, turnsToCompleteRoute = GetAdvancedRouteInfo(routeInfo);
     if routeInfo.TurnsRemaining ~= nil then
         routeInstance.TurnsToComplete:SetText(routeInfo.TurnsRemaining);
         tooltipString = (   Locale.Lookup("LOC_TRADE_TURNS_REMAINING_ALT_HELP_TOOLTIP", routeInfo.TurnsRemaining) .. "[NEWLINE]" ..
@@ -824,8 +824,8 @@ function AddRouteInstanceFromRouteInfo( routeInfo:table )
 
     routeInstance.TurnsToComplete:SetToolTipString( tooltipString );
 
-    local originTextureOffsetX, originTextureOffsetY, originTextureSheet, originTooltip = GetPlayerIconInfo(routeInfo.OriginCityPlayer, true)
-    local destinationTextureOffsetX, destinationTextureOffsetY, destinationTextureSheet, destinationTooltip = GetPlayerIconInfo(routeInfo.DestinationCityPlayer, true)
+    local originTextureOffsetX, originTextureOffsetY, originTextureSheet, originTooltip = GetPlayerIconInfo(routeInfo.OriginCityPlayer)
+    local destinationTextureOffsetX, destinationTextureOffsetY, destinationTextureSheet, destinationTooltip = GetPlayerIconInfo(routeInfo.DestinationCityPlayer)
 
     -- Origin Civ Icon
     routeInstance.OriginCivIcon:SetTexture(originTextureOffsetX, originTextureOffsetY, originTextureSheet);
@@ -918,10 +918,9 @@ end
 
 function SetOriginRouteInstanceYields(routeInstance, routeInfo)
     local yieldTexts = {}
+    local yieldValues, _ = GetYieldsForOriginCity(routeInfo, false)
     for yieldIndex = START_INDEX, END_INDEX do
-        local yieldAmount = GetYieldForOriginCity(yieldIndex, routeInfo, true)
-        yieldAmount = Round(yieldAmount, 1)
-        local iconString, text = FormatYieldText(yieldIndex, yieldAmount)
+        local iconString, text = FormatYieldText(yieldIndex, yieldValues[yieldIndex])
         yieldTexts[yieldIndex] = text .. iconString
     end
     routeInstance.OriginYieldFoodLabel:SetText(yieldTexts[FOOD_INDEX])
@@ -934,10 +933,9 @@ end
 
 function SetDestinationRouteInstanceYields(routeInstance, routeInfo)
     local yieldTexts = {}
+    local yieldValues, _ = GetYieldsForDestinationCity(routeInfo, false)
     for yieldIndex = START_INDEX, END_INDEX do
-        local yieldAmount = GetYieldForDestinationCity(yieldIndex, routeInfo, true)
-        yieldAmount = Round(yieldAmount, 1)
-        local iconString, text = FormatYieldText(yieldIndex, yieldAmount)
+        local iconString, text = FormatYieldText(yieldIndex, yieldValues[yieldIndex])
         yieldTexts[yieldIndex] = text .. iconString
     end
     routeInstance.DestinationYieldFoodLabel:SetText(yieldTexts[FOOD_INDEX])
@@ -976,7 +974,7 @@ function CreatePlayerHeader( player:table )
 
     if colorCityPlayerHeader then
         headerInstance.CityBannerFill:SetHide(false);
-        local backColor, frontColor = GetPlayerColorInfo(playerID, true);
+        local backColor, frontColor = GetPlayerColorInfo(playerID);
         headerBackColor = UI.DarkenLightenColor(backColor, backdropColorOffset, backdropColorOpacity);
         headerFrontColor = UI.DarkenLightenColor(frontColor, labelColorOffset, labelColorOpacity);
         gridBackColor = UI.DarkenLightenColor(backColor, backdropGridColorOffset, backdropGridColorOpacity);
@@ -995,10 +993,10 @@ function CreatePlayerHeader( player:table )
         -- Determine are diplomatic visibility status
         headerInstance.TourismBonusGrid:SetHide(false);
         headerInstance.VisibilityBonusGrid:SetHide(false)
-        local visibilityIndex:number = GetVisibilityIndex(playerID, true)
+        local visibilityIndex:number = GetVisibilityIndex(playerID)
 
         -- Determine this player has a trade route with the local player
-        local hasTradeRoute:boolean = GetHasActiveRoute(playerID, true)
+        local hasTradeRoute:boolean = GetHasActiveRoute(playerID)
 
         -- Display trade route tourism modifier
         local extraTourismModifier = Players[Game.GetLocalPlayer()]:GetCulture():GetExtraTradeRouteTourismModifier();
@@ -1118,10 +1116,10 @@ function CreateCityHeader( city:table , currentRouteShowCount:number, totalRoute
             headerInstance.TourismBonusGrid:SetHide(true);
         else
             -- Determine are diplomatic visibility status
-            local visibilityIndex:number = GetVisibilityIndex(playerID, true)
+            local visibilityIndex:number = GetVisibilityIndex(playerID)
 
             -- Determine this player has a trade route with the local player
-            local hasTradeRoute:boolean = GetHasActiveRoute(playerID, true)
+            local hasTradeRoute:boolean = GetHasActiveRoute(playerID)
 
             -- Display trade route tourism modifier
             local extraTourismModifier = Players[Game.GetLocalPlayer()]:GetCulture():GetExtraTradeRouteTourismModifier();
@@ -1176,7 +1174,7 @@ function CreateCityHeader( city:table , currentRouteShowCount:number, totalRoute
 
     if colorCityPlayerHeader then
         headerInstance.CityBannerFill:SetHide(false);
-        local backColor, frontColor = GetPlayerColorInfo(playerID, true);
+        local backColor, frontColor = GetPlayerColorInfo(playerID);
 
         headerBackColor = UI.DarkenLightenColor(backColor, backdropColorOffset, backdropColorOpacity);
         headerFrontColor = UI.DarkenLightenColor(frontColor, labelColorOffset, labelColorOpacity);

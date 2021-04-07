@@ -6,6 +6,8 @@ include( "Colors" );
 
 local approximateTraderPath:boolean = GameConfiguration.GetValue("BTS_ApproximateTraderPath");
 local showTraderPathOnSelection:boolean = GameConfiguration.GetValue("BTS_ShowTraderPathOnSelection");
+-- TODO: Get this from GameConfiguration
+local useCache = true
 
 -- ===========================================================================
 --  Local Constants
@@ -58,13 +60,13 @@ ICON_LOOKUP[FAITH_INDEX] = "[ICON_Faith]"
 
 -- Build lookup table for score functions
 ScoreFunctionByID = {}
-ScoreFunctionByID[SORT_BY_ID.FOOD]                = function(a) return GetYieldForOriginCity(FOOD_INDEX, a, true) end
-ScoreFunctionByID[SORT_BY_ID.PRODUCTION]          = function(a) return GetYieldForOriginCity(PRODUCTION_INDEX, a, true) end
-ScoreFunctionByID[SORT_BY_ID.GOLD]                = function(a) return GetYieldForOriginCity(GOLD_INDEX, a, true) end
-ScoreFunctionByID[SORT_BY_ID.SCIENCE]             = function(a) return GetYieldForOriginCity(SCIENCE_INDEX, a, true) end
-ScoreFunctionByID[SORT_BY_ID.CULTURE]             = function(a) return GetYieldForOriginCity(CULTURE_INDEX, a, true) end
-ScoreFunctionByID[SORT_BY_ID.FAITH]               = function(a) return GetYieldForOriginCity(FAITH_INDEX, a, true) end
-ScoreFunctionByID[SORT_BY_ID.TURNS_TO_COMPLETE]   = function(a) return GetTurnsToComplete(a, true) end
+ScoreFunctionByID[SORT_BY_ID.FOOD]                = function(a) return GetYieldForOriginCity(a, FOOD_INDEX) end
+ScoreFunctionByID[SORT_BY_ID.PRODUCTION]          = function(a) return GetYieldForOriginCity(a, PRODUCTION_INDEX) end
+ScoreFunctionByID[SORT_BY_ID.GOLD]                = function(a) return GetYieldForOriginCity(a, GOLD_INDEX) end
+ScoreFunctionByID[SORT_BY_ID.SCIENCE]             = function(a) return GetYieldForOriginCity(a, SCIENCE_INDEX) end
+ScoreFunctionByID[SORT_BY_ID.CULTURE]             = function(a) return GetYieldForOriginCity(a, CULTURE_INDEX) end
+ScoreFunctionByID[SORT_BY_ID.FAITH]               = function(a) return GetYieldForOriginCity(a, FAITH_INDEX) end
+ScoreFunctionByID[SORT_BY_ID.TURNS_TO_COMPLETE]   = function(a) return GetTurnsToComplete(a) end
 ScoreFunctionByID[SORT_BY_ID.ORIGIN_NAME]         = function(a) return GetOriginCityName(a) end
 ScoreFunctionByID[SORT_BY_ID.DESTINATION_NAME]    = function(a) return GetDestinationCityName(a) end
 
@@ -92,7 +94,7 @@ function GetLocalPlayerRunningRoutes()
     return m_LocalPlayerRunningRoutes;
 end
 
-function GetLastRouteForTrader( traderID:number )
+function GetLastRouteForTrader(traderID:number)
     -- @Astog NOTE: As of Summer 2017 patch, base game added code to get this info
     -- Commenting my modded code
     -- LoadTraderAutomatedInfo();
@@ -124,12 +126,12 @@ function GetLastRouteForTrader( traderID:number )
 end
 
 -- Adds the route turns remaining to the table, if it does not exist already
-function AddRouteWithTurnsRemaining( routeInfo:table, routesTable:table)
+function AddRouteWithTurnsRemaining(routeInfo:table, routesTable:table)
     -- print("Adding route: " .. GetTradeRouteString(routeInfo));
 
     local routeIndex = findIndex(routesTable, routeInfo, CheckRouteEquality);
     if routeIndex == -1 then
-        local tradePathLength, tripsToDestination, turnsToCompleteRoute = GetRouteInfo(routeInfo);
+        local tradePathLength, tripsToDestination, turnsToCompleteRoute = GetAdvancedRouteInfo(routeInfo);
 
         -- Build entry
         local routeEntry:table = {
@@ -142,6 +144,7 @@ function AddRouteWithTurnsRemaining( routeInfo:table, routesTable:table)
             OriginalTurnsRemaining  = turnsToCompleteRoute;
             TurnsRemaining          = turnsToCompleteRoute;
         };
+        routeEntry.CacheKey = GetRouteKey(routeEntry, true)
 
         -- Append entry
         table.insert(routesTable, routeEntry);
@@ -152,7 +155,7 @@ function AddRouteWithTurnsRemaining( routeInfo:table, routesTable:table)
 end
 
 -- Decrements routes present. Removes those that completed
-function UpdateRoutesWithTurnsRemaining( routesTable:table )
+function UpdateRoutesWithTurnsRemaining(routesTable:table)
     local bEraChanged:boolean = IsEraChange()
     for i=1, #routesTable do
         if routesTable[i].TurnsRemaining ~= nil then
@@ -205,7 +208,7 @@ function IsEraChange()
 end
 
 -- Checks if routes running in game and the routesTable are consistent with each other
-function CheckConsistencyWithMyRunningRoutes( routesTable:table )
+function CheckConsistencyWithMyRunningRoutes(routesTable:table)
     -- Build currently running routes
     local routesCurrentlyRunning:table = {};
     local localPlayerCities:table = Players[Game.GetLocalPlayer()]:GetCities();
@@ -270,8 +273,8 @@ function LoadRunningRoutesInfo()
     CheckConsistencyWithMyRunningRoutes(m_LocalPlayerRunningRoutes);
 end
 
-function GetUnitTypeFromID( playerID: number, unitID : number )
-    if( playerID == Game.GetLocalPlayer() ) then
+function GetUnitTypeFromID(playerID:number, unitID:number)
+    if playerID == Game.GetLocalPlayer() then
         local pPlayer   :table = Players[playerID];
         local pUnit     :table = pPlayer:GetUnits():FindID(unitID);
         if pUnit ~= nil then
@@ -288,7 +291,7 @@ function ClearTraderLens()
     end
 end
 
-function ShowTraderPath( playerID:number, unitID:number )
+function ShowTraderPath(playerID:number, unitID:number)
     UILens.SetActive(m_TradeRouteLens);
     UILens.ClearLayerHexes(m_TradeRouteLens);
 
@@ -330,7 +333,7 @@ local function TradeSupportTracker_OnUnitOperationStarted(ownerID:number, unitID
                 if route.TraderUnitID == unitID then
                     -- Add it to the local players runnning routes
                     print("Route just started. Adding Route: " .. GetTradeRouteString(route));
-                    AddRouteWithTurnsRemaining( route, m_LocalPlayerRunningRoutes );
+                    AddRouteWithTurnsRemaining(route, m_LocalPlayerRunningRoutes);
                     return
                 end
             end
@@ -375,13 +378,13 @@ local function TradeSupportTracker_OnUnitOperationsCleared(ownerID:number, unitI
     end
 end
 
-local function TradeSupportTracker_OnPlayerTurnActivated( playerID:number, isFirstTime:boolean )
+local function TradeSupportTracker_OnPlayerTurnActivated(playerID:number, isFirstTime:boolean)
     if playerID == Game.GetLocalPlayer() and isFirstTime then
         UpdateRoutesWithTurnsRemaining(m_LocalPlayerRunningRoutes);
     end
 end
 
-local function TradeSupportTracker_OnUnitSelectionChanged( playerID:number, unitID:number, hexI:number, hexJ:number, hexK:number, bSelected:boolean, bEditable:boolean )
+local function TradeSupportTracker_OnUnitSelectionChanged(playerID:number, unitID:number, hexI:number, hexJ:number, hexK:number, bSelected:boolean, bEditable:boolean)
     if showTraderPathOnSelection and playerID == Game.GetLocalPlayer() then
         local unitType = GetUnitTypeFromID(playerID, unitID);
         if unitType then
@@ -575,7 +578,7 @@ end
 -- Game event hookups (Local to this file)
 -- ---------------------------------------------------------------------------
 
-local function TradeSupportAutomater_OnPlayerTurnActivated( playerID:number, isFirstTime:boolean )
+local function TradeSupportAutomater_OnPlayerTurnActivated(playerID:number, isFirstTime:boolean)
     if playerID == Game.GetLocalPlayer() and isFirstTime then
         RenewTradeRoutes();
     end
@@ -601,52 +604,78 @@ function CacheRoutesInfo(tRoutes)
 end
 
 function CacheRoute(routeInfo)
-    local key:string = GetRouteKey(routeInfo);
+    local key = GetRouteKey(routeInfo);
     -- print("Key for " .. GetTradeRouteString(routeInfo) .. " is " .. key)
 
+    -- Reset past cache if it existed
     m_Cache[key] = {}
 
     -------------------------------------------------
-    -- Yields
+    -- Origin Yields
     -------------------------------------------------
     m_Cache[key].Yields = {}
+
+    -- Get yields with tooltip, ensure bypassing of cache
+    local originYieldValues, originYieldTooltips = GetYieldsForOriginCity(routeInfo, true, false)
+    m_Cache[key].OriginYieldValues = originYieldValues
+    m_Cache[key].OriginYieldTooltips = originYieldTooltips
+
     local netOriginYield:number = 0
-    local netDestinationYield:number = 0
-
-    local originRouteYields = GetYieldForOriginCity(nil, routeInfo, false)
-    local destinationRouteYields = GetYieldForDestinationCity(nil, routeInfo, false)
-
-    for yieldIndex = START_INDEX, END_INDEX do
-        local originYield = originRouteYields[yieldIndex + 1]
-        local destinationYield = destinationRouteYields[yieldIndex + 1]
-
-        m_Cache[key].Yields[yieldIndex] = {
-            Origin = originYield,
-            Destination = destinationYield
-        }
-
-        netOriginYield = netOriginYield + originYield
-        netDestinationYield = netDestinationYield + destinationYield
+    for yieldIndex=FOOD_INDEX, FAITH_INDEX, 1 do
+        netOriginYield = netOriginYield + m_Cache[key].OriginYieldValues[yieldIndex]
     end
+    m_Cache[key].NetOriginYield = netOriginYield
 
     -------------------------------------------------
-    -- Net Yields
+    -- Destination Yields
     -------------------------------------------------
-    m_Cache[key].NetOriginYield = netOriginYield
+
+    local destinationYieldValues, destinationYieldTooltips = GetYieldsForDestinationCity(routeInfo, true, false)
+    m_Cache[key].DestinationYieldValues = destinationYieldValues
+    m_Cache[key].DestinationYieldTooltips = destinationYieldTooltips
+
+    local netDestinationYield:number = 0
+    for yieldIndex=FOOD_INDEX, FAITH_INDEX, 1 do
+        netDestinationYield = netDestinationYield + m_Cache[key].DestinationYieldValues[yieldIndex]
+    end
     m_Cache[key].NetDestinationYield = netDestinationYield
 
     -------------------------------------------------
     -- Trading Post
     -------------------------------------------------
-    m_Cache[key].HasTradingPost = GetRouteHasTradingPost(routeInfo)
+    m_Cache[key].HasTradingPost = GetRouteHasTradingPost(routeInfo, false)
 
     -------------------------------------------------
-    -- Advanced Info - Length, trips, turns
+    -- Advanced Route Info - Length, trips, turns
     -------------------------------------------------
-    local tradePathLength, tripsToDestination, turnsToCompleteRoute = GetAdvancedRouteInfo(routeInfo);
-    m_Cache[key].TurnsToCompleteRoute = turnsToCompleteRoute;
-    m_Cache[key].TripsToDestination = tripsToDestination;
+    local tradePathLength, tripsToDestination, turnsToCompleteRoute = GetAdvancedRouteInfo(routeInfo, false);
     m_Cache[key].TradePathLength = tradePathLength;
+    m_Cache[key].TripsToDestination = tripsToDestination;
+    m_Cache[key].TurnsToCompleteRoute = turnsToCompleteRoute;
+
+    -------------------------------------------------
+    -- Religion
+    -------------------------------------------------
+    local originMajorityReligion = GetOriginMajorityReligion(routeInfo, false)
+    m_Cache[key].OriginMajorityReligion = originMajorityReligion
+    local destinationMajorityReligion = GetDestinationMajorityReligion(routeInfo, false)
+    m_Cache[key].DestinationMajorityReligion = destinationMajorityReligion
+
+    local pressure = 0
+    local tooltip = ""
+    if destinationMajorityReligion > 0 then
+        pressure, tooltip = GetOriginReligionPressure(routeInfo, destinationMajorityReligion, false)
+    end
+    m_Cache[key].OriginReligionPressureValue = pressure
+    m_Cache[key].OriginReligionPressureTooltip = tooltip
+
+    pressure = 0
+    tooltip = ""
+    if originMajorityReligion > 0 then
+        pressure, tooltip = GetDestinationReligionPressure(routeInfo, originMajorityReligion, false)
+    end
+    m_Cache[key].DestinationReligionPressureValue = pressure
+    m_Cache[key].DestinationReligionPressureTooltip = tooltip
 
     -------------------------------------------------
     -- Turn Built
@@ -661,32 +690,30 @@ function CachePlayer(playerID)
     -- Make entry if none exists
     if m_Cache.Players == nil then m_Cache.Players = {} end
 
-    if m_Cache.Players[playerID] == nil then
+    -- Reset past cache if it existed
+    m_Cache.Players[playerID] = {}
 
-        m_Cache.Players[playerID] = {}
+    -------------------------------------------------
+    -- Active Route
+    -------------------------------------------------
+    m_Cache.Players[playerID].HasActiveRoute = GetHasActiveRoute(playerID, false);
 
-        -------------------------------------------------
-        -- Active Route
-        -------------------------------------------------
-        m_Cache.Players[playerID].HasActiveRoute = GetHasActiveRoute(playerID);
+    -------------------------------------------------
+    -- Visibility Index
+    -------------------------------------------------
+    m_Cache.Players[playerID].VisibilityIndex = GetVisibilityIndex(playerID, false);
 
-        -------------------------------------------------
-        -- Visibility Index
-        -------------------------------------------------
-        m_Cache.Players[playerID].VisibilityIndex = GetVisibilityIndex(playerID);
+    -------------------------------------------------
+    -- Icons, colors
+    -------------------------------------------------
+    local textureOffsetX, textureOffsetY, textureSheet, tooltip = GetPlayerIconInfo(playerID, false)
+    local backColor, frontColor, darkerBackColor, brighterBackColor = GetPlayerColorInfo(playerID, false)
 
-        -------------------------------------------------
-        -- Icons, colors
-        -------------------------------------------------
-        local textureOffsetX, textureOffsetY, textureSheet, tooltip = GetPlayerIconInfo(playerID)
-        local backColor, frontColor, darkerBackColor, brighterBackColor = GetPlayerColorInfo(playerID)
+    m_Cache.Players[playerID].Icon = { textureOffsetX, textureOffsetY, textureSheet, tooltip }
+    m_Cache.Players[playerID].Colors = { backColor, frontColor, darkerBackColor, brighterBackColor }
 
-        m_Cache.Players[playerID].Icon = { textureOffsetX, textureOffsetY, textureSheet, tooltip }
-        m_Cache.Players[playerID].Colors = { backColor, frontColor, darkerBackColor, brighterBackColor }
-
-        -------------------------------------------------
-        m_Cache.Players[playerID].TurnBuilt = Game.GetCurrentGameTurn()
-    end
+    -------------------------------------------------
+    m_Cache.Players[playerID].TurnBuilt = Game.GetCurrentGameTurn()
 end
 
 function CacheEmpty()
@@ -697,9 +724,17 @@ function CacheEmpty()
     end
 end
 
-function GetRouteKey(routeInfo)
-    return routeInfo.OriginCityPlayer .. "_" .. routeInfo.OriginCityID .. "_" ..
-                routeInfo.DestinationCityPlayer .. "_" .. routeInfo.DestinationCityID;
+function GetRouteKey(routeInfo, forceUpdate:boolean)
+    if forceUpdate == nil then
+        forceUpdate = false
+    end
+
+    if routeInfo.CacheKey == nil or forceUpdate then
+        return routeInfo.OriginCityPlayer .. "_" .. routeInfo.OriginCityID .. "_" ..
+                    routeInfo.DestinationCityPlayer .. "_" .. routeInfo.DestinationCityID;
+    else
+        return routeInfo.CacheKey
+    end
 end
 
 function CacheKeyToRouteInfo(cacheKey)
@@ -716,43 +751,117 @@ function CacheKeyToRouteInfo(cacheKey)
     return routeInfo
 end
 
+-- Checks if key is present, if not calls the CacheRoute function
+function CacheTouchRoute(routeCacheKey:string)
+    if m_Cache[routeCacheKey] == nil then
+        print("CACHE MISS for routeKey: " .. routeCacheKey)
+        CacheRoute(CacheKeyToRouteInfo(routeCacheKey));
+    end
+end
+
+-- Checks if playerID is present, if not calls the CachePlayer function
+function CacheTouchPlayer(playerID:number)
+    if m_Cache.Players == nil or m_Cache.Players[playerID] == nil then
+        print("CACHE MISS for playerID: " .. playerID)
+        CachePlayer(playerID);
+    end
+end
+
 -- ---------------------------------------------------------------------------
 -- Cache lookups
 -- ---------------------------------------------------------------------------
 
-function Cached_GetYieldForOriginCity(yieldIndex:number, routeCacheKey:string)
-    local cacheEntry = m_Cache[routeCacheKey]
-    if cacheEntry ~= nil then
-        -- print("CACHE HIT for " .. routeCacheKey)
-        return cacheEntry.Yields[yieldIndex].Origin
-    else
-        print("CACHE MISS for " .. routeCacheKey)
-        CacheRoute(CacheKeyToRouteInfo(routeCacheKey));
-        return m_Cache[routeCacheKey].Yields[yieldIndex].Origin
-    end
+function Cached_GetYieldsForOriginCity(routeCacheKey:string)
+    CacheTouchRoute(routeCacheKey)
+    yieldValues = m_Cache[routeCacheKey].OriginYieldValues
+    yieldTooltips = m_Cache[routeCacheKey].OriginYieldTooltips
+    return yieldValues, yieldTooltips
 end
 
-function Cached_GetYieldForDestinationCity(yieldIndex:number, routeCacheKey:string)
-    local cacheEntry = m_Cache[routeCacheKey]
-    if cacheEntry ~= nil then
-        -- print("CACHE HIT for " .. routeCacheKey)
-        return cacheEntry.Yields[yieldIndex].Destination
-    else
-        print("CACHE MISS for " .. routeCacheKey)
-        CacheRoute(CacheKeyToRouteInfo(routeCacheKey));
-        return m_Cache[routeCacheKey].Yields[yieldIndex].Destination
-    end
+function Cached_GetYieldsForDestinationCity(routeCacheKey:string)
+    CacheTouchRoute(routeCacheKey)
+    yieldValues = m_Cache[routeCacheKey].DestinationYieldValues
+    yieldTooltips = m_Cache[routeCacheKey].DestinationYieldTooltips
+    return yieldValues, yieldTooltips
+end
+
+function Cached_GetYieldForOriginCity(routeCacheKey:string, yieldIndex:number)
+    CacheTouchRoute(routeCacheKey)
+    yieldValue = m_Cache[routeCacheKey].OriginYieldValues[yieldIndex]
+    yieldTooltip = m_Cache[routeCacheKey].OriginYieldTooltips[yieldIndex]
+    return yieldValue, yieldTooltip
+end
+
+function Cached_GetYieldForDestinationCity(routeCacheKey:string, yieldIndex:number)
+    CacheTouchRoute(routeCacheKey)
+    yieldValue = m_Cache[routeCacheKey].DestinationYieldValues[yieldIndex]
+    yieldTooltip = m_Cache[routeCacheKey].DestinationYieldTooltips[yieldIndex]
+    return yieldValue, yieldTooltip
+end
+
+function Cached_GetNetYieldForOriginCity(routeCacheKey:string)
+    CacheTouchRoute(routeCacheKey)
+    return m_Cache[routeCacheKey].NetOriginYield
+end
+
+function Cached_GetNetYieldForDestinationCity(routeCacheKey:string)
+    CacheTouchRoute(routeCacheKey)
+    return m_Cache[routeCacheKey].NetDestinationYield
+end
+
+function Cached_GetOriginMajorityReligion(routeCacheKey:string)
+    CacheTouchRoute(routeCacheKey)
+    return m_Cache[routeCacheKey].OriginMajorityReligion
+end
+
+function Cached_GetDestinationMajorityReligion(routeCacheKey:string)
+    CacheTouchRoute(routeCacheKey)
+    return m_Cache[routeCacheKey].DestinationMajorityReligion
+end
+
+function Cached_GetOriginReligionPressure(routeCacheKey:string)
+    CacheTouchRoute(routeCacheKey)
+    return m_Cache[routeCacheKey].OriginReligionPressureValue, m_Cache[routeCacheKey].OriginReligionPressureTooltip
+end
+
+function Cached_GetDestinationReligionPressure(routeCacheKey:string)
+    CacheTouchRoute(routeCacheKey)
+    return m_Cache[routeCacheKey].DestinationReligionPressureValue, m_Cache[routeCacheKey].DestinationReligionPressureTooltip
 end
 
 function Cached_GetTurnsToComplete(routeCacheKey:string)
-    if m_Cache[routeCacheKey] ~= nil then
-        -- print("CACHE HIT for " .. routeCacheKey)
-        return m_Cache[routeCacheKey].TurnsToCompleteRoute
-    else
-        print("CACHE MISS for " .. routeCacheKey)
-        CacheRoute(CacheKeyToRouteInfo(routeCacheKey));
-        return m_Cache[routeCacheKey].TurnsToCompleteRoute
-    end
+    CacheTouchRoute(routeCacheKey)
+    return m_Cache[routeCacheKey].TurnsToCompleteRoute
+end
+
+function Cached_GetAdvancedRouteInfo(routeCacheKey:string)
+    CacheTouchRoute(routeCacheKey)
+    return m_Cache[routeCacheKey].TradePathLength, m_Cache[routeCacheKey].TripsToDestination, m_Cache[routeCacheKey].TurnsToCompleteRoute
+end
+
+function Cached_GetRouteHasTradingPost(routeCacheKey:string)
+    CacheTouchRoute(routeCacheKey)
+    return m_Cache[routeCacheKey].HasTradingPost
+end
+
+function Cached_GetHasActiveRoute(playerID:number)
+    CacheTouchPlayer(playerID)
+    return m_Cache.Players[playerID].HasActiveRoute
+end
+
+function Cached_GetVisibilityIndex(playerID:number)
+    CacheTouchPlayer(playerID)
+    return m_Cache.Players[playerID].VisibilityIndex
+end
+
+function Cached_GetPlayerIconInfo(playerID:number)
+    CacheTouchPlayer(playerID)
+    return unpack(m_Cache.Players[playerID].Icon)
+end
+
+function Cached_GetPlayerColorInfo(playerID:number)
+    CacheTouchPlayer(playerID)
+    return unpack(m_Cache.Players[playerID].Colors)
 end
 
 -- ===========================================================================
@@ -760,7 +869,7 @@ end
 -- ===========================================================================
 
 -- This requires sort settings table passed.
-function SortTradeRoutes( tradeRoutes:table, sortSettings:table)
+function SortTradeRoutes(tradeRoutes:table, sortSettings:table)
     if table.count(sortSettings) > 0 then
         -- Score all routes based on sort settings, sort them
         local routeScores = ScoreRoutes(tradeRoutes, sortSettings)
@@ -783,7 +892,7 @@ function SortTradeRoutes( tradeRoutes:table, sortSettings:table)
     -- debug_func_calls = 0;
 end
 
-function GetTopRouteFromSortSettings( tradeRoutes:table, sortSettings:table )
+function GetTopRouteFromSortSettings(tradeRoutes:table, sortSettings:table)
     if sortSettings ~= nil and table.count(sortSettings) > 0 then
         local routeScores = ScoreRoutes(tradeRoutes, sortSettings)
         local minScoreInfo = GetMinEntry(routeScores, function(a, b) return ScoreComp(a, b) end )
@@ -799,7 +908,7 @@ end
 -- Score Route functions
 -- ---------------------------------------------------------------------------
 
-function ScoreRoutes( tradeRoutes:table, sortSettings:table )
+function ScoreRoutes(tradeRoutes:table, sortSettings:table)
     local scores = {}
     for index=1, #tradeRoutes do
         scores[index] = { id = index, score = ScoreRoute(tradeRoutes[index], sortSettings)}
@@ -807,7 +916,7 @@ function ScoreRoutes( tradeRoutes:table, sortSettings:table )
     return scores
 end
 
-function ScoreRoute( routeInfo:table, sortSettings:table )
+function ScoreRoute(routeInfo:table, sortSettings:table)
     local score = {}
     for _, sortSetting in ipairs(sortSettings) do
         local scoreFunction = ScoreFunctionByID[sortSetting.SortByID];
@@ -826,11 +935,11 @@ function ScoreRoute( routeInfo:table, sortSettings:table )
     end
 
     -- Add final score, ie net yield
-    score[#score + 1] = GetNetYieldForOriginCity(routeInfo, true)
+    score[#score + 1] = GetNetYieldForOriginCity(routeInfo)
     return score
 end
 
-function ScoreComp( scoreInfo1, scoreInfo2 )
+function ScoreComp(scoreInfo1, scoreInfo2)
     local score1 = scoreInfo1.score
     local score2 = scoreInfo2.score
     if #score1 ~= #score2 then
@@ -854,7 +963,7 @@ end
 -- Sort Entries functions
 -- ---------------------------------------------------------------------------
 
-function InsertSortEntry( sortByID:number, sortOrder:number, sortSettings:table )
+function InsertSortEntry(sortByID:number, sortOrder:number, sortSettings:table)
     local sortEntry = {
         SortByID = sortByID,
         SortOrder = sortOrder
@@ -872,7 +981,7 @@ function InsertSortEntry( sortByID:number, sortOrder:number, sortSettings:table 
     end
 end
 
-function RemoveSortEntry( sortByID:number, sortSettings:table  )
+function RemoveSortEntry(sortByID:number, sortSettings:table)
     local sortEntry = {
         SortByID = sortByID,
         SortOrder = sortOrder
@@ -887,7 +996,7 @@ function RemoveSortEntry( sortByID:number, sortSettings:table  )
 end
 
 -- Checks for the same ID, not the same order
-function CompareSortEntries( sortEntry1:table, sortEntry2:table)
+function CompareSortEntries(sortEntry1:table, sortEntry2:table)
     if sortEntry1.SortByID == sortEntry2.SortByID then
         return true;
     end
@@ -899,7 +1008,7 @@ end
 --  Getter functions
 -- ===========================================================================
 -- Get idle Trade Units by Player ID
-function GetIdleTradeUnits( playerID:number )
+function GetIdleTradeUnits(playerID:number)
     local idleTradeUnits:table = {};
 
     -- Loop through the Players units
@@ -933,7 +1042,7 @@ function GetIdleTradeUnits( playerID:number )
 end
 
 -- Returns a string of the route in format "[ORIGIN_CITY_NAME]-[DESTINATION_CITY_NAME]"
-function GetTradeRouteString( routeInfo:table )
+function GetTradeRouteString(routeInfo:table)
     local originCityName:string = "[NOT_FOUND]";
     local destinationCityName:string = "[NOT_FOUND]";
 
@@ -964,7 +1073,7 @@ function GetTradeRouteString( routeInfo:table )
     return originCityName .. "-" .. destinationCityName;
 end
 
-function GetTradeRouteYieldString( routeInfo:table )
+function GetTradeRouteYieldString(routeInfo:table)
     local returnString:string = "";
     local originPlayer:table = Players[routeInfo.OriginCityPlayer];
     local originCity:table = originPlayer:GetCities():FindID(routeInfo.OriginCityID);
@@ -974,7 +1083,7 @@ function GetTradeRouteYieldString( routeInfo:table )
 
 
     for yieldIndex = START_INDEX, END_INDEX do
-        local originCityYieldValue = GetYieldForOriginCity(yieldIndex, routeInfo, true);
+        local originCityYieldValue = GetYieldForOriginCity(routeInfo, yieldIndex);
         -- Skip if yield is not more than 0
         if originCityYieldValue > 0 then
             local iconString, text = FormatYieldText(yieldIndex, originCityYieldValue);
@@ -998,31 +1107,8 @@ function GetTradeRouteYieldString( routeInfo:table )
     return returnString;
 end
 
--- Returns length of trade path, number of trips to destination, turns to complete route
-function GetAdvancedRouteInfo(routeInfo)
-    local tradePathLength:number = 0;
-    if approximateTraderPath then
-        local pOriginPlayer = Players[routeInfo.OriginCityPlayer]
-        local pOriginCity = pOriginPlayer:GetCities():FindID(routeInfo.OriginCityID)
-        local pDestinationPlayer = Players[routeInfo.DestinationCityPlayer]
-        local pDestinationCity = pDestinationPlayer:GetCities():FindID(routeInfo.DestinationCityID)
-
-        -- Estimate path to city using Euclidean distance
-        tradePathLength = Map.GetPlotDistance(pOriginCity:GetX(), pOriginCity:GetY(), pDestinationCity:GetX(), pDestinationCity:GetY());
-    else
-        -- Get exact path the trader will take
-        local tradeManager = Game.GetTradeManager();
-        local pathPlots = tradeManager:GetTradeRoutePath(routeInfo.OriginCityPlayer, routeInfo.OriginCityID, routeInfo.DestinationCityPlayer, routeInfo.DestinationCityID);
-        tradePathLength = table.count(pathPlots) - 1;
-    end
-
-    local tripsToDestination = GetTripsRequiredFromTradePathLength(tradePathLength)
-    local turnsToCompleteRoute = (tradePathLength * 2 * tripsToDestination);
-    return tradePathLength, tripsToDestination, turnsToCompleteRoute;
-end
-
 -- Gets the number of trips a trader takes based on trader length, game speed and era
-function GetTripsRequiredFromTradePathLength( tradePathLength:number )
+function GetTripsRequiredFromTradePathLength(tradePathLength:number)
     local iSpeedCostMultiplier = GameInfo.GameSpeeds[1].CostMultiplier;
     local eSpeed = GameConfiguration.GetGameSpeedType();
     if GameInfo.GameSpeeds[eSpeed] ~= nil then
@@ -1059,205 +1145,583 @@ function GetTripsRequiredFromTradePathLength( tradePathLength:number )
     return math.ceil(iMinTurnsRequired / (tradePathLength * 2.0));
 end
 
--- ---------------------------------------------------------------------------
--- Trade Route Getters
--- ---------------------------------------------------------------------------
+function GetReligiousPressureForCity(religionIndex:number, originCity:table, destinationCity:table, forOriginCity:boolean)
+    local pressureValue = 0;
+    local pressureIconString = "";
+    local cityName = "";
+    local tradeManager = Game.GetTradeManager();
 
-function GetOriginCityName( routeInfo:table )
+    if originCity == nil or destinationCity == nil then
+        return 0, "";
+    end
+
+    if (forOriginCity) then
+        pressureValue = tradeManager:CalculateOriginReligiousPressureFromPotentialRoute(originCity:GetOwner(), originCity:GetID(), destinationCity:GetOwner(), destinationCity:GetID(), religionIndex);
+        pressureIconString = "[ICON_PressureLeft]";
+        cityName = destinationCity:GetName();
+    else
+        pressureValue = tradeManager:CalculateDestinationReligiousPressureFromPotentialRoute(originCity:GetOwner(), originCity:GetID(), destinationCity:GetOwner(), destinationCity:GetID(), religionIndex);
+        pressureIconString = "[ICON_PressureRight]";
+        cityName = originCity:GetName();
+    end
+    local sourceText = Locale.Lookup("LOC_ROUTECHOOSER_RELIGIOUS_PRESSURE_SOURCE_MAJORITY_RELIGION", pressureValue, pressureIconString, Game.GetReligion():GetName(religionIndex), cityName);
+    return pressureValue, sourceText;
+end
+
+function GetOriginCityName(routeInfo:table)
     -- TODO - Maybe implement cache for this?
     local pPlayer = Players[routeInfo.OriginCityPlayer]
     local pCity = pPlayer:GetCities():FindID(routeInfo.OriginCityID)
     return Locale.Lookup(pCity:GetName()) -- How does lua compare localized text?
 end
 
-function GetDestinationCityName( routeInfo:table )
+function GetDestinationCityName(routeInfo:table)
     -- TODO - Maybe implement cache for this?
     local pPlayer = Players[routeInfo.DestinationCityPlayer]
     local pCity = pPlayer:GetCities():FindID(routeInfo.DestinationCityID)
     return Locale.Lookup(pCity:GetName()) -- How does lua compare localized text?
 end
 
--- Returns yield for the origin city
-function GetYieldForOriginCity( yieldIndex:number, routeInfo:table, checkCache:boolean )
+-- ---------------------------------------------------------------------------
+-- Trade Route Getters (using cache)
+-- ---------------------------------------------------------------------------
+
+-- Returns all yields for the origin city, with an optional tooltip
+function GetYieldsForOriginCity(routeInfo:table, buildTooltip:boolean, checkCache:boolean)
+    -- Default to no tooltip
+    if buildTooltip == nil then
+        buildTooltip = false
+    end
+
+    -- Default checkCache to setting
+    if checkCache == nil then
+        checkCache = useCache
+    end
+
     if checkCache then
-        local key:string = GetRouteKey(routeInfo)
-        return Cached_GetYieldForOriginCity(yieldIndex, key)
+        local key = GetRouteKey(routeInfo)
+        return Cached_GetYieldsForOriginCity(key)
     else
         local tradeManager = Game.GetTradeManager();
+        local kYieldValues:table = {};
 
-        -- Want all the yields in a table
-        if yieldIndex == nil then
-            local routeYields = tradeManager:CalculateOriginYieldsFromPotentialRoute(routeInfo.OriginCityPlayer, routeInfo.OriginCityID, routeInfo.DestinationCityPlayer, routeInfo.DestinationCityID);
-            local pathYields = tradeManager:CalculateOriginYieldsFromPath(routeInfo.OriginCityPlayer, routeInfo.OriginCityID, routeInfo.DestinationCityPlayer, routeInfo.DestinationCityID);
-            local modifierYields = tradeManager:CalculateOriginYieldsFromModifiers(routeInfo.OriginCityPlayer, routeInfo.OriginCityID, routeInfo.DestinationCityPlayer, routeInfo.DestinationCityID);
+        -- Route, Path, Modifiers
+        local kRouteYields = tradeManager:CalculateOriginYieldsFromPotentialRoute(routeInfo.OriginCityPlayer, routeInfo.OriginCityID, routeInfo.DestinationCityPlayer, routeInfo.DestinationCityID);
+        local kPathYields = tradeManager:CalculateOriginYieldsFromPath(routeInfo.OriginCityPlayer, routeInfo.OriginCityID, routeInfo.DestinationCityPlayer, routeInfo.DestinationCityID);
+        local kModifierYields = tradeManager:CalculateOriginYieldsFromModifiers(routeInfo.OriginCityPlayer, routeInfo.OriginCityID, routeInfo.DestinationCityPlayer, routeInfo.DestinationCityID);
 
-            -- Add the yields together and return the result
-            local i;
-            local yieldCount = #routeYields;
-
-            for i=1, yieldCount, 1 do
-                routeYields[i] = routeYields[i] + pathYields[i] + modifierYields[i];
+        -- Overall modifiers / multipliers
+        local kYieldMultipliers:table = {};
+        for yieldIndex=1, #kRouteYields, 1 do
+            kYieldMultipliers[yieldIndex] = 1;
+            if routeInfo.OriginCityPlayer ~= routeInfo.DestinationCityPlayer then
+                local pPlayerTrade:table = Players[routeInfo.OriginCityPlayer]:GetTrade();
+                kYieldMultipliers[yieldIndex] = pPlayerTrade:GetInternationalYieldModifier(yieldIndex);
             end
-            return routeYields
-        else
-            -- From route
-            local yieldValue = tradeManager:CalculateOriginYieldFromPotentialRoute(routeInfo.OriginCityPlayer, routeInfo.OriginCityID, routeInfo.DestinationCityPlayer, routeInfo.DestinationCityID, yieldIndex);
-
-            -- From path only if yield is gold. Trading posts add only gold.
-            if yieldIndex == GameInfo.Yields["YIELD_GOLD"].Index then
-                yieldValue = yieldValue + tradeManager:CalculateOriginYieldFromPath(routeInfo.OriginCityPlayer, routeInfo.OriginCityID, routeInfo.DestinationCityPlayer, routeInfo.DestinationCityID, yieldIndex);
-            end
-
-            -- From modifiers
-            local resourceID = -1;
-            yieldValue = yieldValue + tradeManager:CalculateOriginYieldFromModifiers(routeInfo.OriginCityPlayer, routeInfo.OriginCityID, routeInfo.DestinationCityPlayer, routeInfo.DestinationCityID, yieldIndex, resourceID);
-
-            return yieldValue;
         end
+
+        -- Add the yields together and return the result
+        local i;
+        local yieldCount = #kRouteYields;
+        local sDestinationCityName:string = GetDestinationCityName(routeInfo);
+
+        -- Add the yields together and return the result
+        local kYieldTooltips = {}
+        for yieldIndex=1, #kRouteYields, 1 do
+            local kYieldInfo:table = GameInfo.Yields[yieldIndex - 1];
+            if kYieldInfo ~= nil then
+                local routeValue:number = kRouteYields[yieldIndex];
+                local pathValue:number = kPathYields[yieldIndex];
+                local modifierValue:number = kModifierYields[yieldIndex];
+                local tooltip:string = "";
+                if buildTooltip then
+                    if routeValue > 0 then
+                        if tooltip ~= "" then
+                            tooltip = tooltip .. "[NEWLINE]";
+                        end
+                        tooltip = tooltip .. Locale.Lookup("LOC_ROUTECHOOSER_YIELD_SOURCE_DISTRICTS", routeValue, kYieldInfo.IconString, kYieldInfo.Name, sDestinationCityName);
+                    end
+                    if pathValue > 0 then
+                        if tooltip ~= "" then
+                            tooltip = tooltip .. "[NEWLINE]";
+                        end
+                        tooltip = tooltip .. Locale.Lookup("LOC_ROUTECHOOSER_YIELD_SOURCE_TRADING_POSTS", pathValue, kYieldInfo.IconString, kYieldInfo.Name);
+                    end
+                    if modifierValue > 0 then
+                        if tooltip ~= "" then
+                            tooltip = tooltip .. "[NEWLINE]";
+                        end
+                        tooltip = tooltip .. Locale.Lookup("LOC_ROUTECHOOSER_YIELD_SOURCE_BONUSES", modifierValue, kYieldInfo.IconString, kYieldInfo.Name);
+                    end
+                end
+
+                local totalBeforeMultiplier:number = routeValue + pathValue + modifierValue;
+                local total:number = totalBeforeMultiplier;
+                local multiplier:number = kYieldMultipliers[yieldIndex];
+                if total > 0 and multiplier ~= 1 then
+                    total = totalBeforeMultiplier * multiplier;
+                    local valueFromMultiplier:number = total - totalBeforeMultiplier;
+                    local multiplierAsPercent:number = (multiplier * 100) - 100;
+                    if buildTooltip then
+                        if tooltip ~= "" then
+                            tooltip = tooltip .. "[NEWLINE]";
+                        end
+                        tooltip = tooltip .. Locale.Lookup("LOC_ROUTECHOOSER_YIELD_SOURCE_MULTIPLIERS", valueFromMultiplier, kYieldInfo.IconString, kYieldInfo.Name, multiplierAsPercent);
+                    end
+                end
+
+                -- Store the results
+                -- NOTE: Start indexing at 0 to match GameInfo index for yields
+                kYieldValues[yieldIndex-1] = total;
+                kYieldTooltips[yieldIndex-1] = tooltip;
+            end
+        end
+        return kYieldValues, kYieldTooltips
     end
 end
 
--- Returns yield for the destination city
-function GetYieldForDestinationCity( yieldIndex:number, routeInfo:table, checkCache:boolean )
+-- Returns all yields for the destination city
+function GetYieldsForDestinationCity(routeInfo:table, buildTooltip:boolean, checkCache:boolean)
+    -- Default to no tooltip
+    if buildTooltip == nil then
+        buildTooltip = false
+    end
+
+    -- Default checkCache to setting
+    if checkCache == nil then
+        checkCache = useCache
+    end
+
     if checkCache then
-        local key:string = GetRouteKey(routeInfo)
-        return Cached_GetYieldForDestinationCity(yieldIndex, key)
+        local key = GetRouteKey(routeInfo)
+        return Cached_GetYieldsForDestinationCity(key)
     else
         local tradeManager = Game.GetTradeManager();
+        local kYieldValues:table = {};
 
-        if yieldIndex == nil then
-            local routeYields = tradeManager:CalculateDestinationYieldsFromPotentialRoute(routeInfo.OriginCityPlayer, routeInfo.OriginCityID, routeInfo.DestinationCityPlayer, routeInfo.DestinationCityID);
-            local pathYields = tradeManager:CalculateDestinationYieldsFromPath(routeInfo.OriginCityPlayer, routeInfo.OriginCityID, routeInfo.DestinationCityPlayer, routeInfo.DestinationCityID);
-            local modifierYields = tradeManager:CalculateDestinationYieldsFromModifiers(routeInfo.OriginCityPlayer, routeInfo.OriginCityID, routeInfo.DestinationCityPlayer, routeInfo.DestinationCityID);
+        -- Route, Path, Modifiers
+        local kRouteYields = tradeManager:CalculateDestinationYieldsFromPotentialRoute(routeInfo.OriginCityPlayer, routeInfo.OriginCityID, routeInfo.DestinationCityPlayer, routeInfo.DestinationCityID);
+        local kPathYields = tradeManager:CalculateDestinationYieldsFromPath(routeInfo.OriginCityPlayer, routeInfo.OriginCityID, routeInfo.DestinationCityPlayer, routeInfo.DestinationCityID);
+        local kModifierYields = tradeManager:CalculateDestinationYieldsFromModifiers(routeInfo.OriginCityPlayer, routeInfo.OriginCityID, routeInfo.DestinationCityPlayer, routeInfo.DestinationCityID);
 
-            -- Add the yields together and return the result
-            local i;
-            local yieldCount = #routeYields;
-
-            for i=1, yieldCount, 1 do
-                routeYields[i] = routeYields[i] + pathYields[i] + modifierYields[i];
+        -- Overall modifiers / multipliers
+        local kYieldMultipliers:table = {};
+        for yieldIndex=1, #kRouteYields, 1 do
+            kYieldMultipliers[yieldIndex] = 1;
+            if routeInfo.OriginCityPlayer ~= routeInfo.DestinationCityPlayer then
+                local pPlayerTrade:table = Players[routeInfo.DestinationCityPlayer]:GetTrade();
+                kYieldMultipliers[yieldIndex] = pPlayerTrade:GetInternationalYieldModifier(yieldIndex);
             end
-            return routeYields
-        else
-            -- From route
-            local yieldValue = tradeManager:CalculateDestinationYieldFromPotentialRoute(routeInfo.OriginCityPlayer, routeInfo.OriginCityID, routeInfo.DestinationCityPlayer, routeInfo.DestinationCityID, yieldIndex);
-            -- From path
-            yieldValue = yieldValue + tradeManager:CalculateDestinationYieldFromPath(routeInfo.OriginCityPlayer, routeInfo.OriginCityID, routeInfo.DestinationCityPlayer, routeInfo.DestinationCityID, yieldIndex);
-            -- From modifiers
-            local resourceID = -1;
-            yieldValue = yieldValue + tradeManager:CalculateDestinationYieldFromModifiers(routeInfo.OriginCityPlayer, routeInfo.OriginCityID, routeInfo.DestinationCityPlayer, routeInfo.DestinationCityID, yieldIndex, resourceID);
-
-            return yieldValue;
         end
+
+        -- Add the yields together and return the result
+        local i;
+        local yieldCount = #kRouteYields;
+        local sDestinationCityName:string = GetDestinationCityName(routeInfo);
+
+        -- Add the yields together and return the result
+        local kYieldTooltips = {}
+        for yieldIndex=1, #kRouteYields, 1 do
+            local kYieldInfo:table = GameInfo.Yields[yieldIndex - 1];
+            if kYieldInfo ~= nil then
+                local routeValue:number = kRouteYields[yieldIndex];
+                local pathValue:number = kPathYields[yieldIndex];
+                local modifierValue:number = kModifierYields[yieldIndex];
+                local tooltip:string = "";
+                if buildTooltip then
+                    if routeValue > 0 then
+                        if tooltip ~= "" then
+                            tooltip = tooltip .. "[NEWLINE]";
+                        end
+                        tooltip = tooltip .. Locale.Lookup("LOC_ROUTECHOOSER_YIELD_SOURCE_DISTRICTS", routeValue, kYieldInfo.IconString, kYieldInfo.Name, sDestinationCityName);
+                    end
+                    if pathValue > 0 then
+                        if tooltip ~= "" then
+                            tooltip = tooltip .. "[NEWLINE]";
+                        end
+                        tooltip = tooltip .. Locale.Lookup("LOC_ROUTECHOOSER_YIELD_SOURCE_TRADING_POSTS", pathValue, kYieldInfo.IconString, kYieldInfo.Name);
+                    end
+                    if modifierValue > 0 then
+                        if tooltip ~= "" then
+                            tooltip = tooltip .. "[NEWLINE]";
+                        end
+                        tooltip = tooltip .. Locale.Lookup("LOC_ROUTECHOOSER_YIELD_SOURCE_BONUSES", modifierValue, kYieldInfo.IconString, kYieldInfo.Name);
+                    end
+                end
+
+                local totalBeforeMultiplier:number = routeValue + pathValue + modifierValue;
+                local total:number = totalBeforeMultiplier;
+                local multiplier:number = kYieldMultipliers[yieldIndex];
+                if total > 0 and multiplier ~= 1 then
+                    total = totalBeforeMultiplier * multiplier;
+                    local valueFromMultiplier:number = total - totalBeforeMultiplier;
+                    local multiplierAsPercent:number = (multiplier * 100) - 100;
+                    if buildTooltip then
+                        if tooltip ~= "" then
+                            tooltip = tooltip .. "[NEWLINE]";
+                        end
+                        tooltip = tooltip .. Locale.Lookup("LOC_ROUTECHOOSER_YIELD_SOURCE_MULTIPLIERS", valueFromMultiplier, kYieldInfo.IconString, kYieldInfo.Name, multiplierAsPercent);
+                    end
+                end
+
+                -- Store the results
+                -- NOTE: Start indexing at 0 to match GameInfo index for yields
+                kYieldValues[yieldIndex-1] = total;
+                kYieldTooltips[yieldIndex-1] = tooltip;
+            end
+        end
+        return kYieldValues, kYieldTooltips
     end
 end
 
-function GetNetYieldForOriginCity( routeInfo, checkCache )
+-- Returns a specific yield for origin city
+function GetYieldForOriginCity(routeInfo:table, yieldIndex:number, buildTooltip:boolean, checkCache:boolean)
+    -- Default to no tooltip
+    if buildTooltip == nil then
+        buildTooltip = false
+    end
+
+    -- Default checkCache to setting
+    if checkCache == nil then
+        checkCache = useCache
+    end
+
     if checkCache then
-        local key:string = GetRouteKey(routeInfo)
-        if m_Cache[key] ~= nil then
-            -- print("CACHE HIT for " .. GetTradeRouteString(routeInfo))
-            return m_Cache[key].NetOriginYield
-        else
-            print("CACHE MISS for " .. GetTradeRouteString(routeInfo))
-            CacheRoute(routeInfo);
-            return m_Cache[key].NetOriginYield
+        local key = GetRouteKey(routeInfo)
+        return Cached_GetYieldForOriginCity(key, yieldIndex)
+    else
+        local tradeManager = Game.GetTradeManager();
+        local kYieldValue = 0;
+
+        -- Route, Path, Modifiers
+        local kRouteYield = tradeManager:CalculateOriginYieldFromPotentialRoute(routeInfo.OriginCityPlayer, routeInfo.OriginCityID, routeInfo.DestinationCityPlayer, routeInfo.DestinationCityID, yieldIndex);
+        local kPathYield = tradeManager:CalculateOriginYieldFromPath(routeInfo.OriginCityPlayer, routeInfo.OriginCityID, routeInfo.DestinationCityPlayer, routeInfo.DestinationCityID, yieldIndex);
+        local kModifierYield = tradeManager:CalculateOriginYieldFromModifiers(routeInfo.OriginCityPlayer, routeInfo.OriginCityID, routeInfo.DestinationCityPlayer, routeInfo.DestinationCityID, yieldIndex);
+
+        -- Overall modifiers / multipliers
+        local kYieldMultiplier = 1;
+        if routeInfo.OriginCityPlayer ~= routeInfo.DestinationCityPlayer then
+            local pPlayerTrade:table = Players[routeInfo.OriginCityPlayer]:GetTrade();
+            kYieldMultiplier = pPlayerTrade:GetInternationalYieldModifier(yieldIndex);
         end
+
+        -- Build tooltip
+        local kYieldTooltip = ""
+        local kYieldInfo:table = GameInfo.Yields[yieldIndex - 1];
+        if kYieldInfo ~= nil then
+            local routeValue:number = kRouteYield;
+            local pathValue:number = kPathYield;
+            local modifierValue:number = kModifierYield;
+            local tooltip:string = "";
+            if buildTooltip then
+                if routeValue > 0 then
+                    if tooltip ~= "" then
+                        tooltip = tooltip .. "[NEWLINE]";
+                    end
+                    tooltip = tooltip .. Locale.Lookup("LOC_ROUTECHOOSER_YIELD_SOURCE_DISTRICTS", routeValue, kYieldInfo.IconString, kYieldInfo.Name, pDestinationCity:GetName());
+                end
+                if pathValue > 0 then
+                    kRouteInfo.HasPathBonus = true;
+                    if tooltip ~= "" then
+                        tooltip = tooltip .. "[NEWLINE]";
+                    end
+                    tooltip = tooltip .. Locale.Lookup("LOC_ROUTECHOOSER_YIELD_SOURCE_TRADING_POSTS", pathValue, kYieldInfo.IconString, kYieldInfo.Name);
+                end
+                if modifierValue > 0 then
+                    if tooltip ~= "" then
+                        tooltip = tooltip .. "[NEWLINE]";
+                    end
+                    tooltip = tooltip .. Locale.Lookup("LOC_ROUTECHOOSER_YIELD_SOURCE_BONUSES", modifierValue, kYieldInfo.IconString, kYieldInfo.Name);
+                end
+            end
+
+            local totalBeforeMultiplier:number = routeValue + pathValue + modifierValue;
+            local total:number = totalBeforeMultiplier;
+            local multiplier:number = kYieldMultipliers[yieldIndex];
+            if total > 0 and multiplier ~= 1 then
+                total = totalBeforeMultiplier * multiplier;
+                local valueFromMultiplier:number = total - totalBeforeMultiplier;
+                local multiplierAsPercent:number = (multiplier * 100) - 100;
+                if buildTooltip then
+                    if tooltip ~= "" then
+                        tooltip = tooltip .. "[NEWLINE]";
+                    end
+                    tooltip = tooltip .. Locale.Lookup("LOC_ROUTECHOOSER_YIELD_SOURCE_MULTIPLIERS", valueFromMultiplier, kYieldInfo.IconString, kYieldInfo.Name, multiplierAsPercent);
+                end
+            end
+
+            -- Store the results
+            kYieldValue = total;
+            kYieldTooltip = tooltip;
+        end
+        return kYieldValue, kYieldTooltip
+    end
+end
+
+function GetYieldForDestinationCity(routeInfo:table, yieldIndex:number, buildTooltip:boolean, checkCache:boolean)
+    -- Default to no tooltip
+    if buildTooltip == nil then
+        buildTooltip = false
+    end
+
+    -- Default checkCache to setting
+    if checkCache == nil then
+        checkCache = useCache
+    end
+
+    if checkCache then
+        local key = GetRouteKey(routeInfo)
+        return Cached_GetYieldForDestinationCity(key, yieldIndex)
+    else
+        local tradeManager = Game.GetTradeManager();
+        local kYieldValue = 0;
+
+        -- Route, Path, Modifiers
+        local kRouteYield = tradeManager:CalculateDestinationYieldFromPotentialRoute(routeInfo.OriginCityPlayer, routeInfo.OriginCityID, routeInfo.DestinationCityPlayer, routeInfo.DestinationCityID, yieldIndex);
+        local kPathYield = tradeManager:CalculateDestinationYieldFromPath(routeInfo.OriginCityPlayer, routeInfo.OriginCityID, routeInfo.DestinationCityPlayer, routeInfo.DestinationCityID, yieldIndex);
+        local kModifierYield = tradeManager:CalculateDestinationYieldFromModifiers(routeInfo.OriginCityPlayer, routeInfo.OriginCityID, routeInfo.DestinationCityPlayer, routeInfo.DestinationCityID, yieldIndex);
+
+        -- Overall modifiers / multipliers
+        local kYieldMultiplier = 1;
+        if routeInfo.OriginCityPlayer ~= routeInfo.DestinationCityPlayer then
+            local pPlayerTrade:table = Players[routeInfo.OriginCityPlayer]:GetTrade();
+            kYieldMultiplier = pPlayerTrade:GetInternationalYieldModifier(yieldIndex);
+        end
+
+        -- Build tooltip
+        local kYieldTooltip = ""
+        local kYieldInfo:table = GameInfo.Yields[yieldIndex - 1];
+        if kYieldInfo ~= nil then
+            local routeValue:number = kRouteYield;
+            local pathValue:number = kPathYield;
+            local modifierValue:number = kModifierYield;
+            local tooltip:string = "";
+            if buildTooltip then
+                if routeValue > 0 then
+                    if tooltip ~= "" then
+                        tooltip = tooltip .. "[NEWLINE]";
+                    end
+                    tooltip = tooltip .. Locale.Lookup("LOC_ROUTECHOOSER_YIELD_SOURCE_DISTRICTS", routeValue, kYieldInfo.IconString, kYieldInfo.Name, pDestinationCity:GetName());
+                end
+                if pathValue > 0 then
+                    kRouteInfo.HasPathBonus = true;
+                    if tooltip ~= "" then
+                        tooltip = tooltip .. "[NEWLINE]";
+                    end
+                    tooltip = tooltip .. Locale.Lookup("LOC_ROUTECHOOSER_YIELD_SOURCE_TRADING_POSTS", pathValue, kYieldInfo.IconString, kYieldInfo.Name);
+                end
+                if modifierValue > 0 then
+                    if tooltip ~= "" then
+                        tooltip = tooltip .. "[NEWLINE]";
+                    end
+                    tooltip = tooltip .. Locale.Lookup("LOC_ROUTECHOOSER_YIELD_SOURCE_BONUSES", modifierValue, kYieldInfo.IconString, kYieldInfo.Name);
+                end
+            end
+
+            local totalBeforeMultiplier:number = routeValue + pathValue + modifierValue;
+            local total:number = totalBeforeMultiplier;
+            local multiplier:number = kYieldMultipliers[yieldIndex];
+            if total > 0 and multiplier ~= 1 then
+                total = totalBeforeMultiplier * multiplier;
+                local valueFromMultiplier:number = total - totalBeforeMultiplier;
+                local multiplierAsPercent:number = (multiplier * 100) - 100;
+                if buildTooltip then
+                    if tooltip ~= "" then
+                        tooltip = tooltip .. "[NEWLINE]";
+                    end
+                    tooltip = tooltip .. Locale.Lookup("LOC_ROUTECHOOSER_YIELD_SOURCE_MULTIPLIERS", valueFromMultiplier, kYieldInfo.IconString, kYieldInfo.Name, multiplierAsPercent);
+                end
+            end
+
+            -- Store the results
+            kYieldValue = total;
+            kYieldTooltip = tooltip;
+        end
+        return kYieldValue, kYieldTooltip
+    end
+end
+
+function GetNetYieldForOriginCity(routeInfo:table, checkCache:boolean)
+    -- Default checkCache to setting
+    if checkCache == nil then
+        checkCache = useCache
+    end
+
+    if checkCache then
+        local key = GetRouteKey(routeInfo)
+        return Cached_GetNetYieldForOriginCity(key)
     else
         local netYield:number = 0
         for iI = START_INDEX, END_INDEX do
-            -- Dont check cache here
-            netYield = netYield + GetYieldForOriginCity(iI, routeInfo)
+            -- Dont build tooltip or check cache here
+            netYield, _  = netYield + GetYieldForOriginCity(routeInfo, iI, false, false)
         end
         return netYield
     end
 end
 
-function GetNetYieldForDestinationCity( routeInfo, checkCache )
+function GetNetYieldForDestinationCity(routeInfo:table, checkCache:boolean)
+    -- Default checkCache to setting
+    if checkCache == nil then
+        checkCache = useCache
+    end
+
     if checkCache then
-        local key:string = GetRouteKey(routeInfo)
-        if m_Cache[key] ~= nil then
-            -- print("CACHE HIT for " .. GetTradeRouteString(routeInfo))
-            return m_Cache[key].NetDestinationYield
-        else
-            print("CACHE MISS for " .. GetTradeRouteString(routeInfo))
-            CacheRoute(routeInfo);
-            return m_Cache[key].NetDestinationYield
-        end
+        local key = GetRouteKey(routeInfo)
+        return Cached_GetNetYieldForDestinationCity(key)
     else
         local netYield:number = 0
         for iI = START_INDEX, END_INDEX do
-            -- Dont check cache here
-            netYield = netYield + GetYieldForDestinationCity(iI, routeInfo)
+            -- Dont build tooltip or check cache here
+            netYield = netYield + GetYieldForDestinationCity(routeInfo, iI, false, false)
         end
         return netYield
     end
 end
 
-function GetTurnsToComplete(routeInfo, checkCache)
+function GetOriginMajorityReligion(routeInfo:table, checkCache:boolean)
+    -- Default checkCache to setting
+    if checkCache == nil then
+        checkCache = useCache
+    end
+
+    if checkCache then
+        local key = GetRouteKey(routeInfo)
+        return Cached_GetOriginMajorityReligion(key)
+    else
+        local pPlayer = Players[routeInfo.OriginCityPlayer]
+        local pCity = pPlayer:GetCities():FindID(routeInfo.OriginCityID)
+        return pCity:GetReligion():GetMajorityReligion();
+    end
+end
+
+function GetDestinationMajorityReligion(routeInfo:table, checkCache:boolean)
+    -- Default checkCache to setting
+    if checkCache == nil then
+        checkCache = useCache
+    end
+
+    if checkCache then
+        local key = GetRouteKey(routeInfo)
+        return Cached_GetDestinationMajorityReligion(key)
+    else
+        local pPlayer = Players[routeInfo.DestinationCityPlayer]
+        local pCity = pPlayer:GetCities():FindID(routeInfo.DestinationCityID)
+        return pCity:GetReligion():GetMajorityReligion();
+    end
+end
+
+function GetOriginReligionPressure(routeInfo:table, religionIndex:number, checkCache:boolean)
+    -- Default checkCache to setting
+    if checkCache == nil then
+        checkCache = useCache
+    end
+
+    if checkCache then
+        local key = GetRouteKey(routeInfo)
+        return Cached_GetOriginReligionPressure(key)
+    else
+        local pOriginPlayer = Players[routeInfo.OriginCityPlayer]
+        local pOriginCity = pOriginPlayer:GetCities():FindID(routeInfo.OriginCityID)
+        local pDestinationPlayer = Players[routeInfo.DestinationCityPlayer]
+        local pDestinationCity = pDestinationPlayer:GetCities():FindID(routeInfo.DestinationCityID)
+
+        return GetReligiousPressureForCity(religionIndex, pOriginCity, pDestinationCity, true);
+    end
+end
+
+function GetDestinationReligionPressure(routeInfo:table, religionIndex:number, checkCache:boolean)
+    -- Default checkCache to setting
+    if checkCache == nil then
+        checkCache = useCache
+    end
+
+    if checkCache then
+        local key = GetRouteKey(routeInfo)
+        return Cached_GetDestinationReligionPressure(key)
+    else
+        local pOriginPlayer = Players[routeInfo.OriginCityPlayer]
+        local pOriginCity = pOriginPlayer:GetCities():FindID(routeInfo.OriginCityID)
+        local pDestinationPlayer = Players[routeInfo.DestinationCityPlayer]
+        local pDestinationCity = pDestinationPlayer:GetCities():FindID(routeInfo.DestinationCityID)
+
+        return GetReligiousPressureForCity(religionIndex, pOriginCity, pDestinationCity, false);
+    end
+end
+
+function GetTurnsToComplete(routeInfo:table, checkCache:boolean)
+    -- Default checkCache to setting
+    if checkCache == nil then
+        checkCache = useCache
+    end
+
     if routeInfo.TurnsRemaining ~= nil then
         return routeInfo.TurnsRemaining
     elseif checkCache then
         local key = GetRouteKey(routeInfo)
-        if m_Cache[key] ~= nil then
-            -- print("CACHE HIT for " .. GetTradeRouteString(routeInfo))
-            return m_Cache[key].TurnsToCompleteRoute
-        else
-            print("CACHE MISS for " .. GetTradeRouteString(routeInfo))
-            CacheRoute(routeInfo);
-            return m_Cache[key].TurnsToCompleteRoute
-        end
+        return Cached_GetTurnsToComplete(key)
     else
         local tradePathLength, tripsToDestination, turnsToCompleteRoute = GetAdvancedRouteInfo(routeInfo);
         return turnsToCompleteRoute
     end
 end
 
-function GetRouteInfo(routeInfo, checkCache)
+function GetAdvancedRouteInfo(routeInfo:table, checkCache:boolean)
+    -- Default checkCache to setting
+    if checkCache == nil then
+        checkCache = useCache
+    end
+
     if checkCache then
         local key = GetRouteKey(routeInfo)
-        if m_Cache[key] ~= nil then
-            -- print("CACHE HIT for " .. GetTradeRouteString(routeInfo))
-            return m_Cache[key].TradePathLength, m_Cache[key].TripsToDestination, m_Cache[key].TurnsToCompleteRoute
-        else
-            print("CACHE MISS for " .. GetTradeRouteString(routeInfo))
-            CacheRoute(routeInfo)
-            return m_Cache[key].TradePathLength, m_Cache[key].TripsToDestination, m_Cache[key].TurnsToCompleteRoute
-        end
+        return Cached_GetAdvancedRouteInfo(key)
     else
-        return GetAdvancedRouteInfo(routeInfo)
+        local tradePathLength:number = 0;
+        if approximateTraderPath then
+            local pOriginPlayer = Players[routeInfo.OriginCityPlayer]
+            local pOriginCity = pOriginPlayer:GetCities():FindID(routeInfo.OriginCityID)
+            local pDestinationPlayer = Players[routeInfo.DestinationCityPlayer]
+            local pDestinationCity = pDestinationPlayer:GetCities():FindID(routeInfo.DestinationCityID)
+
+            -- Estimate path to city using Euclidean distance
+            tradePathLength = Map.GetPlotDistance(pOriginCity:GetX(), pOriginCity:GetY(), pDestinationCity:GetX(), pDestinationCity:GetY());
+        else
+            -- Get exact path the trader will take
+            local tradeManager = Game.GetTradeManager();
+            local pathPlots = tradeManager:GetTradeRoutePath(routeInfo.OriginCityPlayer, routeInfo.OriginCityID, routeInfo.DestinationCityPlayer, routeInfo.DestinationCityID);
+            tradePathLength = table.count(pathPlots) - 1;
+        end
+
+        local tripsToDestination = GetTripsRequiredFromTradePathLength(tradePathLength)
+        local turnsToCompleteRoute = (tradePathLength * 2 * tripsToDestination);
+        return tradePathLength, tripsToDestination, turnsToCompleteRoute;
     end
 end
 
-function GetRouteHasTradingPost(routeInfo, checkCache)
+function GetRouteHasTradingPost(routeInfo:table, checkCache:boolean)
+    -- Default checkCache to setting
+    if checkCache == nil then
+        checkCache = useCache
+    end
+
     if checkCache then
         local key = GetRouteKey(routeInfo)
-        if m_Cache[key] ~= nil then
-            -- print("CACHE HIT for " .. GetTradeRouteString(routeInfo))
-            return m_Cache[key].HasTradingPost
-        else
-            print("CACHE MISS for " .. GetTradeRouteString(routeInfo))
-            CacheRoute(routeInfo)
-            return m_Cache[key].HasTradingPost
-        end
+        return Cached_GetRouteHasTradingPost(key)
     else
         local destinationPlayer:table = Players[routeInfo.DestinationCityPlayer];
         local destinationCity:table = destinationPlayer:GetCities():FindID(routeInfo.DestinationCityID);
-
         return destinationCity:GetTrade():HasActiveTradingPost(routeInfo.OriginCityPlayer)
     end
 end
 
-function GetHasActiveRoute(playerID, checkCache)
+function GetHasActiveRoute(playerID:number, checkCache:boolean)
+    -- Default checkCache to setting
+    if checkCache == nil then
+        checkCache = useCache
+    end
+
     if checkCache then
-        if m_Cache.Players ~= nil and m_Cache.Players[playerID] ~= nil then
-            -- print("CACHE HIT for player " .. playerID)
-            return m_Cache.Players[playerID].HasActiveRoute
-        else
-            print("CACHE MISS for player " .. playerID)
-            CachePlayer(playerID)
-            return m_Cache.Players[playerID].HasActiveRoute
-        end
+        return Cached_GetHasActiveRoute(playerID)
     else
         local pPlayer:table = Players[playerID];
         local playerCities:table = pPlayer:GetCities();
@@ -1270,31 +1734,27 @@ function GetHasActiveRoute(playerID, checkCache)
     end
 end
 
-function GetVisibilityIndex(playerID, checkCache)
+function GetVisibilityIndex(playerID:number, checkCache:boolean)
+    -- Default checkCache to setting
+    if checkCache == nil then
+        checkCache = useCache
+    end
+
     if checkCache then
-        if m_Cache.Players ~= nil and m_Cache.Players[playerID] ~= nil then
-            -- print("CACHE HIT for player " .. playerID)
-            return m_Cache.Players[playerID].VisibilityIndex
-        else
-            print("CACHE MISS for player " .. playerID)
-            CachePlayer(playerID)
-            return m_Cache.Players[playerID].VisibilityIndex
-        end
+        return Cached_GetVisibilityIndex(playerID)
     else
         return Players[Game.GetLocalPlayer()]:GetDiplomacy():GetVisibilityOn(playerID);
     end
 end
 
-function GetPlayerIconInfo(playerID, checkCache)
+function GetPlayerIconInfo(playerID:number, checkCache:boolean)
+    -- Default checkCache to setting
+    if checkCache == nil then
+        checkCache = useCache
+    end
+
     if checkCache then
-        if m_Cache.Players ~= nil and m_Cache.Players[playerID] ~= nil then
-            -- print("CACHE HIT for player " .. playerID)
-            return unpack(m_Cache.Players[playerID].Icon)
-        else
-            print("CACHE MISS for player " .. playerID)
-            CachePlayer(playerID)
-            return unpack(m_Cache.Players[playerID].Icon)
-        end
+        return Cached_GetPlayerIconInfo(playerID)
     else
         local pPlayer = Players[playerID];
         local playerConfig:table = PlayerConfigurations[playerID];
@@ -1335,16 +1795,14 @@ function GetPlayerIconInfo(playerID, checkCache)
     end
 end
 
-function GetPlayerColorInfo(playerID, checkCache)
+function GetPlayerColorInfo(playerID:number, checkCache:boolean)
+    -- Default checkCache to setting
+    if checkCache == nil then
+        checkCache = useCache
+    end
+
     if checkCache then
-        if m_Cache.Players ~= nil and m_Cache.Players[playerID] ~= nil then
-            -- print("CACHE HIT for player " .. playerID)
-            return unpack(m_Cache.Players[playerID].Colors)
-        else
-            print("CACHE MISS for player " .. playerID)
-            CachePlayer(playerID)
-            return unpack(m_Cache.Players[playerID].Colors)
-        end
+        return Cached_GetPlayerColorInfo(playerID)
     else
         local backColor, frontColor = UI.GetPlayerColors(playerID)
         local darkerBackColor = UI.DarkenLightenColor(backColor, BACKDROP_DARKER_OFFSET, BACKDROP_DARKER_OPACITY);
@@ -1382,6 +1840,7 @@ function IsRoutePossible(originCityPlayerID, originCityID, destinationCityPlayer
 end
 
 function FormatYieldText(yieldIndex, yieldAmount)
+    yieldAmount = Round(yieldAmount, 1)
     if yieldAmount == 0 then
         return "", ""
     end
@@ -1400,7 +1859,7 @@ function FormatYieldText(yieldIndex, yieldAmount)
 end
 
 -- Finds and removes routeToDelete from routeTable
-function RemoveRouteFromTable( routeToDelete:table , routeTable:table, isGrouped:boolean )
+function RemoveRouteFromTable(routeToDelete:table , routeTable:table, isGrouped:boolean)
     -- If grouping by something, go one level deeper
     if isGrouped then
         print("Routes grouped")
@@ -1409,7 +1868,7 @@ function RemoveRouteFromTable( routeToDelete:table , routeTable:table, isGrouped
 
         for i, groupedRoutes in ipairs(routeTable) do
             for j, route in ipairs(groupedRoutes) do
-                if CheckRouteEquality( route, routeToDelete ) then
+                if CheckRouteEquality(route, routeToDelete) then
                     targetIndex = j;
                     targetGroupIndex = i;
                     break
@@ -1455,7 +1914,7 @@ function CheckRouteEquality ( tradeRoute1:table, tradeRoute2:table )
     return false;
 end
 
-function IsCityState( player:table )
+function IsCityState(player:table)
     local playerInfluence:table = player:GetInfluence();
     if  playerInfluence:CanReceiveInfluence() then
         return true
@@ -1465,7 +1924,7 @@ function IsCityState( player:table )
 end
 
 -- Checks if the player is a city state, with "Send a trade route" quest
-function IsCityStateWithTradeQuest( player:table )
+function IsCityStateWithTradeQuest(player:table)
     local questsManager:table = Game.GetQuestsManager();
     local localPlayer = Game.GetLocalPlayer()
     if (questsManager ~= nil and localPlayer ~= nil) then
@@ -1481,12 +1940,26 @@ function IsCityStateWithTradeQuest( player:table )
 end
 
 -- Checks if the player is a civ, other than the local player
-function IsOtherCiv( player:table )
+function IsOtherCiv(player:table)
     if player:GetID() ~= Game.GetLocalPlayer() then
         return true
     end
 
     return false
+end
+
+function BuildRouteInfoFromCities(pOriginCity:table, pDestinationCity:table)
+    if pOriginCity == nil or pDestinationCity == nil then
+        return nil
+    end
+
+    local routeInfo = {
+        OriginCityPlayer        = pOriginCity:GetOwner(),
+        OriginCityID            = pOriginCity:GetID(),
+        DestinationCityPlayer   = pDestinationCity:GetOwner(),
+        DestinationCityID       = pDestinationCity:GetID()
+    };
+    return routeInfo
 end
 
 -- ===========================================================================
