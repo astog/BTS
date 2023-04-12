@@ -143,5 +143,42 @@
       <Text>CONFIRMAR</Text>
     </Replace>
 
+    <!-- Settings Panel -->
+    <Replace Tag="LOC_BTS_SETTINGS_PANEL_HEADER" Language="pt_BR">
+      <Text>Better Trade Screen - Ajustes</Text>
+    </Replace>
+
+    <Replace Tag="LOC_BTS_SETTING_APPROXIMATE_TRADER_PATH" Language="pt_BR">
+      <Text>Percurso Aproximado</Text>
+    </Replace>
+
+    <Replace Tag="LOC_BTS_SETTING_APPROXIMATE_TRADER_PATH_TOOLTIP" Language="pt_BR">
+      <Text>Usa a distância absoluta para calcular o percurso do comerciante em vez do verdadeiro utilizado na rota comercial. Habilitar essa opção fará com que o cálculo da duração da rota comercial(em turnos) seja extremamente imprecisa em alguns casos mas fará o painel de seleção de rota comercial abrir mais rápido, especialmente para civilizações com muitas cidades.</Text>
+    </Replace>
+
+    <Replace Tag="LOC_BTS_SETTING_SHOW_SORT_PRIORITIES" Language="pt_BR">
+      <Text>Mostra prioridades de ordenação</Text>
+    </Replace>
+
+    <Replace Tag="LOC_BTS_SETTING_SHOW_SORT_PRIORITIES_TOOLTIP" Language="pt_BR">
+      <Text>Exibirá a prioridade numérica de ordenação de um recurso em seu respectivo botão. Útil para ordenação por múltiplos recursos como Alimento + Produção, por exemplo.</Text>
+    </Replace>
+
+    <Replace Tag="LOC_BTS_SETTING_SHOW_ALL_ROUTE_PATHS" Language="pt_BR">
+      <Text>Exibir todos percursos disponíveis</Text>
+    </Replace>
+
+    <Replace Tag="LOC_BTS_SETTING_SHOW_ALL_ROUTE_PATHS_TOOLTIP" Language="pt_BR">
+      <Text>Ao habilitar esta opção, serão exibidos no mapa os percursos de todas as rotas comerciais disponíveis no painel de seleção de rota comercial para o comerciante selecionado em vez de exibir apenas o percurso da rota comercial selecionada no painel. Habilitar essa opção pode causar lentidão na abertura do painel de seleção de rota comercial.</Text>
+    </Replace>
+
+    <Replace Tag="LOC_BTS_SHOW_TRADER_PATH_ON_SELECTION" Language="pt_BR">
+      <Text>Exibir percurso de comerciante</Text>
+    </Replace>
+
+    <Replace Tag="LOC_BTS_SHOW_TRADER_PATH_ON_SELECTION_TOOLTIP" Language="pt_BR">
+      <Text>Ao habilitar esta opção, selecionar uma unidade de comerciante fará com que o percurso de sua rota comercial ativa seja exibida no mapa.</Text>
+    </Replace>
+
   </LocalizedText>
 </GameData>
