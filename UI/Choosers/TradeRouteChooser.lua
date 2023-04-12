@@ -1046,7 +1046,7 @@ function Close()
     LuaEvents.TradeRouteChooser_SetTradeUnitStatus("");
     ContextPtr:SetHide(true);
     m_isOpen = false;
-	UILens.ClearLayerHexes(m_TradeRouteLens); -- fix for route arrows sometimes remaining on the map
+    UILens.ClearLayerHexes(m_TradeRouteLens); -- fix for route arrows sometimes remaining on the map
     if UILens.IsLensActive(m_TradeRouteLens) then
         -- Make sure to switch back to default lens
         UILens.SetActive("Default");
