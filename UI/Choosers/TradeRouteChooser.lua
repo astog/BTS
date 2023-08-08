@@ -60,6 +60,15 @@ m_SortBySettings[1] = {
 local opt_print = false
 
 -- ===========================================================================
+function FindDestinationEntry(cityOwner:number, cityID:number)
+    for index, entry in ipairs(m_AvailableTradeRoutes) do
+        if entry.DestinationCityID == cityID and entry.DestinationCityPlayer == cityOwner then
+            return entry;
+        end
+    end
+end
+
+-- ===========================================================================
 --  Refresh functions
 -- ===========================================================================
 function Refresh()
@@ -847,10 +856,11 @@ function TradeRouteSelected( cityOwner:number, cityID:number )
     local player:table = Players[cityOwner];
     if player then
         local pCity:table = player:GetCities():FindID(cityID);
-        if pCity ~= nil then
+        if pCity and FindDestinationEntry(cityOwner, cityID) then
             m_destinationCity = pCity;
         else
-            error("Unable to find city '".. tostring(cityID).."' for creating a trade route.");
+            print("Unable to find city '".. tostring(cityID).."' for creating a trade route.");
+            m_destinationCity = nil;
         end
     end
 
@@ -1293,6 +1303,19 @@ function OnSelectRouteFromOverview( destinationOwnerID:number, destinationCityID
 end
 
 -- ===========================================================================
+--  Create a trade route from the world input.
+-- ===========================================================================
+function OnWorldInputMakeTradeRoute( plotId:number )
+
+    local plotX,plotY   = Map.GetPlotLocation( plotId );
+    local pCity         :table = Cities.GetCityInPlot( plotX, plotY );
+    if pCity then
+        UI.PlaySound("Play_UI_Click");
+        TradeRouteSelected( pCity:GetOwner(), pCity:GetID() );
+    end
+end
+
+-- ===========================================================================
 --  Setup
 -- ===========================================================================
 
@@ -1321,6 +1344,7 @@ function Initialize()
     LuaEvents.TradeRouteChooser_SkipOpen.Add( OnSkipNextOpen )
     LuaEvents.TradeOverview_SelectRouteFromOverview.Add( OnSelectRouteFromOverview );
     LuaEvents.TradeRouteChooser_Close.Add( OnClose )
+    LuaEvents.WorldInput_MakeTradeRouteDestination.Add( OnWorldInputMakeTradeRoute );
 
     -- Game Engine Events
     Events.InterfaceModeChanged.Add( OnInterfaceModeChanged );
