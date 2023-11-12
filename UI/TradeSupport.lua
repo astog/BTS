@@ -1121,7 +1121,8 @@ function GetTripsRequiredFromTradePathLength(tradePathLength:number)
     -- Previous formula that is semi correct
     -- local tripsToDestination = 1 + math.floor(iSpeedCostMultiplier/tradePathLength * 0.1);
     -- NOTE: Not 100% sure of this formula. Ran a few experiments and it seems to be this one
-    local iMinTurnsRequired = (math.floor(iSpeedCostMultiplier * 0.1) * 2.0) + 1
+    local iTurnDurationBase = GameInfo.GlobalParameters["TRADE_ROUTE_TURN_DURATION_BASE"].Value;
+    local iMinTurnsRequired = (math.floor(iTurnDurationBase * (iSpeedCostMultiplier / 100.0))) + 1;
 
     -- Expansion 2 added a modifier called TradeRouteMinimumEndTurnChange that changes required turns based on Era
     if GameInfo.Eras_XP2 ~= nil then
